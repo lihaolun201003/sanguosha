@@ -23,6 +23,7 @@ from .combat import CombatMixin
 from .dying import DyingMixin
 from .ai import AIMixin
 from .engine import GameContext, GameEngine
+from .controllers import AIController, HumanController
 from .rules import SeatManager
 
 
@@ -45,6 +46,7 @@ class Game(
 
         self.ai_count = max(1, min(7, int(ai_count)))
         self.players = []
+        self.controllers = {}
         self._create_players()
         self.seats = SeatManager(self)
 
@@ -83,24 +85,11 @@ class Game(
 
         self.message = ""
 
-        # 玩家本回合状态
-        self.sha_used = False
-        self.jiu_used = False
-
-        self.player_wine_buff = False
-
-        # 使用酒以后锁定：
-        # 下一步必须出杀
-        self.wine_sha_required = False
-
-        # AI 酒状态
-        self.enemy_wine_buff = False
-        self.enemy_jiu_used = False
-
         self.game_over = False
         self.result = None
         self.winner = None
         self.game_log = []
+        self._stall_frames = 0
 
         self.reset()
 
@@ -128,8 +117,88 @@ class Game(
         # and tests. New rules must use players/seats APIs.
         self.enemy = ais[0]
 
+    # ==================================================
+    # 回合状态 façade
+    #
+    # 真正的存储位置是每个 Player 自己的字段；这些属性只保留给旧 1v1
+    # UI 与旧测试使用。多人规则必须直接读 player.sha_used 等实例字段。
+    # ==================================================
+
+    @property
+    def sha_used(self):
+        return self.player.sha_used
+
+    @sha_used.setter
+    def sha_used(self, value):
+        self.player.sha_used = bool(value)
+
+    @property
+    def jiu_used(self):
+        return self.player.jiu_used
+
+    @jiu_used.setter
+    def jiu_used(self, value):
+        self.player.jiu_used = bool(value)
+
+    @property
+    def player_wine_buff(self):
+        return self.player.wine_buff
+
+    @player_wine_buff.setter
+    def player_wine_buff(self, value):
+        self.player.wine_buff = bool(value)
+
+    @property
+    def wine_sha_required(self):
+        return self.player.wine_sha_required
+
+    @wine_sha_required.setter
+    def wine_sha_required(self, value):
+        self.player.wine_sha_required = bool(value)
+
+    @property
+    def enemy_wine_buff(self):
+        enemy = self.enemy
+        return enemy.wine_buff if enemy is not None else False
+
+    @enemy_wine_buff.setter
+    def enemy_wine_buff(self, value):
+        enemy = self.enemy
+        if enemy is not None:
+            enemy.wine_buff = bool(value)
+
+    @property
+    def enemy_jiu_used(self):
+        enemy = self.enemy
+        return enemy.jiu_used if enemy is not None else False
+
+    @enemy_jiu_used.setter
+    def enemy_jiu_used(self, value):
+        enemy = self.enemy
+        if enemy is not None:
+            enemy.jiu_used = bool(value)
+
     def get_player(self, player_id):
         return next((p for p in self.players if p.player_id == player_id), None)
+
+    # ==================================================
+    # Controller 边界
+    #
+    # TurnFlow 只依据 current_player.controller_type 决定 Action 来源：
+    # 真人走 Pygame 输入适配器，AI 走本地 AI 控制器。未来的局域网
+    # RemoteController 也会挂在这里，不需要改动规则层。
+    # ==================================================
+
+    def get_controller(self, player):
+        controller = self.controllers.get(player.player_id)
+        if controller is None:
+            controller = (
+                HumanController(self, player)
+                if player.is_human
+                else AIController(self, player)
+            )
+            self.controllers[player.player_id] = controller
+        return controller
 
     def get_alive_players(self):
         return self.seats.alive_players_in_order()
@@ -190,12 +259,58 @@ class Game(
     # 每一帧更新
     # ==================================================
 
+    STALL_GUARD_FRAMES = 40
+
     def update(
         self,
         dt
     ):
 
         self.actions.update(dt)
+        self._guard_stalled_turn()
+
+    def _guard_stalled_turn(self):
+        """兜底：AI 回合停在没有后续动作的状态时把它接回去。
+
+        正常的 AI 回合由 ActionQueue 的连续回调推进。如果某条异常路径
+        （例如暂停中的子流程提前结束）把动作链断开，对局会停在这一回合
+        不再前进。这里检测「AI 回合 + play/discard + 队列空 + 无任何等待
+        输入」持续若干帧，就结束该回合并交给下一个存活角色。
+        真人回合与任何等待中的 Pending 都不会被这个守卫影响。
+        """
+
+        if self.game_over or self.scene != "game":
+            self._stall_frames = 0
+            return
+
+        waiting = (
+            self.busy
+            or self.engine.pending.active
+            or self.pending_selection is not None
+            or self.pending_target_selection is not None
+            or self.response.active
+            or self.choice.active
+            or self.zhangba_selecting
+        )
+        current = self.current_turn_player
+        stalled = (
+            not waiting
+            and current is not None
+            and not current.is_human
+            and current.alive
+            and self.phase in ("play", "discard")
+        )
+        if not stalled:
+            self._stall_frames = 0
+            return
+
+        self._stall_frames = getattr(self, "_stall_frames", 0) + 1
+        if self._stall_frames < self.STALL_GUARD_FRAMES:
+            return
+
+        self._stall_frames = 0
+        self.add_log("（回合守卫）继续 " + current.name + " 的回合")
+        self._finish_ai_turn(current)
 
 
     def submit_action(self, action):
@@ -225,6 +340,7 @@ class Game(
 
         self._create_players()
         self.seats = SeatManager(self)
+        self.controllers.clear()
 
         self.zhangba_selecting = False
         self.zhangba_selected = []
@@ -248,21 +364,11 @@ class Game(
 
         self.phase = "play"
 
-        self.sha_used = False
-        self.jiu_used = False
-
-        self.player_wine_buff = False
-
-        self.wine_sha_required = False
-
-        self.enemy_wine_buff = False
-
-        self.enemy_jiu_used = False
-
         self.game_over = False
         self.result = None
         self.winner = None
         self.game_log = []
+        self._stall_frames = 0
 
         # ==================================================
         # 双方初始四张

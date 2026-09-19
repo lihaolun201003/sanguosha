@@ -5,6 +5,12 @@ class ControllerType(str, Enum):
     HUMAN = "human"
     AI = "ai"
 
+    # A future LAN phase adds REMOTE_HUMAN here; the engine must keep
+    # treating controller type as the only source of action authority.
+
+
+HORSE_SLOTS = ("defensive_horse", "offensive_horse")
+
 
 class Player:
 
@@ -50,6 +56,37 @@ class Player:
             "offensive_horse": None,
         }
 
+        # ==================================================
+        # 本回合状态
+        #
+        # 这些标记必须按角色独立保存：多人局里每个 AI 都有自己的
+        # 出杀次数与酒效果，不能共用一个全局布尔值。
+        # ==================================================
+
+        self.sha_used = False
+        self.jiu_used = False
+        self.wine_buff = False
+        self.wine_sha_required = False
+
+
+    @property
+    def is_human(self):
+        return self.controller_type is ControllerType.HUMAN
+
+    @property
+    def is_ai(self):
+        return self.controller_type is ControllerType.AI
+
+    @property
+    def is_alive(self):
+        return self.alive and self.hp > 0
+
+    def clear_turn_state(self):
+        self.sha_used = False
+        self.jiu_used = False
+        self.wine_buff = False
+        self.wine_sha_required = False
+
 
     # ==================================================
     # 重置
@@ -74,6 +111,8 @@ class Player:
 
             "offensive_horse": None,
         }
+
+        self.clear_turn_state()
 
 
     # ==================================================

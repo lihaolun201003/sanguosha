@@ -5,6 +5,9 @@ from src.game.rules import TargetRule, validate_targets
 
 class CardEffect:
     card_name = None
+    # Category-level fallback used by equipment: every physical weapon, armor
+    # and horse shares one effect instead of forty near-identical entries.
+    card_category = None
     category = "trick"
     target_rule = TargetRule.NO_TARGET
     min_targets = 0
@@ -12,6 +15,7 @@ class CardEffect:
     distance_limit = None
     can_respond = False
     cancellable_by_wuxie = False
+    per_target_wuxie = False
 
     def can_use(self, game, action):
         if game.game_over:
@@ -37,16 +41,26 @@ class CardEffect:
 class CardEffectRegistry:
     def __init__(self):
         self._effects = {}
+        self._by_category = {}
 
     def register(self, effect):
-        if not effect.card_name:
-            raise ValueError("CardEffect.card_name is required")
-        self._effects[effect.card_name] = effect
-        return effect
+        if effect.card_name:
+            self._effects[effect.card_name] = effect
+            return effect
+        if effect.card_category:
+            self._by_category[effect.card_category] = effect
+            return effect
+        raise ValueError("CardEffect.card_name or card_category is required")
 
     def get(self, card_or_name):
         name = getattr(card_or_name, "name", card_or_name)
-        return self._effects.get(name)
+        effect = self._effects.get(name)
+        if effect is not None:
+            return effect
+        category = getattr(card_or_name, "category", None)
+        if category is not None:
+            return self._by_category.get(category)
+        return None
 
     def require(self, card_or_name):
         effect = self.get(card_or_name)

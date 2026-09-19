@@ -23,6 +23,31 @@ from .equipment_skills.weapons import (
 class BasicCardMixin:
 
     # ==================================================
+    # 酒是否仍要求先出杀
+    #
+    # 使用【酒】后下一张必须是【杀】；但如果手上没有【杀】，或者没有任何
+    # 能攻击到的存活角色，酒的效果作废，不能把玩家永久锁死。
+    # ==================================================
+
+    def wine_blocks_other_cards(self):
+
+        if not self.player.wine_sha_required:
+            return False
+
+        has_sha = any(card.name == "SHA" for card in self.player.hand)
+        reachable = has_sha and any(
+            target is not self.player and self.can_attack(self.player, target)
+            for target in self.get_alive_players()
+        )
+
+        if reachable:
+            return True
+
+        self.player.wine_sha_required = False
+        self.player.wine_buff = False
+        return False
+
+    # ==================================================
     # 玩家主动使用一张手牌
     # ==================================================
 
@@ -39,6 +64,11 @@ class BasicCardMixin:
             return
 
         if self.response.active:
+            return
+
+        # 真人输入锁定：只有轮到自己、或自己正是当前 Pending 的 owner 时
+        # 才能出牌，AI 回合与 AI 的五谷选择期间都不能点击手牌。
+        if self.current_turn_player is not self.player:
             return
 
         if self.phase != "play":
@@ -61,8 +91,8 @@ class BasicCardMixin:
         # ==================================================
 
         if (
-            self.wine_sha_required
-            and card.name != "SHA"
+            card.name != "SHA"
+            and self.wine_blocks_other_cards()
         ):
 
             self.message = (
@@ -78,8 +108,8 @@ class BasicCardMixin:
 
         if card.category == "equipment":
 
-            self.player_equip(
-                index,
+            self._begin_v2_card_targeting(
+                card,
                 source_rect
             )
 
@@ -96,205 +126,30 @@ class BasicCardMixin:
                     on_no=lambda c=card, r=source_rect: self._submit_tiesuo(c, r, True),
                 )
                 return
-            if len(self.players) == 2:
-                if card.name in ("WUZHONG", "SHANDIAN"):
-                    targets = [self.player]
-                elif card.name in ("TAOYUAN", "WUGU"):
-                    targets = living_players(self)
-                elif card.name in ("NANMAN", "WANJIAN"):
-                    targets = [target for target in living_players(self) if target is not self.player]
-                else:
-                    targets = [self.enemy]
-                self.submit_action(UseCardAction(self.player, card, targets, source_rect=source_rect))
-                return
             self._begin_v2_card_targeting(card, source_rect)
             return
 
         # ==================================================
         # 杀
+        #
+        # 1v1 与多人共用同一条目标选择路径：长度 2 的 players[] 只是
+        # 候选只有一个的普通情况。
         # ==================================================
 
         if card.name == "SHA":
-            if len(self.players) == 2:
-                self.try_player_sha(card, source_rect)
-            else:
-                self._begin_v2_card_targeting(card, source_rect)
+            self._begin_v2_card_targeting(card, source_rect)
             return
 
         # ==================================================
-        # 桃
+        # 桃 / 酒
+        #
+        # 也走统一的 CardEffect 路径：合法性与结算都由注册表决定，
+        # 真人 UI 与 AI 不会出现两套规则。
         # ==================================================
 
-        if card.name == "TAO":
-
-            if (
-                self.player.hp
-                >= self.player.max_hp
-            ):
-
-                self.message = (
-                    "你的体力已经是满的。"
-                )
-
-                return
-
-            card = self.player.remove_card(
-                index
-            )
-
-            self.message = (
-                "你使用了【桃】。"
-            )
-
-            self.actions.add(
-
-                MoveCardAction(
-                    card,
-                    source_rect,
-                    TABLE_CARD_RECT,
-                    duration=0.30,
-
-                    on_finish=(
-
-                        lambda c=card:
-                            self.add_table_card(
-                                c,
-                                TABLE_CARD_RECT
-                            )
-                    )
-                )
-            )
-
-            self.actions.add(
-                WaitAction(
-                    0.40
-                )
-            )
-
-            self.actions.add(
-
-                CallbackAction(
-
-                    lambda c=card:
-                        self.resolve_player_tao(
-                            c
-                        )
-                )
-            )
-
+        if card.name in ("TAO", "JIU"):
+            self._begin_v2_card_targeting(card, source_rect)
             return
-
-        # ==================================================
-        # 酒
-        # ==================================================
-
-        if card.name == "JIU":
-
-            if self.jiu_used:
-
-                self.message = (
-                    "本回合已经使用过【酒】。"
-                )
-
-                return
-
-            # ==================================================
-            # 没有诸葛连弩时，
-            # 如果已经出过杀，
-            # 再喝酒会造成死锁。
-            # ==================================================
-
-            if (
-                self.sha_used
-                and not self.can_use_unlimited_sha(
-                    self.player
-                )
-            ):
-
-                self.message = (
-                    "本回合已经使用过【杀】，"
-                    "当前不能再使用【酒】强化杀。"
-                )
-
-                return
-
-            # ==================================================
-            # 必须持有杀
-            # ==================================================
-
-            if not self.player.has_card(
-                "SHA"
-            ):
-
-                self.message = (
-                    "你没有【杀】，"
-                    "现在不能使用【酒】。"
-                )
-
-                return
-
-            # ==================================================
-            # 必须能够攻击目标
-            # ==================================================
-
-            if not self.can_attack(
-                self.player,
-                next((target for target in self.get_alive_players()
-                      if target is not self.player and self.can_attack(self.player, target)), self.enemy)
-            ):
-
-                self.message = (
-                    "当前没有能够使用【杀】"
-                    "攻击到的目标，"
-                    "不能使用【酒】。"
-                )
-
-                return
-
-            card = self.player.remove_card(
-                index
-            )
-
-            self.jiu_used = True
-
-            self.player_wine_buff = True
-
-            self.wine_sha_required = True
-
-            self.message = (
-                "你使用了【酒】，"
-                "现在必须使用【杀】。"
-            )
-
-            self.actions.add(
-
-                MoveCardAction(
-                    card,
-                    source_rect,
-                    TABLE_CARD_RECT,
-                    duration=0.30,
-
-                    on_finish=(
-
-                        lambda c=card:
-                            self.add_table_card(
-                                c,
-                                TABLE_CARD_RECT
-                            )
-                    )
-                )
-            )
-
-            self.actions.add(
-                WaitAction(
-                    0.45
-                )
-            )
-
-            self.queue_to_discard(
-                card,
-                TABLE_CARD_RECT
-            )
 
             return
 
@@ -318,27 +173,37 @@ class BasicCardMixin:
             )
         )
 
-    def _begin_v2_card_targeting(self, card, source_rect):
+    def _begin_v2_card_targeting(self, card, source_rect, metadata=None, ignore_usage_limit=False):
         effect = self.engine.card_effects.require(card)
         rule = effect.target_rule
         ordered = self.seats.alive_players_in_order(start_after=self.player, include_start=True)
         if rule is TargetRule.SELF:
-            return self._submit_selected_card(card, source_rect, [self.player])
+            return self._submit_selected_card(
+                card, source_rect,
+                [self.player] if effect.max_targets >= 1 else [],
+                metadata=metadata, ignore_usage_limit=ignore_usage_limit,
+            )
         if rule is TargetRule.ALL_PLAYERS:
-            return self._submit_selected_card(card, source_rect, ordered)
+            return self._submit_selected_card(card, source_rect, ordered, metadata=metadata, ignore_usage_limit=ignore_usage_limit)
         if rule is TargetRule.ALL_OTHERS:
-            return self._submit_selected_card(card, source_rect, [p for p in ordered if p is not self.player])
+            return self._submit_selected_card(card, source_rect, [p for p in ordered if p is not self.player], metadata=metadata, ignore_usage_limit=ignore_usage_limit)
         if rule is TargetRule.NO_TARGET:
-            return self._submit_selected_card(card, source_rect, [])
+            return self._submit_selected_card(card, source_rect, [], metadata=metadata, ignore_usage_limit=ignore_usage_limit)
 
         candidates = []
         for target in target_candidates(self, self.player, rule):
-            probe = UseCardAction(self.player, card, [target], source_rect=source_rect)
+            probe = UseCardAction(self.player, card, [target], source_rect=source_rect, ignore_usage_limit=ignore_usage_limit)
             if rule is TargetRule.MULTIPLE or effect.can_use(self, probe)[0]:
                 candidates.append(target)
         if not candidates:
             self.message = "没有合法目标。"
             return
+        if effect.max_targets == 1 and len(candidates) == 1:
+            # 1v1 与“只剩一个合法目标”的情况保持一步出牌，不额外要求确认。
+            return self._submit_selected_card(
+                card, source_rect, candidates,
+                metadata=metadata, ignore_usage_limit=ignore_usage_limit,
+            )
         self.pending_target_selection = {
             "card": card,
             "source_rect": source_rect,
@@ -346,9 +211,28 @@ class BasicCardMixin:
             "selected": [],
             "minimum": effect.min_targets,
             "maximum": effect.max_targets,
+            "metadata": dict(metadata or {}),
+            "ignore_usage_limit": ignore_usage_limit,
         }
-        self.message = ("请选择目标（1 / 1）" if effect.max_targets == 1 else
-                        "请选择 1～" + str(effect.max_targets) + " 个目标，已选择 0 / " + str(effect.max_targets))
+        self.message = self._target_prompt(self.pending_target_selection)
+
+    def cancel_target_selection(self):
+        """放弃当前的目标选择（只影响 UI 选择状态，不改变任何规则状态）。"""
+
+        if self.pending_target_selection is None:
+            return False
+        self.pending_target_selection = None
+        self.message = "已取消目标选择。"
+        return True
+
+    def _target_prompt(self, selection):
+        selected = len(selection["selected"])
+        minimum = selection["minimum"]
+        maximum = selection["maximum"]
+        if maximum == 1:
+            return "请选择目标：已选择 " + str(selected) + " / 1，点击角色后自动确认。"
+        return ("请选择 " + str(minimum) + "～" + str(maximum) + " 个目标：已选择 "
+                + str(selected) + " / " + str(maximum) + "，点击「确认目标」结算。")
 
     def toggle_target_selection(self, target):
         selection = self.pending_target_selection
@@ -362,7 +246,7 @@ class BasicCardMixin:
         if selection["maximum"] == 1 and selected:
             self.confirm_target_selection()
         else:
-            self.message = "请选择 1～" + str(selection["maximum"]) + " 个目标，已选择 " + str(len(selected)) + " / " + str(selection["maximum"])
+            self.message = self._target_prompt(selection)
         return True
 
     def confirm_target_selection(self):
@@ -384,19 +268,30 @@ class BasicCardMixin:
                 self.message = "请选择被迫成为【杀】目标的角色（1 / 1）"
                 return True
         self.pending_target_selection = None
-        metadata = {}
+        metadata = dict(selection.get("metadata", {}))
         targets = selection["selected"]
         if selection.get("stage") == "victim":
             metadata["jiedao_victim"] = targets[0]
             targets = [selection["wielder"]]
-        self._submit_selected_card(selection["card"], selection["source_rect"], targets, metadata=metadata)
+        self._submit_selected_card(
+            selection["card"], selection["source_rect"], targets,
+            metadata=metadata,
+            ignore_usage_limit=selection.get("ignore_usage_limit", False),
+        )
         return True
 
-    def _submit_selected_card(self, card, source_rect, targets, metadata=None):
+    def _submit_selected_card(self, card, source_rect, targets, metadata=None, ignore_usage_limit=False):
         self.pending_target_selection = None
-        result = self.submit_action(UseCardAction(self.player, card, list(targets), source_rect=source_rect, metadata=dict(metadata or {})))
-        self.add_log(self.player.name + " 使用【" + card.display_name + "】" +
-                     (("，目标：" + "、".join(target.name for target in targets)) if targets else ""))
+        result = self.submit_action(UseCardAction(
+            self.player, card, list(targets),
+            source_rect=source_rect,
+            ignore_usage_limit=ignore_usage_limit,
+            metadata=dict(metadata or {}),
+        ))
+        # 被规则拒绝的尝试不会真正使用这张牌，日志由 UseCardFlow 在成功时记录。
+        if getattr(result.status, "value", None) != "cancelled":
+            self.add_log(self.player.name + " 使用【" + card.display_name + "】" +
+                         (("，目标：" + "、".join(target.name for target in targets)) if targets else ""))
         return result
 
 
@@ -557,22 +452,18 @@ class BasicCardMixin:
                 color=(245, 205, 195),
             )
             virtual_sha._virtual = True
-            base_damage = 2 if self.player_wine_buff else 1
-            self.player_wine_buff = False
-            self.wine_sha_required = False
-            self.submit_action(
-                UseCardAction(
-                    actor=self.player,
-                    card=virtual_sha,
-                    targets=[self.enemy],
-                    source_rect=PLAYER_HAND_SOURCE_RECT,
-                    ignore_usage_limit=True,
-                    metadata={
-                        "skill": "ZHANGBA",
-                        "materials": material_cards,
-                        "base_damage": base_damage,
-                    },
-                )
+            base_damage = 2 if self.player.wine_buff else 1
+            self.player.wine_buff = False
+            self.player.wine_sha_required = False
+            self._begin_v2_card_targeting(
+                virtual_sha,
+                PLAYER_HAND_SOURCE_RECT,
+                metadata={
+                    "skill": "ZHANGBA",
+                    "materials": material_cards,
+                    "base_damage": base_damage,
+                },
+                ignore_usage_limit=True,
             )
             return
 
@@ -609,13 +500,13 @@ class BasicCardMixin:
 
         damage = 1
 
-        if self.player_wine_buff:
+        if self.player.wine_buff:
 
             damage += 1
-            self.player_wine_buff = False
-            self.wine_sha_required = False
+            self.player.wine_buff = False
+            self.player.wine_sha_required = False
 
-        self.sha_used = True
+        self.player.sha_used = True
 
         self.message = (
             "你发动【丈八蛇矛】，"
@@ -640,15 +531,11 @@ class BasicCardMixin:
         damage
     ):
 
-        self.submit_action(
-            UseCardAction(
-                actor=self.player,
-                card=sha,
-                targets=[self.enemy],
-                source_rect=PLAYER_HAND_SOURCE_RECT,
-                ignore_usage_limit=True,
-                metadata={"base_damage": damage, "skill": "ZHANGBA"},
-            )
+        self._begin_v2_card_targeting(
+            sha,
+            PLAYER_HAND_SOURCE_RECT,
+            metadata={"base_damage": damage, "skill": "ZHANGBA"},
+            ignore_usage_limit=True,
         )
         return
 
@@ -681,6 +568,13 @@ class BasicCardMixin:
                     )
             )
         )
+
+    # ==================================================
+    # Legacy 1v1 出杀入口
+    #
+    # 真人出杀现在统一走 _begin_v2_card_targeting；这个方法保留给
+    # Legacy 回归测试与旧回调链使用，不再承担多人目标选择。
+    # ==================================================
 
     def try_player_sha(
         self,

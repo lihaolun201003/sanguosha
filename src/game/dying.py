@@ -1,3 +1,10 @@
+"""Legacy 1v1 dying/rescue callbacks.
+
+The live path is ``flows/dying.py`` with the seat-ordered multi-player rescue
+round; this mixin keeps the Legacy 1v1 tests and the old callback helpers
+working.
+"""
+
 from src.actions import (
     CallbackAction,
     MoveCardAction,

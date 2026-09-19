@@ -17,11 +17,12 @@ class ShaEffect(CardEffect):
         valid, message = super().can_use(game, action)
         if not valid:
             return valid, message
-        if game.phase not in ("play", "enemy") and not action.ignore_usage_limit:
-            return False, "当前不是出牌阶段。"
-        if action.actor is game.player and game.sha_used and not action.ignore_usage_limit and not game.can_use_unlimited_sha(action.actor):
+        actor = action.actor
+        # Usage limits are per character: every AI tracks its own Sha count,
+        # and the turn flow resets the flag when that character's turn starts.
+        if actor.sha_used and not action.ignore_usage_limit and not game.can_use_unlimited_sha(actor):
             return False, "本回合已经使用过【杀】。"
-        if not DistanceRule.in_attack_range(game, action.actor, list(action.targets)[0]):
+        if not DistanceRule.in_attack_range(game, actor, list(action.targets)[0]):
             return False, "攻击距离不足。"
         return True, ""
 

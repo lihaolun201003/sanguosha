@@ -1,3 +1,10 @@
+"""Legacy 1v1 combat callbacks and animations.
+
+The live path for Sha, damage and equipment skills is Engine V2
+(``flows/`` + ``card_effects/``); this mixin keeps the Legacy regression tests
+and the remaining 1v1 callback helpers working.
+"""
+
 from src.actions import (
     CallbackAction,
     MoveCardAction,

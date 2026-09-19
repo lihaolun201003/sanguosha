@@ -10,6 +10,7 @@ class GameOutcome(str, Enum):
     AI_WIN = "ai_win"
     LAST_SURVIVOR = "last_survivor"
     HUMAN_ELIMINATED = "human_eliminated"
+    NO_SURVIVOR = "no_survivor"
 
 
 @dataclass(frozen=True)

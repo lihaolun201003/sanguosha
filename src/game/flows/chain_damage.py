@@ -25,6 +25,9 @@ class ChainDamageFlow(Flow):
     def _next(self):
         from .damage import DamageContext, DamageFlow
         while self.index < len(self.targets):
+            if self.engine.game.game_over:
+                # 对局已经结束：不再继续结算剩余传播，也不留下等待请求。
+                break
             target = self.targets[self.index]
             self.index += 1
             if target.hp <= 0 or target in self.visited:

@@ -20,7 +20,8 @@ def trick(name):
 class EngineV2Phase3Tests(unittest.TestCase):
     def test_registry_target_rules_and_catalog(self):
         game = make_test_game()
-        self.assertEqual(len(game.engine.card_effects), 16)
+        # 16 tricks + Sha + the shared category-level equipment effect.
+        self.assertEqual(len(game.engine.card_effects), 18)
         self.assertIs(game.engine.card_effects.require("NANMAN").target_rule, TargetRule.ALL_OTHERS)
         self.assertEqual(len(create_development_deck()), 128)
         self.assertEqual(sum(map(len, TRICK_DEFINITIONS.values())), 49)

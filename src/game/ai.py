@@ -1,3 +1,12 @@
+"""Legacy 1v1 AI state machine.
+
+Live AI turns no longer run through this module: ``TurnFlow`` asks the seat's
+``AIController`` (``controllers/ai.py``) which submits the same GameActions as
+the human seat.  These methods survive only because the Legacy 1v1 combat and
+dying paths still call into them.  New multiplayer behaviour belongs in
+``controllers/ai.py``.
+"""
+
 import random
 
 from src.actions import (

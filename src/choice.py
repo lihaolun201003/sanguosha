@@ -1,5 +1,8 @@
 import pygame
 
+from src.ui import theme
+from src.ui.widgets import Button, draw_panel
+
 
 class ChoiceRequest:
 
@@ -90,6 +93,7 @@ class ChoiceSystem:
 
 
 class ChoiceOverlay:
+    """Dark modal with two themed choices."""
 
     def __init__(
         self,
@@ -103,26 +107,16 @@ class ChoiceOverlay:
         self.title_font = title_font
         self.body_font = body_font
 
-        self.panel_rect = pygame.Rect(
-            300,
-            300,
-            400,
-            190
-        )
+        self.panel_rect = pygame.Rect(280, 280, 440, 200)
 
-        self.yes_rect = pygame.Rect(
-            365,
-            415,
-            115,
-            46
-        )
+        self.yes_rect = pygame.Rect(312, 398, 176, 54)
+        self.no_rect = pygame.Rect(512, 398, 176, 54)
 
-        self.no_rect = pygame.Rect(
-            520,
-            415,
-            115,
-            46
-        )
+    def _buttons(self, choice_system):
+        request = choice_system.current
+        yes = Button(pygame.Rect(self.yes_rect), request.yes_label, kind="primary", font="normal")
+        no = Button(pygame.Rect(self.no_rect), request.no_label, kind="secondary", font="normal")
+        return yes, no
 
 
     def handle_click(
@@ -134,24 +128,17 @@ class ChoiceOverlay:
         if not choice_system.active:
             return False
 
-        if self.yes_rect.collidepoint(
-            position
-        ):
+        yes, no = self._buttons(choice_system)
 
+        if yes.contains(position):
             choice_system.choose_yes()
-
             return True
 
-        if self.no_rect.collidepoint(
-            position
-        ):
-
+        if no.contains(position):
             choice_system.choose_no()
-
             return True
 
-        # 选择框存在期间，
-        # 点击其他地方全部忽略。
+        # 选择框存在期间，点击其他地方全部忽略。
         return True
 
 
@@ -164,168 +151,35 @@ class ChoiceOverlay:
             return
 
         request = choice_system.current
+        fonts = theme.fonts()
 
-        # ==================================================
-        # 半透明背景
-        # ==================================================
+        veil = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        veil.fill((6, 9, 13, 176))
+        self.screen.blit(veil, (0, 0))
 
-        overlay = pygame.Surface(
-            self.screen.get_size(),
-            pygame.SRCALPHA
-        )
-
-        overlay.fill(
-            (
-                0,
-                0,
-                0,
-                105
-            )
-        )
-
-        self.screen.blit(
-            overlay,
-            (
-                0,
-                0
-            )
-        )
-
-        # ==================================================
-        # 主面板
-        # ==================================================
-
-        pygame.draw.rect(
+        draw_panel(
             self.screen,
-            (
-                58,
-                58,
-                58
-            ),
             self.panel_rect,
-            border_radius=12
+            fill=theme.PANEL,
+            border=theme.GOLD,
+            border_width=theme.BORDER_THICK,
         )
 
-        pygame.draw.rect(
+        title = fonts.get("large").render(request.title, True, theme.GOLD_BRIGHT)
+        self.screen.blit(title, title.get_rect(center=(self.panel_rect.centerx, self.panel_rect.y + 46)))
+
+        pygame.draw.line(
             self.screen,
-            (
-                225,
-                190,
-                120
-            ),
-            self.panel_rect,
-            3,
-            border_radius=12
+            theme.GOLD_DIM,
+            (self.panel_rect.x + 48, self.panel_rect.y + 78),
+            (self.panel_rect.right - 48, self.panel_rect.y + 78),
+            2,
         )
 
-        # ==================================================
-        # 标题
-        # ==================================================
+        prompt = fonts.get("small").render(request.prompt[:40], True, theme.TEXT)
+        self.screen.blit(prompt, prompt.get_rect(center=(self.panel_rect.centerx, self.panel_rect.y + 106)))
 
-        title = self.title_font.render(
-            request.title,
-            True,
-            (
-                255,
-                225,
-                150
-            )
-        )
-
-        self.screen.blit(
-            title,
-            title.get_rect(
-                center=(
-                    500,
-                    335
-                )
-            )
-        )
-
-        # ==================================================
-        # 提示
-        # ==================================================
-
-        prompt = self.body_font.render(
-            request.prompt,
-            True,
-            (
-                245,
-                245,
-                245
-            )
-        )
-
-        self.screen.blit(
-            prompt,
-            prompt.get_rect(
-                center=(
-                    500,
-                    382
-                )
-            )
-        )
-
-        # ==================================================
-        # 发动按钮
-        # ==================================================
-
-        pygame.draw.rect(
-            self.screen,
-            (
-                225,
-                180,
-                80
-            ),
-            self.yes_rect,
-            border_radius=8
-        )
-
-        # ==================================================
-        # 不发动按钮
-        # ==================================================
-
-        pygame.draw.rect(
-            self.screen,
-            (
-                150,
-                150,
-                150
-            ),
-            self.no_rect,
-            border_radius=8
-        )
-
-        yes_text = self.body_font.render(
-            request.yes_label,
-            True,
-            (
-                20,
-                20,
-                20
-            )
-        )
-
-        no_text = self.body_font.render(
-            request.no_label,
-            True,
-            (
-                20,
-                20,
-                20
-            )
-        )
-
-        self.screen.blit(
-            yes_text,
-            yes_text.get_rect(
-                center=self.yes_rect.center
-            )
-        )
-
-        self.screen.blit(
-            no_text,
-            no_text.get_rect(
-                center=self.no_rect.center
-            )
-        )
+        yes, no = self._buttons(choice_system)
+        mouse = pygame.mouse.get_pos()
+        yes.draw(self.screen, fonts, mouse)
+        no.draw(self.screen, fonts, mouse)

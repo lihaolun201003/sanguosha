@@ -3,11 +3,6 @@ from src.actions import (
     WaitAction,
 )
 
-from src.constants import (
-    ENEMY_HAND_RECT,
-    PLAYER_HAND_SOURCE_RECT,
-)
-
 
 class TurnMixin:
 
@@ -23,6 +18,9 @@ class TurnMixin:
         if self.response.active:
             return
 
+        if self.current_turn_player is not self.player:
+            return
+
         if self.phase != "play":
             return
 
@@ -30,8 +28,9 @@ class TurnMixin:
             return
 
 
-        # 使用酒以后必须先出杀
-        if self.wine_sha_required:
+        # 使用酒以后必须先出杀；但如果没有能打到的目标（例如唯一目标已经
+        # 阵亡），酒的效果作废，不能把玩家永久锁在出牌阶段。
+        if self.wine_blocks_other_cards():
 
             self.message = (
                 "你已经使用【酒】，"
@@ -79,6 +78,9 @@ class TurnMixin:
     ):
 
         if self.busy:
+            return
+
+        if self.current_turn_player is not self.player:
             return
 
         if self.phase != "discard":
@@ -143,18 +145,14 @@ class TurnMixin:
         self.actions.add(
 
             CallbackAction(
-                self.start_enemy_turn
+                lambda: self.start_next_turn(self.player)
             )
         )
 
 
     # ==================================================
-    # 开始电脑回合
+    # 开始下一个存活角色的回合
     # ==================================================
-
-    def start_enemy_turn(self):
-
-        self.start_next_turn(self.player)
 
     def start_next_turn(self, previous=None):
 
@@ -168,27 +166,31 @@ class TurnMixin:
 
     def start_turn(self, player):
 
+        from .engine import FlowStatus
         from .flows.turn import TurnFlow
-        from .controllers import AIController
 
         if self.game_over or not player.alive:
             return
 
-
-        # 玩家酒效果不能跨回合
-        self.player_wine_buff = False
-        self.wine_sha_required = False
-
-
-        # 初始化电脑本回合状态
-        self.enemy_wine_buff = False
-        self.enemy_jiu_used = False
-
+        # 回合状态属于角色自己：出杀次数、酒效果都按角色清理。
+        player.clear_turn_state()
 
         if getattr(self, "active_turn_flow", None) is not None:
             self.active_turn_flow.finish_interactive()
-        self.active_turn_flow = TurnFlow(self.engine, player)
-        can_play = self.active_turn_flow.begin_interactive()
+        flow = TurnFlow(
+            self.engine,
+            player,
+            on_play_phase=lambda ready, p=player: self._enter_play_phase(p, ready),
+        )
+        self.active_turn_flow = flow
+        ready = flow.begin_interactive()
+        if flow.status is FlowStatus.WAITING:
+            # 判定阶段触发了需要等待的流程（例如闪电造成濒死求桃）：
+            # 出牌阶段会在该流程结束后自动开始。
+            return
+        self._enter_play_phase(player, ready)
+
+    def _enter_play_phase(self, player, can_play):
 
         self.message = player.name + " 的回合。"
         self.add_log("当前回合：" + player.name)
@@ -199,21 +201,18 @@ class TurnMixin:
         )
 
 
-        if player is self.player:
-            self.sha_used = False
-            self.jiu_used = False
+        if player.is_human:
             self.message = "出牌阶段。" if can_play else "出牌阶段被跳过，请进入弃牌阶段。"
             return
-        controller = AIController(self, player)
+        # AI 与真人共用同一套回合流程，只是 Action 来自 AIController。
+        controller = self.get_controller(player)
         self.actions.add(CallbackAction(
             lambda p=player, c=controller: c.take_turn(lambda: self._finish_ai_turn(p))
             if can_play else self._finish_ai_turn(p)
         ))
 
     def _finish_ai_turn(self, player):
-        from .atoms_v2 import MoveCardAtom
-        while len(player.hand) > max(0, player.hp):
-            self.context.apply(MoveCardAtom(player.hand[-1], source=player.hand, destination=self.deck.discard_pile))
+        self.get_controller(player).discard_to_hand_limit()
         if self.active_turn_flow is not None:
             self.active_turn_flow.finish_interactive()
         if not self.game_over:

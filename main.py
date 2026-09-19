@@ -3,12 +3,9 @@ import pygame
 from src.choice import ChoiceOverlay
 
 from src.constants import (
-    ENEMY_EQUIPMENT_RECTS,
     FPS,
     HEIGHT,
-    PLAYER_EQUIPMENT_RECTS,
     WIDTH,
-    MAIN_MENU_RECT,
 )
 
 from src.game import Game
@@ -55,6 +52,38 @@ start_menu = StartMenu(
     renderer.small_font,
     renderer.tiny_font
 )
+
+
+def _public_index_at(position, renderer, cards):
+    for index, rect in enumerate(renderer.get_public_card_rects(cards)):
+        if rect.collidepoint(position):
+            return index
+    return None
+
+
+def run_action(action):
+    """UI 动作 → 既有 Game 入口，规则仍然只由引擎决定。"""
+
+    if action == "end_turn":
+        game.end_player_turn()
+    elif action == "confirm_target":
+        game.confirm_target_selection()
+    elif action == "cancel_target":
+        game.cancel_target_selection()
+    elif action == "pass_response":
+        game.pass_response()
+    elif action == "choice_no":
+        game.choice.choose_no()
+    elif action == "confirm_zhangba":
+        game.commit_player_zhangba()
+    elif action == "cancel_zhangba":
+        game.cancel_player_zhangba()
+    elif action == "restart":
+        renderer.reset_effects()
+        game.reset()
+    elif action == "menu":
+        renderer.reset_effects()
+        game.return_to_menu()
 
 
 running = True
@@ -113,44 +142,7 @@ while running:
 
 
         # ==================================================
-        # 游戏结束
-        # ==================================================
-
-        if (
-            game.game_over
-            and not game.busy
-        ):
-
-            restart_rect = (
-                renderer.get_restart_rect()
-            )
-
-
-            if restart_rect.collidepoint(
-                event.pos
-            ):
-
-                game.reset()
-
-            elif pygame.Rect(*MAIN_MENU_RECT).collidepoint(event.pos):
-
-                game.return_to_menu()
-
-
-            continue
-
-
-        # ==================================================
-        # 动画期间不能操作
-        # ==================================================
-
-        if game.busy:
-
-            continue
-
-
-        # ==================================================
-        # 通用二选一
+        # 二选一弹窗优先，出现时拦截其它点击
         # ==================================================
 
         if game.choice.active:
@@ -164,76 +156,45 @@ while running:
 
 
         # ==================================================
-        # 响应阶段
+        # 固定操作按钮：结束回合 / 确认目标 / 不出 / 结算按钮
         # ==================================================
 
-        if game.response.active:
+        action = renderer.hit_action(event.pos, game)
 
-            pass_rect = (
-                renderer
-                .get_pass_response_rect()
-            )
-
-
-            if pass_rect.collidepoint(
-                event.pos
-            ):
-
-                game.pass_response()
-
-                continue
+        if action is not None:
+            run_action(action)
+            continue
 
 
-            card_index = (
-                renderer.card_at_position(
-                    event.pos,
-                    game.player.hand
-                )
-            )
-
-
-            if card_index is None:
-
-                continue
-
-
-            rects = (
-                renderer.get_card_rects(
-                    game.player.hand
-                )
-            )
-
-
-            source_rect = tuple(
-                rects[card_index]
-            )
-
-
-            game.respond_with_card(
-                card_index,
-                source_rect
-            )
-
+        if game.game_over or game.busy:
 
             continue
 
 
         # ==================================================
-        # 武器效果的具体选牌阶段
+        # 选牌阶段（五谷公共牌 / 手牌 / 装备区）
         # ==================================================
 
         if game.pending_selection is not None:
 
             zone = game.pending_selection["zone"]
 
-            if zone == "public_pool":
-                for card, rect in zip(game.public_card_pool, renderer.get_public_card_rects(game.public_card_pool)):
-                    if rect.collidepoint(event.pos):
-                        game.select_pending_card(card, tuple(rect))
-                        break
+            if zone in ("public_pool", "selection_pool"):
+                # 候选可能来自其它角色的装备区，必须把装备槽 key 一起回传给引擎，
+                # 否则装备牌永远选不中。
+                entries = renderer.get_pool_entries(game)
+                cards = [card for card, _key in entries]
+                index = _public_index_at(event.pos, renderer, cards)
+                if index is not None:
+                    rects = renderer.get_public_card_rects(cards)
+                    game.select_pending_card(
+                        entries[index][0],
+                        tuple(rects[index]),
+                        key=entries[index][1],
+                    )
                 continue
 
-            if zone == "player_hand":
+            if zone in ("hand", "player_hand"):
 
                 card_index = renderer.card_at_position(
                     event.pos,
@@ -251,57 +212,19 @@ while running:
                         tuple(rects[card_index])
                     )
 
-            elif zone in ("enemy_hand", "enemy_cards"):
+                continue
 
-                card_index = renderer.enemy_card_at_position(
-                    event.pos,
-                    game.enemy.hand
-                )
+            if zone in ("player_equipment",):
 
-                if card_index is not None:
-
-                    rects = renderer.get_enemy_hand_rects(
-                        game.enemy.hand
-                    )
-
-                    game.select_pending_card(
-                        game.enemy.hand[card_index],
-                        tuple(rects[card_index])
-                    )
-
-                    continue
-
-                if zone == "enemy_cards":
-                    for slot, rect_data in ENEMY_EQUIPMENT_RECTS.items():
-                        rect = pygame.Rect(*rect_data)
-                        if not rect.collidepoint(event.pos):
-                            continue
-                        card = game.enemy.get_equipment(slot)
-                        if card is not None:
-                            game.select_pending_card(card, tuple(rect), key=slot)
-                        break
-
-            elif zone == "enemy_equipment":
-
-                for slot, rect_data in (
-                    ENEMY_EQUIPMENT_RECTS.items()
-                ):
-
-                    rect = pygame.Rect(
-                        *rect_data
-                    )
+                for slot, rect in renderer.player_equipment_slot_rects(game).items():
 
                     if not rect.collidepoint(event.pos):
                         continue
 
-                    card = game.enemy.get_equipment(slot)
+                    card = game.player.get_equipment(slot)
 
                     if card is not None:
-                        game.select_pending_card(
-                            card,
-                            tuple(rect),
-                            key=slot
-                        )
+                        game.select_pending_card(card, tuple(rect), key=slot)
 
                     break
 
@@ -311,13 +234,14 @@ while running:
         # ==================================================
         # 多人角色目标选择
         # ==================================================
+
         if game.pending_target_selection is not None:
-            if renderer.get_end_turn_rect().collidepoint(event.pos):
-                game.confirm_target_selection()
-                continue
+
             target = renderer.player_at_position(event.pos, game)
+
             if target is not None:
                 game.toggle_target_selection(target)
+
             continue
 
 
@@ -325,13 +249,9 @@ while running:
         # 丈八蛇矛选牌：点击手牌选择，点击武器取消
         # ==================================================
 
-        weapon = game.player.get_equipment(
-            "weapon"
-        )
+        weapon = game.player.get_equipment("weapon")
 
-        weapon_rect = pygame.Rect(
-            *PLAYER_EQUIPMENT_RECTS["weapon"]
-        )
+        weapon_rect = renderer.player_equipment_slot_rects(game)["weapon"]
 
         if game.zhangba_selecting:
 
@@ -375,19 +295,33 @@ while running:
 
 
         # ==================================================
-        # 结束回合
+        # 响应阶段：点击手牌打出响应牌
         # ==================================================
 
-        end_rect = (
-            renderer.get_end_turn_rect()
+        card_index = renderer.card_at_position(
+            event.pos,
+            game.player.hand
         )
 
+        if card_index is None:
 
-        if end_rect.collidepoint(
-            event.pos
-        ):
+            continue
 
-            game.end_player_turn()
+
+        rects = renderer.get_card_rects(
+            game.player.hand
+        )
+
+        source_rect = tuple(
+            rects[card_index]
+        )
+
+        if game.response.active:
+
+            game.respond_with_card(
+                card_index,
+                source_rect
+            )
 
             continue
 
@@ -396,32 +330,7 @@ while running:
         # 点击手牌
         # ==================================================
 
-        card_index = (
-            renderer.card_at_position(
-                event.pos,
-                game.player.hand
-            )
-        )
-
-
-        if card_index is None:
-
-            continue
-
-
-        rects = (
-            renderer.get_card_rects(
-                game.player.hand
-            )
-        )
-
-
-        source_rect = tuple(
-            rects[card_index]
-        )
-
-
-        if game.phase == "play":
+        if game.phase == "play" and game.current_turn_player is game.player:
 
             game.player_use_card(
                 card_index,
@@ -429,7 +338,7 @@ while running:
             )
 
 
-        elif game.phase == "discard":
+        elif game.phase == "discard" and game.current_turn_player is game.player:
 
             game.player_discard(
                 card_index,
@@ -442,6 +351,8 @@ while running:
     # ==================================================
 
     game.update(dt)
+
+    renderer.update(dt)
 
 
     # ==================================================

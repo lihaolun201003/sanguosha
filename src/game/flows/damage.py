@@ -34,6 +34,10 @@ class DamageFlow(Flow):
 
     def advance(self, response=None):
         damage = self.damage
+        if self.game.game_over:
+            # 对局已经结束（例如同一传播里有人先触发了胜负）：不再结算
+            # 后续伤害，避免在结束后创建等待真人输入的求桃请求。
+            return self._complete_damage()
         for event_type in (
             EventType.DAMAGE_CREATED,
             EventType.DAMAGE_SOURCE_BEFORE,
@@ -105,8 +109,13 @@ class DamageFlow(Flow):
     def _set_damage_message(self):
         damage = self.damage
         card_name = getattr(damage.card, "display_name", "伤害")
-        self.game.message = damage.target.name + "受到 " + str(self.applied_amount) + " 点伤害。"
-        self.game.add_log((damage.source.name + " 对 " if damage.source else "") + damage.target.name + "造成 " + str(self.applied_amount) + " 点" + damage.nature + "伤害（" + card_name + "）")
+        nature_names = {"normal": "普通", "fire": "火焰", "thunder": "雷电"}
+        nature = nature_names.get(damage.nature, damage.nature)
+        self.game.message = damage.target.name + "受到 " + str(self.applied_amount) + " 点" + nature + "伤害。"
+        self.game.add_log(
+            (damage.source.name + " 对 " if damage.source else "")
+            + damage.target.name + " 造成 " + str(self.applied_amount) + " 点" + nature + "伤害（" + card_name + "）"
+        )
 
         if damage.effects:
             self.game.message += "（" + "；".join(damage.effects) + "）"

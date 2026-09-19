@@ -6,11 +6,13 @@ class CardSelectionMixin:
         candidates,
         number,
         prompt,
-        on_complete
+        on_complete,
+        owner=None,
     ):
 
         self.pending_selection = {
             "zone": zone,
+            "owner": owner,
             "candidates": list(candidates),
             "number": number,
             "prompt": prompt,
@@ -19,6 +21,27 @@ class CardSelectionMixin:
         }
 
         self._update_selection_message()
+
+    def selection_pool_cards(self):
+        """Cards laid out in the public area for the current selection."""
+
+        selection = self.pending_selection
+        if selection is None or selection["zone"] != "public_pool":
+            return []
+        return [card for card, _key in selection["candidates"]]
+
+    def selection_pool_entries(self):
+        """[(card, key)] for the public area.
+
+        The key is the equipment slot for cards taken out of another
+        character's equipment zone, and must be handed back when the card is
+        selected — otherwise a piece of equipment can never be picked.
+        """
+
+        selection = self.pending_selection
+        if selection is None or selection["zone"] != "public_pool":
+            return []
+        return list(selection["candidates"])
 
 
     def _update_selection_message(self):

@@ -9,9 +9,9 @@ CARD_WIDTH = 90
 CARD_HEIGHT = 130
 CARD_GAP = 20
 
-PLAYER_HAND_Y = 520
+PLAYER_HAND_Y = 578
 
-BACKGROUND_COLOR = (45, 105, 65)
+BACKGROUND_COLOR = (23, 33, 44)
 
 WHITE = (255, 255, 255)
 BLACK = (30, 30, 30)
@@ -19,13 +19,15 @@ BLACK = (30, 30, 30)
 
 # ==================================================
 # 抽牌堆
+#
+# 这些坐标是引擎动画的落点，必须与 src.ui.layout 的桌面布局保持一致。
 # ==================================================
 
 DRAW_PILE_RECT = (
-    60,
-    250,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    226,
+    258,
+    86,
+    122,
 )
 
 
@@ -34,10 +36,10 @@ DRAW_PILE_RECT = (
 # ==================================================
 
 DISCARD_PILE_RECT = (
-    850,
-    250,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    688,
+    258,
+    86,
+    122,
 )
 
 
@@ -46,18 +48,18 @@ DISCARD_PILE_RECT = (
 # ==================================================
 
 TABLE_CARD_RECT = (
-    405,
-    330,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    438,
+    300,
+    90,
+    124,
 )
 
 
 RESPONSE_CARD_RECT = (
-    515,
-    330,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    534,
+    300,
+    90,
+    124,
 )
 
 
@@ -66,53 +68,56 @@ RESPONSE_CARD_RECT = (
 # ==================================================
 
 ENEMY_HAND_RECT = (
-    455,
-    170,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    440,
+    150,
+    88,
+    122,
 )
 
 
 PLAYER_HAND_SOURCE_RECT = (
-    455,
+    438,
     PLAYER_HAND_Y,
-    CARD_WIDTH,
-    CARD_HEIGHT,
+    88,
+    122,
 )
 
 
 # ==================================================
 # 玩家装备区
+#
+# 与 src.ui.layout.TableLayout.player_equipment_rects 保持一致，
+# 供 Legacy 装备动画路径使用。
 # ==================================================
 
 PLAYER_EQUIPMENT_RECTS = {
 
     "weapon": (
-        20,
-        420,
-        65,
-        85,
+        380,
+        532,
+        56,
+        38,
     ),
 
     "armor": (
-        95,
-        420,
-        65,
-        85,
+        444,
+        532,
+        56,
+        38,
     ),
 
     "defensive_horse": (
-        170,
-        420,
-        65,
-        85,
+        508,
+        532,
+        56,
+        38,
     ),
 
     "offensive_horse": (
-        245,
-        420,
-        65,
-        85,
+        572,
+        532,
+        56,
+        38,
     ),
 }
 
@@ -189,24 +194,17 @@ MAIN_MENU_RECT = (400, 480, 200, 52)
 
 SINGLE_PLAYER_RECT = (
     350,
+    446,
     300,
-    300,
-    64,
+    62,
 )
 
-MULTIPLAYER_RECT = (
-    350,
-    385,
-    300,
-    64,
-)
-
-AI_MINUS_RECT = (315, 395, 52, 44)
-AI_PLUS_RECT = (633, 395, 52, 44)
+AI_MINUS_RECT = (372, 352, 56, 48)
+AI_PLUS_RECT = (572, 352, 56, 48)
 
 EXIT_GAME_RECT = (
     350,
-    470,
+    526,
     300,
-    64,
+    52,
 )

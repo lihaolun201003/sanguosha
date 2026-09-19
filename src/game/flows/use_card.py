@@ -52,18 +52,16 @@ class UseCardFlow(Flow):
                 self.context.apply(MoveCardAtom(self.card, source=self.actor.hand, destination=self.game.processing_zone))
             self.engine.animate_card_use(self.action)
 
-            if self.card.name == "SHA" and self.actor is self.game.player:
-                self.game.sha_used = True
-                if self.game.player_wine_buff:
+            if self.card.name == "SHA":
+                self.actor.sha_used = True
+                if self.actor.wine_buff:
                     self.base_damage += 1
-                    self.game.player_wine_buff = False
-                    self.game.wine_sha_required = False
-                self.game.message = "你使用了【" + self.card.display_name + "】。"
-            elif self.card.name == "SHA":
-                if self.game.enemy_wine_buff:
-                    self.base_damage += 1
-                    self.game.enemy_wine_buff = False
-                self.game.message = self.actor.name + "使用了【" + self.card.display_name + "】。"
+                    self.actor.wine_buff = False
+                self.actor.wine_sha_required = False
+                self.game.message = (
+                    ("你使用了【" if self.actor.is_human else self.actor.name + "使用了【")
+                    + self.card.display_name + "】。"
+                )
 
             self.context.emit(Event(EventType.CARD_USED, source=self.actor, payload={"card": self.card, "flow": self, "targets": self.targets}))
             for target in self.targets:

@@ -158,47 +158,9 @@ class GameEngine:
     def present_or_auto_resolve(self, request):
         responder = request.target
         if getattr(responder.controller_type, "value", responder.controller_type) == "ai":
-            if request.request_type is PendingRequestType.CONFIRM:
-                self.submit(ConfirmPendingAction(responder, request.request_id, True))
-                return
-            if request.request_type is PendingRequestType.CHOOSE_OPTION:
-                self.submit(ChooseOptionAction(responder, request.request_id, request.options[0]))
-                return
-            if request.request_type is PendingRequestType.SELECT_CARDS:
-                candidates = list(request.context.get("candidates", ()))
-                self.submit(SelectCardsAction(responder, request.request_id, candidates[:request.min_cards]))
-                return
-            preferred_names = tuple(request.allowed_cards)
-            if request.context.get("reason") == "dying_rescue":
-                dying_player = request.context.get("dying_player")
-                if responder is not dying_player:
-                    self.submit(PassPendingAction(responder, request.request_id))
-                    return
-                preferred_names = ("TAO", "JIU")
-            if request.context.get("reason") == "wuxie_chain":
-                affected = request.context.get("targets", ())
-                if responder not in affected:
-                    self.submit(PassPendingAction(responder, request.request_id))
-                    return
-            card = None
-            for name in preferred_names:
-                card = next(
-                    (item for item in responder.hand if item.name == name),
-                    None,
-                )
-                if card is not None:
-                    break
-            if card is None:
-                self.submit(PassPendingAction(responder, request.request_id))
-            else:
-                self.submit(
-                    RespondCardAction(
-                        responder,
-                        request.request_id,
-                        card,
-                        ENEMY_HAND_RECT,
-                    )
-                )
+            # AI 与真人共用同一个 Action 接口：由 AIController 决策并提交
+            # GameAction，引擎再恢复 Flow。
+            self.game.get_controller(responder).respond(request)
             return
 
         if request.request_type is PendingRequestType.RESPOND_CARD:
@@ -215,7 +177,7 @@ class GameEngine:
                     lambda index, card, rect, request_id=request.request_id:
                     self.submit(
                         RespondCardAction(
-                            self.game.player,
+                            responder,
                             request_id,
                             card,
                             rect,
@@ -226,7 +188,7 @@ class GameEngine:
                     lambda request_id=request.request_id:
                     self.submit(
                         PassPendingAction(
-                            self.game.player,
+                            responder,
                             request_id,
                         )
                     )
@@ -238,8 +200,8 @@ class GameEngine:
             self.game.choice.request(
                 title="装备技能", prompt=request.prompt,
                 yes_label="发动", no_label="不发动",
-                on_yes=lambda request_id=request.request_id: self.submit(ConfirmPendingAction(self.game.player, request_id, True)),
-                on_no=lambda request_id=request.request_id: self.submit(ConfirmPendingAction(self.game.player, request_id, False)),
+                on_yes=lambda request_id=request.request_id: self.submit(ConfirmPendingAction(responder, request_id, True)),
+                on_no=lambda request_id=request.request_id: self.submit(ConfirmPendingAction(responder, request_id, False)),
             )
             return
 
@@ -249,20 +211,17 @@ class GameEngine:
             self.game.choice.request(
                 title="请选择", prompt=request.prompt,
                 yes_label=str(first), no_label=str(second),
-                on_yes=lambda value=first, request_id=request.request_id: self.submit(ChooseOptionAction(self.game.player, request_id, value)),
-                on_no=lambda value=second, request_id=request.request_id: self.submit(ChooseOptionAction(self.game.player, request_id, value)),
+                on_yes=lambda value=first, request_id=request.request_id: self.submit(ChooseOptionAction(responder, request_id, value)),
+                on_no=lambda value=second, request_id=request.request_id: self.submit(ChooseOptionAction(responder, request_id, value)),
             )
             return
 
         if request.request_type is PendingRequestType.SELECT_CARDS:
             owner = request.context.get("zone_owner", responder)
-            zone = request.context.get("zone") or ("player_hand" if owner is self.game.player else "enemy_hand")
+            zone = request.context.get("zone")
+            if zone is None:
+                zone = self._zone_name(owner, request)
             raw_candidates = list(request.context.get("candidates", ()))
-            if owner is self.game.enemy and any(
-                not any(card is hand_card for hand_card in owner.hand)
-                for card in raw_candidates
-            ):
-                zone = "enemy_cards"
             candidates = []
             for card in raw_candidates:
                 key = None
@@ -273,17 +232,31 @@ class GameEngine:
                 candidates.append((card, key))
             self.game.start_card_selection(
                 zone=zone,
+                owner=owner,
                 candidates=candidates,
                 number=request.min_cards,
                 prompt=request.prompt,
                 on_complete=lambda selected, request_id=request.request_id: self.submit(
                     SelectCardsAction(
-                        self.game.player,
+                        responder,
                         request_id,
                         [item[0] for item in selected],
                     )
                 ),
             )
+
+    def _zone_name(self, owner, request):
+        """Pick the human input region for a card-selection request.
+
+        Own cards are picked by clicking the hand; another character's cards are
+        laid out in the public pool area so every candidate stays clickable
+        even when eight panels share the table.
+        """
+
+        if owner is self.game.player:
+            return "hand"
+        return "public_pool"
+
 
     def animate_card_use(self, action):
         start_rect = action.source_rect

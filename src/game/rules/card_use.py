@@ -15,17 +15,12 @@ def validate_sha_use(game, action):
         return False, "当前【杀】必须指定一个目标。"
 
     target = targets[0]
-    if actor is game.player:
-        if game.phase != "play":
-            return False, "当前不是你的出牌阶段。"
-        if (
-            game.sha_used
-            and not action.ignore_usage_limit
-            and not game.can_use_unlimited_sha(actor)
-        ):
-            return False, "本回合已经使用过【杀】。"
-    elif getattr(actor.controller_type, "value", actor.controller_type) == "ai" and game.phase != "enemy":
-        return False, "当前不是电脑的出牌阶段。"
+    if (
+        actor.sha_used
+        and not action.ignore_usage_limit
+        and not game.can_use_unlimited_sha(actor)
+    ):
+        return False, "本回合已经使用过【杀】。"
 
     if not game.can_attack(actor, target):
         return False, "攻击距离不足。"
