@@ -14,12 +14,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pygame
 
 from src.choice import ChoiceOverlay
-from src.constants import (
-    AI_MINUS_RECT,
-    AI_PLUS_RECT,
-    MAIN_MENU_RECT,
-    SINGLE_PLAYER_RECT,
-)
+from src.constants import MAIN_MENU_RECT
 from src.game import Game
 from src.renderer import Renderer
 from src.start_menu import StartMenu
@@ -35,8 +30,10 @@ class MultiplayerUiTests(unittest.TestCase):
         pygame.init()
         self.screen = pygame.display.set_mode((1000, 700))
         self.renderer = Renderer(self.screen)
-        self.overlay = ChoiceOverlay(self.screen, self.renderer.small_font, self.renderer.tiny_font)
-        self.menu = StartMenu(self.screen, self.renderer.big_font, self.renderer.small_font, self.renderer.tiny_font)
+        self.overlay = ChoiceOverlay(self.screen)
+        self.overlay.sync_layout(self.renderer.metrics)
+        self.menu = StartMenu(self.screen)
+        self.menu.sync_layout(self.renderer.metrics)
 
     def tearDown(self):
         pygame.display.quit()
@@ -44,8 +41,12 @@ class MultiplayerUiTests(unittest.TestCase):
     def start_battle(self, ai_count):
         game = Game(ai_count=1)
         while game.ai_count < ai_count:
-            self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
-        self.menu.handle_click(pygame.Rect(*SINGLE_PLAYER_RECT).center, game)
+            self.menu.handle_click(self.menu.plus_button.rect.center, game)
+        self.menu.handle_click(self.menu.start_button.rect.center, game)
+        # Phase 8 起菜单先进入选将：确认一个武将后才真正开局。
+        if game.scene == "general_select":
+            game.selected_general = game.generals.ids()[0]
+            game.confirm_general()
         game.actions.clear()
         # 每个用例从空手牌开始，AI 的随机初始手牌不能影响断言。
         for player in game.players:
@@ -64,15 +65,19 @@ class MultiplayerUiTests(unittest.TestCase):
     def test_menu_changes_ai_count_and_starts_the_battle(self):
         game = Game(ai_count=1)
         self.assertEqual(game.scene, "menu")
-        self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
-        self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
+        self.menu.handle_click(self.menu.plus_button.rect.center, game)
+        self.menu.handle_click(self.menu.plus_button.rect.center, game)
         self.assertEqual(game.ai_count, 3)
-        self.menu.handle_click(pygame.Rect(*AI_MINUS_RECT).center, game)
+        self.menu.handle_click(self.menu.minus_button.rect.center, game)
         self.assertEqual(game.ai_count, 2)
         while game.ai_count < 7:
-            self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
+            self.menu.handle_click(self.menu.plus_button.rect.center, game)
         self.assertEqual(game.ai_count, 7)
-        self.menu.handle_click(pygame.Rect(*SINGLE_PLAYER_RECT).center, game)
+        self.menu.handle_click(self.menu.start_button.rect.center, game)
+        # Phase 8 起菜单先进入选将，确认后才是对局
+        self.assertEqual(game.scene, "general_select")
+        game.selected_general = game.generals.ids()[0]
+        game.confirm_general()
         self.assertEqual(game.scene, "game")
         self.assertEqual(len(game.players), 8)
 
@@ -93,6 +98,12 @@ class MultiplayerUiTests(unittest.TestCase):
         game.player.hp = game.player.max_hp
         game.current_turn_player = game.player
         game.phase = "play"
+        # 每个 AI 都发一张手牌：武将池里有【空城】这类技能，没有手牌时会
+        # 禁止被指定为目标，候选数降到 1 后引擎会直接自动选定目标，
+        # 这条测试就点不到面板了（那是正确行为，但这里要测的是点击面板）。
+        for opponent in game.players:
+            if opponent is not game.player:
+                opponent.hand = [normal_sha()]
 
         self.render(game)
         self.click_hand_card(game, 0)
@@ -110,9 +121,15 @@ class MultiplayerUiTests(unittest.TestCase):
         game.toggle_target_selection(victim)
         self.assertIsNone(game.pending_target_selection)
         self.assertFalse(any(item is attack for item in game.player.hand))
+        # 杀离开玩家手牌后只能有一个去处：结算区、弃牌堆，或者被受伤角色
+        # 的技能取走（奸雄一类）。武将分配是随机的，不能只认弃牌堆。
+        held_by_skill = any(
+            any(item is attack for item in player.hand) for player in game.players
+        )
         self.assertTrue(
             any(item is attack for item in game.deck.discard_pile)
             or any(item is attack for item in game.processing_zone)
+            or held_by_skill
         )
 
     def test_tiesuo_accepts_two_clicked_panels(self):

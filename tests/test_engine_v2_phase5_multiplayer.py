@@ -279,6 +279,66 @@ class MultiplayerAITests(MultiplayerSetupMixin, unittest.TestCase):
         self.assertEqual(len(action.targets), 1)
         self.assertIn(action.targets[0], legal)
 
+    # ==================================================
+    # 选择界面不得泄露隐藏信息
+    # ==================================================
+
+    def test_choose_target_card_hides_the_opponents_hand(self):
+        """过河拆桥 / 顺手牵羊的选择界面不能把对方手牌摊开。"""
+
+        game = self.make_game(2)
+        actor, victim = game.player, game.players[1]
+        weapon = equipment("QINGLONG")
+        victim.set_equipment(weapon)
+        hidden_card = normal_sha()
+        victim.hand = [hidden_card]
+        guohe = trick("GUOHE")
+        actor.hand = [guohe]
+
+        game.submit_action(UseCardAction(actor, guohe, [victim]))
+
+        self.assertIsNotNone(game.pending_selection)
+        self.assertTrue(
+            game.is_selection_face_down(hidden_card),
+            "对方手牌在选择界面上只能显示牌背")
+        self.assertFalse(
+            game.is_selection_face_down(weapon),
+            "装备区是明置信息，照常显示卡面")
+        keys = {id(card): key for card, key in game.selection_pool_entries()}
+        self.assertEqual(keys[id(weapon)], "weapon", "装备仍要能按槽位选中")
+        self.assertIsNone(keys[id(hidden_card)])
+
+    def test_own_hand_candidates_stay_face_up(self):
+        """选自己的牌（弃牌 / 技能费用）不存在隐藏问题。"""
+
+        game = self.make_game(2)
+        actor = game.player
+        own_card = tao()
+        actor.hand = [own_card]
+        game.start_card_selection(
+            zone="hand", owner=actor, candidates=[(own_card, None)],
+            number=1, prompt="选择一张牌", on_complete=lambda _cards: None)
+        self.assertFalse(game.is_selection_face_down(own_card))
+        self.assertEqual(game.selection_face_down_ids(), set())
+        game.pending_selection = None
+
+    def test_wugu_pool_stays_face_up(self):
+        """五谷丰登的公共牌是从牌堆翻开的，必须画真实卡面。"""
+
+        game = self.make_game(2)
+        actor = game.player
+        wugu = trick("WUGU")
+        actor.hand = [wugu]
+        set_draw_order(game, [tao(), normal_sha(), tao(), normal_sha()])
+
+        game.submit_action(UseCardAction(actor, wugu, list(game.players)))
+
+        self.assertIsNotNone(game.pending_selection)
+        pool = game.selection_pool_cards()
+        self.assertTrue(pool, "五谷应当摊开公共牌")
+        for card in pool:
+            self.assertFalse(game.is_selection_face_down(card))
+
 
 class MultiplayerTurnTests(MultiplayerSetupMixin, unittest.TestCase):
     def test_dead_current_player_skips_draw_and_play(self):
@@ -503,6 +563,42 @@ class MultiplayerTurnTests(MultiplayerSetupMixin, unittest.TestCase):
         self.assertTrue(game.game_over)
         self.assertIsNone(game.winner)
         self.assertEqual(game.result.reason, "HUMAN_ELIMINATED")
+
+
+class PendingContractTests(MultiplayerSetupMixin, unittest.TestCase):
+    def test_pass_action_is_rejected_for_selection_requests(self):
+        """选牌类请求必须给出具体内容，不能用 Pass 敷衍（否则流程收到空结果）。"""
+
+        game = self.make_game(3)
+        card = trick("WUGU")
+        game.player.hand = [card]
+        set_draw_order(game, [tao(), normal_sha(), tao(), normal_sha()])
+        targets = game.seats.alive_players_in_order(start_after=game.player, include_start=True)
+        game.submit_action(UseCardAction(game.player, card, targets))
+
+        request = game.engine.pending.current
+        self.assertIsNotNone(request)
+        self.assertEqual(request.request_type.value, "select_cards")
+        with self.assertRaises(ValueError):
+            game.submit_action(PassPendingAction(game.player, request.request_id))
+
+        # 正确给出选择后流程仍然正常。
+        game.submit_action(
+            SelectCardsAction(game.player, request.request_id, [game.public_card_pool[0]])
+        )
+        self.assertTrue(any(len(player.hand) >= 1 for player in game.players))
+
+    def test_pass_action_still_works_for_card_responses(self):
+        game = self.make_game(3)
+        card = normal_sha()
+        game.player.hand = [card]
+        victim = game.players[1]
+        victim.hand = []
+        game.ai_pacing = False
+        game.submit_action(UseCardAction(game.player, card, [victim]))
+        # AI 已自动响应完毕（同步模式）。
+        self.assertIsNone(game.engine.pending.current)
+        self.assertEqual(victim.hp, 3)
 
 
 class TurnStallGuardTests(MultiplayerSetupMixin, unittest.TestCase):

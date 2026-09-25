@@ -3,6 +3,75 @@ from itertools import count
 from typing import Optional, Tuple
 
 
+# 内部牌名 → 中文显示名（实体牌与技能生成的虚拟牌共用同一张表）。
+BASIC_NAMES = {
+    "SHA": "杀",
+    "SHAN": "闪",
+    "TAO": "桃",
+    "JIU": "酒",
+}
+
+TRICK_NAMES = {
+    "WUZHONG": "无中生有",
+    "GUOHE": "过河拆桥",
+    "SHUNSHOU": "顺手牵羊",
+    "JUEDOU": "决斗",
+    "NANMAN": "南蛮入侵",
+    "WANJIAN": "万箭齐发",
+    "TAOYUAN": "桃园结义",
+    "WUGU": "五谷丰登",
+    "WUXIE": "无懈可击",
+    "JIEDAO": "借刀杀人",
+    "LEBU": "乐不思蜀",
+    "SHANDIAN": "闪电",
+    "HUOGONG": "火攻",
+    "TIESUO": "铁索连环",
+    "BINGLIANG": "兵粮寸断",
+}
+
+EQUIPMENT_NAMES = {
+    "ZHUGE": "诸葛连弩",
+    "CIXIONG": "雌雄双股剑",
+    "HANBING": "寒冰剑",
+    "QINGGANG": "青釭剑",
+    "GUDING": "古锭刀",
+    "QINGLONG": "青龙偃月刀",
+    "ZHANGBA": "丈八蛇矛",
+    "GUANSHI": "贯石斧",
+    "FANGTIAN": "方天画戟",
+    "ZHUQUE": "朱雀羽扇",
+    "QILIN": "麒麟弓",
+    "BAGUA": "八卦阵",
+    "RENWANG": "仁王盾",
+    "TENGJIA": "藤甲",
+    "BAIYIN": "白银狮子",
+    "JUEYING": "绝影",
+    "DILU": "的卢",
+    "ZHAOHUANG": "爪黄飞电",
+    "HUALIU": "骅骝",
+    "CHITU": "赤兔",
+    "DAWAN": "大宛",
+    "ZIXING": "紫骍",
+}
+
+DISPLAY_NAMES = {}
+DISPLAY_NAMES.update(BASIC_NAMES)
+DISPLAY_NAMES.update(TRICK_NAMES)
+DISPLAY_NAMES.update(EQUIPMENT_NAMES)
+
+
+def display_name_for(name, nature="normal"):
+    """牌名 → 显示名；火杀 / 雷杀按属性区分。"""
+
+    if name == "SHA":
+        if nature == "fire":
+            return "火杀"
+        if nature == "thunder":
+            return "雷杀"
+        return "杀"
+    return DISPLAY_NAMES.get(name, name)
+
+
 _CARD_IDS = count(1)
 
 
@@ -97,114 +166,7 @@ class Card:
     @property
     def display_name(self):
 
-        # ==================================================
-        # 基本牌
-        # ==================================================
-
-        if self.name == "SHA":
-
-            if self.nature == "fire":
-                return "火杀"
-
-            if self.nature == "thunder":
-                return "雷杀"
-
-            return "杀"
-
-
-        if self.name == "SHAN":
-            return "闪"
-
-
-        if self.name == "TAO":
-            return "桃"
-
-
-        if self.name == "JIU":
-            return "酒"
-
-        trick_names = {
-            "WUZHONG": "无中生有",
-            "GUOHE": "过河拆桥",
-            "SHUNSHOU": "顺手牵羊",
-            "JUEDOU": "决斗",
-            "NANMAN": "南蛮入侵",
-            "WANJIAN": "万箭齐发",
-            "TAOYUAN": "桃园结义",
-            "WUGU": "五谷丰登",
-            "WUXIE": "无懈可击",
-            "JIEDAO": "借刀杀人",
-            "LEBU": "乐不思蜀",
-            "SHANDIAN": "闪电",
-            "HUOGONG": "火攻",
-            "TIESUO": "铁索连环",
-            "BINGLIANG": "兵粮寸断",
-        }
-        if self.name in trick_names:
-            return trick_names[self.name]
-
-
-        # ==================================================
-        # 武器
-        # ==================================================
-
-        equipment_names = {
-
-            "ZHUGE": "诸葛连弩",
-
-            "CIXIONG": "雌雄双股剑",
-
-            "HANBING": "寒冰剑",
-
-            "QINGGANG": "青釭剑",
-
-            "GUDING": "古锭刀",
-
-            "QINGLONG": "青龙偃月刀",
-
-            "ZHANGBA": "丈八蛇矛",
-
-            "GUANSHI": "贯石斧",
-
-            "FANGTIAN": "方天画戟",
-
-            "ZHUQUE": "朱雀羽扇",
-
-            "QILIN": "麒麟弓",
-
-            # 防具
-            "BAGUA": "八卦阵",
-
-            "RENWANG": "仁王盾",
-
-            "TENGJIA": "藤甲",
-
-            "BAIYIN": "白银狮子",
-
-            # +1 马
-            "JUEYING": "绝影",
-
-            "DILU": "的卢",
-
-            "ZHAOHUANG": "爪黄飞电",
-
-            "HUALIU": "骅骝",
-
-            # -1 马
-            "CHITU": "赤兔",
-
-            "DAWAN": "大宛",
-
-            "ZIXING": "紫骍",
-        }
-
-
-        if self.name in equipment_names:
-
-            return equipment_names[self.name]
-
-
-        return self.name
+        return display_name_for(self.name, self.nature)
 
 
     @property

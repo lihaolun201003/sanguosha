@@ -17,12 +17,15 @@ from src.game import Game
 from src.renderer import Renderer
 from src.start_menu import StartMenu
 from src.ui import layout
+
+# 视觉验收尺寸（可通过命令行覆盖）
+DEFAULT_SIZE = (1920, 1080)
 from tests.legacy_helpers import canonical_card, equipment, normal_sha, set_draw_order, shan, tao
 
 
-def make_screen():
+def make_screen(size=DEFAULT_SIZE):
     pygame.init()
-    return pygame.display.set_mode((layout.WIDTH, layout.HEIGHT))
+    return pygame.display.set_mode(size)
 
 
 def build_game(ai_count, hand_size=4, seed=3):
@@ -75,16 +78,20 @@ def snapshot(name, game, renderer, outdir, *, frames=30):
 
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else "tools/ui_snapshots"
+    size = DEFAULT_SIZE
+    if len(sys.argv) > 3:
+        size = (int(sys.argv[2]), int(sys.argv[3]))
     os.makedirs(outdir, exist_ok=True)
-    screen = make_screen()
+    screen = make_screen(size)
     renderer = Renderer(screen)
     produced = []
 
     # 开始菜单
-    menu = StartMenu(screen, renderer.big_font, renderer.small_font, renderer.tiny_font)
+    menu = StartMenu(screen)
+    menu.sync_layout(renderer.metrics)
     menu_game = Game(ai_count=4)
     menu_game.ai_count = 4
-    menu.draw(menu_game)
+    menu.draw(menu_game, renderer.metrics)
     path = os.path.join(outdir, "00_menu.png")
     pygame.image.save(screen, path)
     produced.append(path)
@@ -130,9 +137,10 @@ def main():
     game = build_game(2)
     game.choice.request(title="铁索连环", prompt="选择使用【铁索连环】或重铸摸一张牌",
                         yes_label="连环", no_label="重铸", on_yes=lambda: None, on_no=lambda: None)
-    overlay = ChoiceOverlay(screen, renderer.small_font, renderer.tiny_font)
+    overlay = ChoiceOverlay(screen)
+    overlay.sync_layout(renderer.metrics)
     renderer.draw(game)
-    overlay.draw(game.choice)
+    overlay.draw(game.choice, renderer.metrics)
     path = os.path.join(outdir, "choice_modal.png")
     pygame.image.save(screen, path)
     produced.append(path)

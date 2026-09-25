@@ -27,10 +27,16 @@ class EventType(str, Enum):
     FLOW_CANCELLED = "flow.cancelled"
     CARD_USE_BEFORE = "card.use.before"
     CARD_USED = "card.used"
+    # 响应窗口里打出了一张牌（【闪】/【杀】/【无懈可击】/【桃】）。
+    # payload: actor / card / request / reason。与 CARD_USED 分开：
+    # CARD_USED 是"使用"，响应是"打出"，两者的时机条件不同（银月枪一类）。
+    CARD_RESPONDED = "card.responded"
     TARGET_SELECTED = "card.target.selected"
     BECOME_TARGET = "card.target.became"
     CARD_EFFECT_BEFORE = "card.effect.before"
     CARD_EFFECT_AFTER = "card.effect.after"
+    # 一张【杀】被【闪】抵消（= 命中失败）。装备与武将技能都从这里接。
+    SHA_DODGED = "card.sha.dodged"
     CARD_USE_FINISHED = "card.use.finished"
     PENDING_CREATED = "pending.created"
     PENDING_RESOLVED = "pending.resolved"
@@ -41,11 +47,17 @@ class EventType(str, Enum):
     DAMAGE_APPLIED = "damage.applied"
     DAMAGE_SOURCE_AFTER = "damage.source.after"
     DAMAGE_TARGET_AFTER = "damage.target.after"
+    # 伤害完全结算完毕（含濒死与死亡处理）之后，供"受到伤害后"类技能使用。
+    DAMAGE_SETTLED = "damage.settled"
+    # 有角色回复了体力。payload: target / amount / source（施治者，可能为 None）。
+    HP_RECOVERED = "hp.recovered"
     DYING_ENTERED = "dying.entered"
     DYING_EXITED = "dying.exited"
     DEATH = "death"
     JUDGE_STARTED = "judge.started"
     JUDGE_REVEALED = "judge.revealed"
+    # 改判窗口里判定牌真的被替换了（鬼才一类）：UI 据此表现"原判定牌被改"。
+    JUDGE_REPLACED = "judge.replaced"
     JUDGE_FINISHED = "judge.finished"
     EQUIPMENT_LOST = "equipment.lost"
     EQUIPMENT_EQUIPPED = "equipment.equipped"
@@ -54,6 +66,19 @@ class EventType(str, Enum):
     PHASE_START = "phase.start"
     PHASE_END = "phase.end"
     CHAIN_STATE_CHANGED = "chain.state.changed"
+    # 有任何牌进入弃牌堆。payload: card / reason / owner / from。
+    # 这是**唯一**的"弃牌"出口（由 MoveCardAtom 在目的地是弃牌堆时发出），
+    # 因此琴音 / 落英 / 固政这类技能不需要各自去猜弃牌发生在哪条代码路径。
+    CARD_DISCARDED = "card.discarded"
+    # 有牌离开了某名角色的区域但**没有**进弃牌堆（被拿走 / 送出去 / 被装备）。
+    # 「失去牌」类技能（屯田）读它；弃牌走 CARD_DISCARDED，两者不重复。
+    CARD_LOST = "card.lost"
+    # 濒死求桃全部失败、即将结算死亡之前。技能可以在这里把
+    # payload["prevented"] 置为 True 来阻止这次死亡（不屈一类）。
+    DYING_BEFORE_DEATH = "dying.before_death"
+    # 武将牌翻面状态改变。payload: face_up / reason。
+    FLIPPED = "player.flipped"
+    SKILL_TRIGGERED = "skill.triggered"
     JUDGE_BEFORE_RESULT = "judge.before_result"
     JUDGE_RESULT = "judge.result"
 

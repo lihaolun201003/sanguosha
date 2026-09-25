@@ -6,14 +6,19 @@ light module like ``src.ui.theme`` never drags the engine in.
 """
 
 __all__ = [
+    "assets",
     "cards",
     "fx",
+    "lan_scene",
     "layout",
+    "lobby",
+    "multiplayer_menu",
     "overlay",
     "player",
     "prompt",
     "seats",
     "table",
+    "text_input",
     "theme",
     "widgets",
 ]

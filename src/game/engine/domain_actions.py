@@ -60,6 +60,33 @@ class SelectCardsAction(GameAction):
 
 
 @dataclass
+class SelectTargetsAction(GameAction):
+    """选择角色目标（突袭一类）：与选牌走同一套 Pending 校验。"""
+
+    actor: Any
+    request_id: int
+    targets: Sequence[Any]
+
+
+@dataclass
+class ActivateSkillAction(GameAction):
+    """真人/AI 发动主动技能：参数齐备后一次性提交。"""
+
+    actor: Any
+    skill_id: str
+    target: Any = None
+    cards: Sequence[Any] = ()
+
+    @property
+    def actor_id(self):
+        return self.actor.player_id
+
+    @property
+    def target_ids(self):
+        return () if self.target is None else (self.target.player_id,)
+
+
+@dataclass
 class ChooseOptionAction(GameAction):
     actor: Any
     request_id: int

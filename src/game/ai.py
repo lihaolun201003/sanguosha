@@ -38,6 +38,22 @@ from .equipment_skills.weapons import (
 class AIMixin:
 
     # ==================================================
+    # 旧 1v1 装备路径
+    #
+    # 装备牌进槽之后必须同步"装备赋予的技能"（丈八蛇矛一类），否则这件武器
+    # 的视为技不会出现在技能表与转换表里。引擎里的装备走 ``EquipCardAtom``，
+    # 这条旧回调链不经过原子，所以在这里补一次（sync 是幂等的）。
+    # ==================================================
+
+    def _legacy_ai_equip(self, card):
+
+        self.enemy.set_equipment(card)
+
+        from .equipment_skills.granted import sync_equipment_skills
+
+        sync_equipment_skills(self, self.enemy)
+
+    # ==================================================
     # AI 尝试装备
     # ==================================================
 
@@ -126,7 +142,7 @@ class AIMixin:
                 on_finish=(
 
                     lambda c=card:
-                    self.enemy.set_equipment(
+                    self._legacy_ai_equip(
                         c
                     )
                 )

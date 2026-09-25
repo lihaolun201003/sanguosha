@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+from ..invariants import armed_for, assert_card_ownership
 from .events import Event, EventType
 
 
@@ -53,6 +54,11 @@ def apply_atom(context: "GameContext", atom: Atom) -> AtomResult:
             payload={"atom": atom, "result": result},
         )
     )
+    # 一次完整移动 / 结算的稳定边界：原子与它的 ATOM_AFTER 订阅者都已经跑完，
+    # 此时的牌区状态必须自洽。默认关闭，判定统一走 invariants.armed_for
+    # （对局显式设置 > 模块开关 > 环境变量），见 src/game/invariants.py。
+    if armed_for(context.state):
+        assert_card_ownership(context.state)
     return result
 
 

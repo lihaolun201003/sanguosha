@@ -16,7 +16,7 @@ from .equipment_skills.armors import (
     is_red_card,
     modify_sha_damage,
 )
-from .engine import Event, EventType
+from .atoms_v2 import UnequipAtom
 
 from .equipment_skills.weapons import (
     has_guding_blade,
@@ -64,9 +64,12 @@ class EquipmentMixin:
         player
     ):
 
-        return has_zhuge_crossbow(
-            player
-        )
+        # 诸葛连弩是装备给出的无限出杀；技能的出杀额度走 modifier 查询
+        # （咆哮 = 锁定技，额度视为无限）。以后"本回合额外多出一张杀"
+        # 之类的技能只需要提供 SLASH_QUOTA 修正，不必改这里。
+        if has_zhuge_crossbow(player):
+            return True
+        return self.slash_quota(player) > 0
 
 
     # ==================================================
@@ -358,23 +361,21 @@ class EquipmentMixin:
         slot
     ):
 
-        old_card = player.remove_equipment(
-            slot
+        if player.get_equipment(slot) is None:
+            return (None, False)
+
+        # 失去装备的事件由 UnequipAtom 统一发出（白银狮子回血 / 枭姬摸牌
+        # 都订阅同一个事件），这里只负责把结果转成旧的返回值。
+        result = self.context.apply(
+            UnequipAtom(
+                player,
+                slot
+            )
         )
 
-        event = self.context.emit(
-            Event(
-                EventType.EQUIPMENT_LOST,
-                source=old_card,
-                target=player,
-                payload={"card": old_card, "slot": slot, "healed": False},
-            )
-        ) if old_card is not None else None
-        healed = bool(event and event.payload.get("healed"))
-
         return (
-            old_card,
-            healed
+            result.data["card"],
+            bool(result.data.get("healed")),
         )
 
 

@@ -86,10 +86,24 @@ class EngineV2Phase5Tests(unittest.TestCase):
         self.assertEqual(game.public_card_pool, [])
         self.assertTrue(all(len(player.hand) == 1 for player in game.players))
 
-    def test_wuxie_responder_order_is_seat_order(self):
+    def test_wuxie_window_covers_every_eligible_player_in_seat_order(self):
+        """共享无懈阶段：**所有打得出无懈的人**按座次同轮获得机会。
+
+        （旧语义是"按座次逐人问一遍"，Phase 11.6 改成"一轮同时问所有有资格的
+        人、谁先打出谁锁定本轮"。）
+        """
+
         game = self.make_game(3)
-        chain = WuxieResponseChain(game.engine, game.players[2], trick("GUOHE"), [game.player], lambda _x: None)
-        self.assertEqual([p.seat for p in chain.responders], [2, 3, 0, 1])
+        for player in game.players:
+            player.hand = [trick("WUXIE")]
+        chain = WuxieResponseChain(
+            game.engine, game.players[2], trick("GUOHE"), [game.player],
+            lambda _x: None)
+        chain.start()
+        request = game.pending_request
+        self.assertTrue(request.is_group)
+        self.assertEqual([p.seat for p in request.responders], [2, 3, 0, 1])
+        self.assertEqual(request.context.get("round_id"), 1)
 
     def test_dying_flow_asks_human_to_save_other_player(self):
         game = self.make_game(2)

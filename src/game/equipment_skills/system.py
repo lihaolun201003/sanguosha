@@ -1,8 +1,9 @@
 """Engine V2 equipment skills and resumable activation controller."""
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom
+from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, UnequipAtom
 from src.game.engine.domain_actions import UseCardAction
 from src.game.engine.events import EventType
+from src.game.engine.flows import FlowStatus
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.engine.pending import PendingRequestType
 from src.game.flows.judge import JudgeFlow
@@ -11,6 +12,17 @@ from src.game.rules import ArmorRule
 
 def _equipment(player, slot, name):
     card = player.get_equipment(slot)
+    return card is not None and card.name == name
+
+
+def _armor(game, player, name):
+    """防具判定统一走 ``Game.has_armor``：真实防具优先，其次是【八阵】一类
+    技能赋予的虚拟防具。直接读 ``equipment`` 会让"视为装备八卦阵"永不生效。"""
+
+    query = getattr(game, "has_armor", None)
+    if callable(query):
+        return bool(query(player, name))
+    card = player.get_equipment("armor")
     return card is not None and card.name == name
 
 
@@ -25,49 +37,93 @@ class EquipmentEventSkill(Skill):
             SkillBinding(EventType.CARD_EFFECT_BEFORE, priority=100),
             SkillBinding(EventType.DAMAGE_MODIFY, priority=10),
             SkillBinding(EventType.EQUIPMENT_LOST, priority=10),
+            SkillBinding(EventType.CARD_RESPONDED, priority=30),
         )
 
     def resolve(self, context, event):
         if event.name is EventType.CARD_EFFECT_BEFORE:
-            self._block_sha(event)
+            self._block_sha(context, event)
         elif event.name is EventType.DAMAGE_MODIFY:
-            self._modify_damage(event)
+            self._modify_damage(context, event)
         elif event.name is EventType.EQUIPMENT_LOST:
             card = event.payload.get("card")
             if card is not None and card.name == "BAIYIN" and event.target.hp < event.target.max_hp:
                 result = context.apply(RecoverHpAtom(event.target, 1))
                 event.payload["healed"] = result.data["amount"] > 0
+        elif event.name is EventType.CARD_RESPONDED:
+            self._yinyueqiang(context, event)
 
-    def _block_sha(self, event):
+    # ---- 银月枪 ----
+    #
+    # 卡面：「在自己回合外，若打出一张黑色花色的牌，可立即指定攻击范围内的
+    # 一名玩家出一张[闪]，否则减一点体力。」
+    #
+    # 两个必须核实的点都落在实现里：
+    #   * 时机是**回合外 + 打出**（响应窗口），不是"使用"——因此订阅的是
+    #     CARD_RESPONDED 而不是 CARD_USED；
+    #   * 「减一点体力」是**失去体力**，不走伤害流程：不触发受伤类技能、
+    #     不吃防具与伤害加成，但体力降到 0 依然进入濒死。
+
+    def _yinyueqiang(self, context, event):
+        actor = event.payload.get("actor")
+        card = event.payload.get("card")
+        if actor is None or card is None:
+            return
+        if not _equipment(actor, "weapon", "YINYUEQIANG"):
+            return
+        if getattr(card, "card_color", None) != "black":
+            return
+        game = context.state
+        if game.current_turn_player is actor:
+            return                      # 只在回合外
+        candidates = self._yinyue_targets(game, actor)
+        if not candidates:
+            return
+        # 引擎从 context 取：这个技能实例由装备控制器统一安装，本身没有
+        # engine 字段，直接 self.engine 会在事件分发里抛 AttributeError，
+        # 把整局拖垮（回合外打出黑牌就会走到这里）。
+        YinyueqiangFlow(context.services["engine"], actor, candidates).start()
+
+    @staticmethod
+    def _yinyue_targets(game, actor):
+        from src.game.rules import DistanceRule
+
+        return [
+            other for other in game.seats.alive_players_in_order(start_after=actor)
+            if other is not actor and DistanceRule.in_attack_range(game, actor, other)
+        ]
+
+    def _block_sha(self, context, event):
         card = event.payload.get("card")
         if card is None or card.name != "SHA" or not ArmorRule.is_effective(event.source, event.target, card):
             return
-        armor = event.target.get_equipment("armor")
-        if armor is None:
-            return
-        if armor.name == "RENWANG" and card.nature == "normal" and card.card_color == "black":
+        game = context.state
+        if _armor(game, event.target, "RENWANG") and card.nature == "normal" and card.card_color == "black":
             event.payload["blocked_by"] = "仁王盾"
             event.cancel()
-        elif armor.name == "TENGJIA" and card.nature == "normal":
+        elif _armor(game, event.target, "TENGJIA") and card.nature == "normal":
             event.payload["blocked_by"] = "藤甲"
             event.cancel()
 
-    def _modify_damage(self, event):
+    def _modify_damage(self, context, event):
         damage = event.payload.get("damage")
         if damage is None:
             return
+        game = context.state
         source, target = damage.source, damage.target
         if damage.card is not None and damage.card.name == "SHA" and _equipment(source, "weapon", "GUDING") and not target.hand:
             damage.amount += 1
             damage.effects.append("【古锭刀】使伤害 +1")
-        if not ArmorRule.is_effective(source, target, damage.card):
-            if target.get_equipment("armor") is not None:
-                damage.effects.append("【青釭剑】无视防具")
+        if getattr(damage, "ignore_armor", False) or not ArmorRule.is_effective(
+                source, target, damage.card):
+            if game.armor_card(target) is not None or game.virtual_armor(target):
+                if not getattr(damage, "ignore_armor", False):
+                    damage.effects.append("【青釭剑】无视防具")
             return
-        if _equipment(target, "armor", "TENGJIA") and damage.nature == "fire":
+        if _armor(game, target, "TENGJIA") and damage.nature == "fire":
             damage.amount += 1
             damage.effects.append("【藤甲】使火焰伤害 +1")
-        if _equipment(target, "armor", "BAIYIN") and damage.amount > 1:
+        if _armor(game, target, "BAIYIN") and damage.amount > 1:
             damage.amount = 1
             damage.effects.append("【白银狮子】将伤害改为 1")
 
@@ -96,7 +152,7 @@ class EquipmentSkillController:
         # accidentally (especially Cixiong Twin Swords).
         if flow.card is None or flow.card.name != "SHA":
             return False
-        if _equipment(flow.target, "armor", "BAGUA") and ArmorRule.is_effective(flow.actor, flow.target, flow.card):
+        if _armor(self.engine.game, flow.target, "BAGUA") and ArmorRule.is_effective(flow.actor, flow.target, flow.card):
             request = self.engine.pending.create(
                 PendingRequestType.CONFIRM, source=flow.actor, target=flow.target,
                 prompt="是否发动【八卦阵】？", owner_flow=flow,
@@ -119,13 +175,30 @@ class EquipmentSkillController:
             return True
         return False
 
+    def _resume_bagua(self, flow, result):
+        """改判窗口结束（或从未打开）后，按最终判定牌结算八卦阵。"""
+
+        if flow.status in (FlowStatus.COMPLETED, FlowStatus.CANCELLED):
+            return flow.current_result()
+        flow.pending_request = None
+        flow.status = FlowStatus.RUNNING
+        if result is not None and result.color == "red":
+            flow.game.message = flow.target.name + "的【八卦阵】判定成功，视为使用【闪】。"
+            return flow.finish(cancelled=True)
+        return flow.effect.request_shan(flow)
+
     def resume_sha(self, flow, resolution):
         if flow.stage == "bagua_confirm":
             if resolution.confirmed:
-                result = JudgeFlow(self.engine, flow.target, "bagua").start().value
-                if result is not None and result.color == "red":
-                    flow.game.message = flow.target.name + "的【八卦阵】判定成功，视为使用【闪】。"
-                    return flow.finish(cancelled=True)
+                judge = JudgeFlow(self.engine, flow.target, "bagua")
+                outcome = judge.start()
+                if outcome.status is FlowStatus.WAITING:
+                    # 判定进入改判窗口：先挂起本次【杀】，等改判结束后再按
+                    # 最终判定牌决定八卦阵是否生效。
+                    judge.on_complete = lambda result: self._resume_bagua(flow, result)
+                    flow.wait(judge)
+                    return flow.current_result()
+                return self._resume_bagua(flow, outcome.value)
             return flow.effect.request_shan(flow)
         if flow.stage == "cixiong_option":
             if resolution.option == "draw":
@@ -187,8 +260,8 @@ class EquipmentSkillController:
             card = resolution.cards[0]
             for slot, current in flow.target.equipment.items():
                 if current is card:
-                    flow.target.remove_equipment(slot); break
-            flow.context.apply(MoveCardAtom(card, destination=flow.game.deck.discard_pile))
+                    flow.context.apply(UnequipAtom(flow.target, slot, flow.game.deck.discard_pile))
+                    break
             return flow.finish(cancelled=False)
         return None
 
@@ -221,3 +294,114 @@ class EquipmentSkillController:
         child = DamageFlow(self.engine, DamageContext(flow.actor, flow.target, flow.base_damage, getattr(flow.card, "nature", "normal"), flow.card), on_complete=flow._after_damage)
         result = child.start()
         return flow.current_result() if flow.status.value in ("completed", "cancelled") else result
+
+
+class YinyueqiangFlow:
+    """银月枪：指定攻击范围内的一名角色打出一张【闪】，否则其失去 1 点体力。
+
+    这是装备的**可选**效果，因此先问持有者要不要发动；目标答不出【闪】时
+    由规则层扣体力（``Game.lose_hp``），不走伤害流程。
+    """
+
+    def __init__(self, owner_controller, actor, candidates):
+        self.controller = owner_controller
+        self.game = owner_controller.game
+        self.actor = actor
+        self.candidates = list(candidates)
+        self.target = None
+        self.stage = "confirm"
+
+    @property
+    def pending_request(self):
+        return self._request
+
+    @property
+    def status(self):
+        from src.game.engine.flows import FlowStatus
+
+        return FlowStatus.WAITING
+
+    def start(self):
+        from src.game.engine.pending import PendingRequestType
+
+        engine = self.controller
+        game = self.game
+        self._request = engine.pending.create(
+            PendingRequestType.CONFIRM,
+            source=self.actor, target=self.actor,
+            prompt="【银月枪】：是否指定攻击范围内的一名角色出【闪】？",
+            owner_flow=self,
+            request_context={"reason": "yinyueqiang_confirm"},
+        )
+        engine.present_or_auto_resolve(self._request)
+        return None
+
+    def current_result(self):
+        from src.game.engine.flows import FlowResult, FlowStatus
+
+        return FlowResult(FlowStatus.WAITING, None)
+
+    def resume(self, response):
+        from src.game.engine.flows import FlowResult, FlowStatus
+        from src.game.engine.pending import PendingRequestType
+
+        if self.stage == "confirm":
+            if response is None or not response.confirmed or not self.candidates:
+                return FlowResult(FlowStatus.COMPLETED, None)
+            self.stage = "target"
+            self._request = self.controller.pending.create(
+                PendingRequestType.SELECT_TARGETS,
+                source=self.actor, target=self.actor,
+                prompt="【银月枪】：请选择目标",
+                owner_flow=self,
+                min_cards=1, max_cards=1,
+                request_context={
+                    "reason": "yinyueqiang_target",
+                    "candidates": list(self.candidates),
+                },
+            )
+            self.controller.present_or_auto_resolve(self._request)
+            return FlowResult(FlowStatus.WAITING, None)
+
+        if self.stage == "shan":
+            return self.advance(response)
+        targets = list(getattr(response, "targets", ()) or ())
+        if not targets:
+            return FlowResult(FlowStatus.COMPLETED, None)
+        return self._ask_shan(targets[0])
+
+    def _ask_shan(self, target):
+        from src.game.engine.flows import FlowResult, FlowStatus
+        from src.game.engine.pending import PendingRequestType
+
+        if not self.controller.game.card_actions.can_respond(target, allowed_names=("SHAN",)):
+            return self._punish(target)
+        self.target = target
+        self.stage = "shan"
+        self._request = self.controller.pending.create(
+            PendingRequestType.RESPOND_CARD,
+            source=self.actor, target=target,
+            prompt="【银月枪】：请打出一张【闪】，否则失去 1 点体力",
+            owner_flow=self,
+            allowed_cards=frozenset(("SHAN",)),
+            request_context={"reason": "yinyueqiang_shan"},
+        )
+        self.controller.present_or_auto_resolve(self._request)
+        return FlowResult(FlowStatus.WAITING, None)
+
+    def _punish(self, target):
+        from src.game.engine.flows import FlowResult, FlowStatus
+
+        self.game.lose_hp(target, 1, source=self.actor, cause="银月枪")
+        self.game.add_log("【银月枪】：%s 未能打出【闪】，失去 1 点体力" % target.name)
+        return FlowResult(FlowStatus.COMPLETED, None)
+
+    def advance(self, response=None):
+        if self.stage == "shan":
+            if response is not None and getattr(response, "card", None) is not None:
+                self.game.add_log("【银月枪】：%s 打出了【闪】" % self.target.name)
+                from src.game.engine.flows import FlowResult, FlowStatus
+
+                return FlowResult(FlowStatus.COMPLETED, None)
+            return self._punish(self.target)
+        return self.resume(response)

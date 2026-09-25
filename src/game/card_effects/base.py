@@ -14,8 +14,46 @@ class CardEffect:
     max_targets = 0
     distance_limit = None
     can_respond = False
+    # 整张牌是否有一个属于自己的【无懈可击】窗口。它由 UseCardFlow 在效果
+    # 开始**之前**统一开启一次，与"效果开始后逐目标要求【杀】/【闪】"是两种
+    # 完全不同的语义（TRICK_NEGATION_WINDOW / CARD_RESPONSE_REQUIREMENT）。
     cancellable_by_wuxie = False
-    per_target_wuxie = False
+    # 逐目标响应型效果（南蛮入侵 / 万箭齐发）：效果阶段自己按目标顺序推进，
+    # 一次只向一个目标要响应牌。UI 据此把箭头与提示逐个目标展示。
+    sequential_targets = False
+    # 这张牌能不能"重铸"（置入弃牌堆并摸一张牌，例如【铁索连环】）。重铸不是
+    # 转化：它不产生逻辑牌、也没有目标，所以不在 Card Action Discovery 的候选
+    # 里——能力在这里声明，动作由决策来源用 ``metadata={"recast": True}`` 构造，
+    # 合法性仍由本效果自己的 ``can_use`` 判定。
+    can_recast = False
+
+    def target_rule_for(self, game, actor, card=None):
+        """本次使用的目标规则，默认就是类上声明的 ``target_rule``。
+
+        技能可以改写它（【天义】/【神戟】让一张【杀】多指定目标），因此
+        规则层统一走这个方法而不是直接读类属性——否则会出现"技能改写了
+        目标规则、结算却不认"的半截能力。
+        """
+
+        return self.target_rule
+
+    def target_bounds_for(self, game, actor, card=None):
+        """本次使用的目标数量范围 (min, max)，默认就是类上声明的常量。"""
+
+        return self.min_targets, self.max_targets
+
+    def distance_limit_for(self, game, actor, card=None):
+        """本次使用的距离上限（None = 不限）。
+
+        默认是类上声明的 ``distance_limit``；技能可以放宽它（断粮让
+        【兵粮寸断】能对距离 2 以内的角色使用）。统一走这里，卡牌效果
+        就不会出现"技能放宽了距离、结算却还按旧上限拒绝"的半截实现。
+        """
+
+        query = getattr(game, "trick_distance_limit", None)
+        if callable(query):
+            return query(actor, card)
+        return type(self).distance_limit
 
     def can_use(self, game, action):
         if game.game_over:
@@ -24,9 +62,11 @@ class CardEffect:
             card is action.card for card in action.actor.hand
         ):
             return False, "这张牌已经不在使用者手牌中。"
+        minimum, maximum = self.target_bounds_for(game, action.actor, action.card)
         if not validate_targets(
-            game, action.actor, action.targets, self.target_rule,
-            self.min_targets, self.max_targets,
+            game, action.actor, action.targets,
+            self.target_rule_for(game, action.actor, action.card),
+            minimum, maximum, card=action.card,
         ):
             return False, "目标不合法。"
         return True, ""
@@ -36,6 +76,15 @@ class CardEffect:
 
     def resume(self, use_flow, resolution):
         raise RuntimeError(self.card_name + " is not waiting for a response")
+
+    def resume_after_child(self, use_flow, result):
+        """效果开始前的技能窗口结束，回来继续效果前奏。
+
+        技能可以在 ``CARD_EFFECT_BEFORE`` 里开一个"要不要让这张牌生效"的
+        窗口（啖酪）：那个窗口没答完，效果前奏就不能继续往下走。
+        """
+
+        raise RuntimeError(self.card_name + " has no pre-effect window to resume")
 
 
 class CardEffectRegistry:

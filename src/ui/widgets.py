@@ -58,6 +58,166 @@ def draw_text(surface, text, position, font, color, *, anchor="topleft"):
     return rect
 
 
+def place_tooltip(anchor, size, viewport, *, avoid=(), gap=None, margin=None):
+    """给提示框选一个位置：不越界、尽量不遮挡 anchor、尽量不压 avoid 区域。
+
+    候选顺序：右 → 左 → 下 → 上 → 右下 → 左下 → 右上 → 左上，再补一轮
+    "右 / 左但垂直居中或底对齐"的滑动变体——座位面板贴边时，只按顶端对齐
+    找位置很容易整块撞到别的面板。
+
+    取第一个"完整落在视口内且与 avoid 完全不相交"的位置；全都会相交时，
+    取相交面积最小的那个（保证至少不越界）。
+
+    所有提示框（卡牌 / 技能 / 座位 / 装备）都走这一个函数，不允许各自写死坐标。
+    """
+
+    anchor = pygame.Rect(anchor)
+    viewport = pygame.Rect(viewport)
+    width, height = int(size[0]), int(size[1])
+    g = 14 if gap is None else int(gap)
+    m = 8 if margin is None else int(margin)
+    # anchor 自己也算"必须避开"：否则夹取回视口后可能正好压在它身上。
+    avoid = [pygame.Rect(item) for item in avoid] + [anchor]
+
+    candidates = (
+        (anchor.right + g, anchor.y),
+        (anchor.left - g - width, anchor.y),
+        (anchor.centerx - width // 2, anchor.bottom + g),
+        (anchor.centerx - width // 2, anchor.top - g - height),
+        (anchor.right + g, anchor.bottom + g),
+        (anchor.left - g - width, anchor.bottom + g),
+        (anchor.right + g, anchor.top - g - height),
+        (anchor.left - g - width, anchor.top - g - height),
+        # 滑动变体：右侧 / 左侧，但纵向与 anchor 居中或底对齐。
+        (anchor.right + g, anchor.centery - height // 2),
+        (anchor.left - g - width, anchor.centery - height // 2),
+        (anchor.right + g, anchor.bottom - height),
+        (anchor.left - g - width, anchor.bottom - height),
+    )
+
+    best = None
+    best_overlap = None
+    for x, y in candidates:
+        x = max(viewport.left + m, min(int(x), viewport.right - width - m))
+        y = max(viewport.top + m, min(int(y), viewport.bottom - height - m))
+        rect = pygame.Rect(x, y, width, height)
+        if not viewport.contains(rect):
+            continue
+        overlap = 0
+        for item in avoid:
+            clipped = rect.clip(item)
+            overlap += clipped.width * clipped.height
+        if best is None or overlap < best_overlap:
+            best, best_overlap = rect, overlap
+            if overlap == 0:
+                break
+
+    if best is not None:
+        return best
+    # 视口比提示框还小：退回左上角并夹在视口内。
+    return pygame.Rect(
+        viewport.left + m, viewport.top + m,
+        min(width, max(1, viewport.width - m * 2)),
+        min(height, max(1, viewport.height - m * 2)),
+    )
+
+
+def draw_state_border(surface, rect, state_name, *, radius=None, alpha=132):
+    """按视觉状态画描边 + 外发光（唯一入口，组件不再自己配颜色与宽度）。
+
+    ``rect`` 是元素的实际边界：发光向外扩散，但点击区域仍以 ``rect`` 为准，
+    所以更亮更大的高亮不会改变真实的可点范围。
+    """
+
+    state = theme.visual_state(state_name)
+    rect = pygame.Rect(rect)
+    if radius is None:
+        radius = theme.RADIUS_PANEL
+
+    dim = int(state.get("dim") or 0)
+    if dim > 0:
+        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
+        veil.fill((12, 16, 22, dim))
+        surface.blit(veil, rect.topleft)
+
+    stroke = int(state.get("width") or 0)
+    if stroke <= 0:
+        return rect
+    halo = int(state.get("glow_width") or 0)
+    border = theme.glow_border(
+        rect.size, state["border"], stroke, halo, radius, alpha)
+    surface.blit(border, (rect.x - halo, rect.y - halo))
+    return rect
+
+
+def draw_state_label(surface, rect, state_name, font_set, metrics, *, inset=None):
+    """在元素右上角画状态角标（如「当前回合」「目标」「已选」）。"""
+
+    state = theme.visual_state(state_name)
+    label = state.get("label")
+    if not label:
+        return None
+    font = font_set.get("micro")
+    rendered = font.render(label, True, theme.INK)
+    rect = pygame.Rect(rect)
+    offset = metrics.px(6) if inset is None else inset
+    badge = pygame.Rect(
+        0, 0,
+        rendered.get_width() + metrics.px(16),
+        rendered.get_height() + metrics.px(8),
+    )
+    badge.topright = (rect.right - offset, rect.y + offset)
+    pygame.draw.rect(surface, state["border"], badge, border_radius=metrics.px(7))
+    surface.blit(rendered, rendered.get_rect(center=badge.center))
+    return badge
+
+
+def ellipsize_text(text, font, max_width, *, suffix="…"):
+    """按真实渲染宽度截断，不按字符数硬切。
+
+    ``font.size()`` 才是中文字符串宽度的唯一可靠来源，所以这里逐字测量，
+    放不下时补省略号；连省略号都放不下就返回空串。
+    """
+
+    text = str(text)
+    if max_width <= 0:
+        return ""
+    if font.size(text)[0] <= max_width:
+        return text
+
+    ellipsis_width = font.size(suffix)[0]
+    if ellipsis_width >= max_width:
+        return ""
+
+    result = ""
+    for char in text:
+        if font.size(result + char)[0] + ellipsis_width > max_width:
+            break
+        result += char
+    return (result + suffix) if result else ""
+
+
+def fit_text(text, font_set, *, max_width, preferred, fallback="micro"):
+    """先试首选字号，逐级降级；都放不下才省略。返回 (文本, 字体)。"""
+
+    order = [
+        preferred,
+        "seat_meta", "small", "tiny", "micro",
+    ]
+    seen = []
+    for name in order:
+        if name in seen or name not in theme.FONT_SIZES:
+            continue
+        seen.append(name)
+        font = font_set.get(name)
+        if font.size(str(text))[0] <= max_width:
+            return str(text), font
+        if name == fallback:
+            return ellipsize_text(text, font, max_width), font
+    font = font_set.get(fallback)
+    return ellipsize_text(text, font, max_width), font
+
+
 def draw_center_text(surface, text, center, font, color):
     return draw_text(surface, text, center, font, color, anchor="center")
 

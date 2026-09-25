@@ -105,8 +105,7 @@ def make_test_game(
     game.response.clear()
     game.choice.clear()
     game.pending_selection = None
-    game.zhangba_selecting = False
-    game.zhangba_selected = []
+    game.pending_view_as = None
     game.table_cards.clear()
 
     game.player.reset()
@@ -120,6 +119,12 @@ def make_test_game(
         game.player.set_equipment(card)
     for card in enemy_equipment:
         game.enemy.set_equipment(card)
+    # 直接塞进装备槽等同于"装备在装备区"：装备赋予的技能（丈八蛇矛一类）
+    # 也要跟着绑定，否则测试里的玩家与真实对局不是同一个状态。
+    from src.game.equipment_skills.granted import sync_equipment_skills
+
+    sync_equipment_skills(game, game.player)
+    sync_equipment_skills(game, game.enemy)
 
     set_draw_order(game, draw_order)
 
@@ -148,7 +153,7 @@ def settlement_status(game):
         or game.response.active
         or game.choice.active
         or game.pending_selection is not None
-        or game.zhangba_selecting
+        or game.pending_view_as is not None
     ):
         return SettlementStatus.WAITING_FOR_PLAYER
     return SettlementStatus.IDLE

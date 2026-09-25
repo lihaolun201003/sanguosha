@@ -22,6 +22,7 @@ from src.game.engine import (
     PassPendingAction,
     RespondCardAction,
     SelectCardsAction,
+    SelectTargetsAction,
 )
 
 
@@ -47,44 +48,62 @@ class SmokeResult:
         )
 
 
-def _human_respond(game, request):
+def human_respond(game, request):
     """Scripted stand-in for the human seat."""
-    controller = getattr(request.target, "controller_type", None)
+
+    # 共享响应阶段（无懈）里一条请求同时问好几个人：脚本替真人回答时，
+    # 回答者必须是真人自己，而不是请求上的 target（那可能是别人）。
+    actor = game.player if getattr(request, "is_group", False) else request.target
+    controller = getattr(actor, "controller_type", None)
     assert getattr(controller, "value", controller) == "human", "not a human request"
 
     reason = request.context.get("reason")
     if request.request_type.value == "respond_card":
         allowed = list(request.allowed_cards)
         if reason == "dying_rescue" and "TAO" in allowed:
-            card = next((c for c in request.target.hand if c.name == "TAO"), None)
+            card = next((c for c in actor.hand if c.name == "TAO"), None)
             if card is not None:
-                game.submit_action(RespondCardAction(request.target, request.request_id, card, None))
+                game.submit_action(RespondCardAction(actor, request.request_id, card, None))
                 return
         if reason == "wuxie_chain":
-            game.submit_action(PassPendingAction(request.target, request.request_id))
+            game.submit_action(PassPendingAction(actor, request.request_id))
             return
-        card = next((c for c in request.target.hand if c.name in allowed), None)
+        card = next((c for c in actor.hand if c.name in allowed), None)
         if card is not None:
-            game.submit_action(RespondCardAction(request.target, request.request_id, card, None))
+            game.submit_action(RespondCardAction(actor, request.request_id, card, None))
         else:
-            game.submit_action(PassPendingAction(request.target, request.request_id))
+            game.submit_action(PassPendingAction(actor, request.request_id))
         return
 
     if request.request_type.value == "confirm":
-        game.submit_action(ConfirmPendingAction(request.target, request.request_id, False))
+        # 阶段替换（突袭一类）：脚本真人一律发动，好让这条路径在
+        # smoke 里真的被走到；其余确认保持保守。
+        confirmed = request.context.get("reason") == "phase_replacement"
+        game.submit_action(ConfirmPendingAction(actor, request.request_id, confirmed))
         return
 
     if request.request_type.value == "choose_option":
-        game.submit_action(ChooseOptionAction(request.target, request.request_id, request.options[0]))
+        game.submit_action(ChooseOptionAction(actor, request.request_id, request.options[0]))
         return
 
     if request.request_type.value == "select_cards":
         candidates = list(request.context.get("candidates", ()))
         picked = candidates[:max(1, request.min_cards)]
         if not picked:
-            game.submit_action(PassPendingAction(request.target, request.request_id))
+            game.submit_action(PassPendingAction(actor, request.request_id))
             return
-        game.submit_action(SelectCardsAction(request.target, request.request_id, picked))
+        game.submit_action(SelectCardsAction(actor, request.request_id, picked))
+        return
+
+    if request.request_type.value == "select_targets":
+        candidates = list(request.context.get("candidates", ()))
+        if not candidates:
+            game.submit_action(PassPendingAction(actor, request.request_id))
+            return
+        want = max(1, min(int(request.max_cards or 1), len(candidates)))
+        game.submit_action(
+            SelectTargetsAction(actor, request.request_id, candidates[:want])
+        )
         return
 
     raise AssertionError("unhandled request type " + request.request_type.value)
@@ -207,7 +226,8 @@ def describe_state(game):
     }
 
 
-def run_smoke(ai_count=3, seed=7, max_steps=MAX_STEPS, verbose=False, deck_seed=None):
+def run_smoke(ai_count=3, seed=7, max_steps=MAX_STEPS, verbose=False, deck_seed=None,
+              general_pool=None, mode_id=None):
     pygame.init()
     pygame.display.set_mode((320, 240))
 
@@ -217,7 +237,23 @@ def run_smoke(ai_count=3, seed=7, max_steps=MAX_STEPS, verbose=False, deck_seed=
         # 固定牌堆洗牌，便于复现偶发卡死。
         random.seed(deck_seed)
     game = Game(ai_count=ai_count)
-    game.start_local_battle(ai_count)
+    # 走真实对局路径：AI 响应排队出现。
+    game.ai_pacing = True
+    if general_pool:
+        game.general_pool = tuple(general_pool)
+    if mode_id:
+        # 走真实开局流程：模式 -> 人数 -> 身份 -> 选将 -> 对局。
+        game.rng.seed(seed)
+        game.set_mode(mode_id)
+        game.ai_count = ai_count
+        game.begin_general_select()
+        if game.scene == "identity_reveal":
+            game.confirm_identity()
+        candidates = game.general_candidates or game.generals.ids()
+        game.selected_general = candidates[0]
+        game.confirm_general()
+    else:
+        game.start_local_battle(ai_count)
 
     steps = 0
     idle = 0
@@ -269,11 +305,18 @@ def run_smoke(ai_count=3, seed=7, max_steps=MAX_STEPS, verbose=False, deck_seed=
 
             request = game.pending_request
             if request is not None:
+                if getattr(request, "is_group", False):
+                    # 共享响应阶段（无懈）：AI 由引擎一次问遍，真人那一步由脚本答。
+                    game.engine.present_or_auto_resolve(request)
+                    if request.member_status(game.player) == "pending":
+                        human_respond(game, request)
+                    idle = 0
+                    continue
                 controller = getattr(request.target, "controller_type", None)
                 if getattr(controller, "value", controller) == "ai":
                     game.engine.present_or_auto_resolve(request)
                 else:
-                    _human_respond(game, request)
+                    human_respond(game, request)
                 idle = 0
                 continue
 

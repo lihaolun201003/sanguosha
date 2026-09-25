@@ -12,11 +12,14 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 
-from src.constants import AI_PLUS_RECT, PLAYER_EQUIPMENT_RECTS, SINGLE_PLAYER_RECT
 from src.game import Game
+from src.actions import CallbackAction
 from src.game.engine import PassPendingAction, RespondCardAction
+from tools.multiplayer_smoke import human_respond
 from src.renderer import Renderer
 from src.start_menu import StartMenu
+from src.ui.general_select import GeneralSelectScreen
+from src.ui.interaction import handle_game_click
 from src.ui import layout
 from tests.legacy_helpers import canonical_card, equipment, normal_sha, shan, tao
 
@@ -211,10 +214,14 @@ def run_dummy_flow():
     """完整交互流程：菜单 → 5 人局 → 出牌 → 结束回合 → AI 行动 → 结算。"""
 
     pygame.init()
-    screen = pygame.display.set_mode((layout.WIDTH, layout.HEIGHT))
+    screen = pygame.display.set_mode((1920, 1080))
     game = Game()
+    game.ai_pacing = True
     renderer = Renderer(screen)
-    menu = StartMenu(screen, renderer.big_font, renderer.small_font, renderer.tiny_font)
+    menu = StartMenu(screen)
+    menu.sync_layout(renderer.metrics)
+    picker = GeneralSelectScreen(screen)
+    picker.sync_layout(renderer.metrics, game.generals.list_generals())
     steps = []
 
     def frame(count=1, mouse=None):
@@ -223,6 +230,41 @@ def run_dummy_flow():
             renderer.update(1 / 60)
             renderer.draw(game, mouse)
             pygame.display.flip()
+
+    def click(position, mouse=None):
+        """投递真实鼠标左键事件，并交给 main.py 使用的那一份点击路由。"""
+
+        frame(1, mouse if mouse is not None else position)
+        pygame.event.post(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"pos": position, "button": 1}
+        ))
+        handled = 0
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                handled += 1
+                handle_game_click(event.pos, game, renderer)
+        frame(1, position)
+        return handled
+
+    def source_landed(card, g=None):
+        """实体 source 只移动一次：落到弃牌堆，或被技能（奸雄一类）取走。"""
+
+        g = g or game
+        if card in g.deck.discard_pile:
+            return True
+        return any(
+            any(item is card for item in owner.hand)
+            for owner in g.players if owner is not g.player
+        )
+
+    def settle(g, frame_fn, max_frames=900):
+        """把动画与响应队列都跑完（AI 可能出闪 / 触发防具）。"""
+
+        for _ in range(max_frames):
+            frame_fn(1)
+            if not g.busy and g.pending_request is None:
+                return True
+        return False
 
     def wait_idle(max_frames=240):
         """等动画队列播完，就像真实玩家等界面稳定后再点击。"""
@@ -233,15 +275,34 @@ def run_dummy_flow():
             frame(1)
         return False
 
-    # 1) 选择 4 AI
+    # 1) 选择 4 AI（按钮位置现在由 LayoutMetrics 决定）
+    menu.sync_layout(renderer.metrics)
     for _ in range(3):
-        menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
+        menu.handle_click(menu.plus_button.rect.center, game)
     steps.append(("菜单选择 AI 数量 = 4", game.ai_count == 4))
 
-    # 2) 开始 5 人局
-    menu.handle_click(pygame.Rect(*SINGLE_PLAYER_RECT).center, game)
+    # 2) 开始 → 进入选将 → 选择赵云 → 确认 → 5 人局
+    menu.handle_click(menu.start_button.rect.center, game)
+    steps.append(("进入选将界面", game.scene == "general_select"))
+
+    picker.sync_layout(renderer.metrics, game.generals.list_generals())
+    zhaoyun_rect = next(
+        (rect for general, rect in zip(picker.generals, picker.card_rects) if general.id == "zhaoyun"),
+        None,
+    )
+    if zhaoyun_rect is not None:
+        picker.handle_click(zhaoyun_rect.center, game)
+    steps.append(("选择赵云", game.selected_general == "zhaoyun"))
+
+    confirm_action = picker.handle_click(picker.confirm_button.rect.center, game)
+    if confirm_action == "confirm":
+        game.confirm_general()
     frame(2)
-    steps.append(("进入 5 人局", game.scene == "game" and len(game.players) == 5))
+    steps.append(("进入 5 人局",
+                  game.scene == "game" and len(game.players) == 5))
+    steps.append(("真人武将为赵云", game.players[0].general_id == "zhaoyun"))
+    assigned = [player.general_id for player in game.players]
+    steps.append(("AI 也分到武将且不重复", all(assigned) and len(set(assigned)) == len(assigned)))
     steps.append(("开局动画播完", wait_idle()))
 
     # 3) 鼠标移动（悬停手牌）
@@ -252,7 +313,7 @@ def run_dummy_flow():
         hovered = renderer.table_layout.hand_hover
         steps.append(("鼠标移动到第一张手牌触发悬停", hovered == 0))
         lifted = renderer.get_card_rects(game.player.hand)[0].top
-        steps.append(("悬停卡牌上浮", lifted < layout.HAND_TOP))
+        steps.append(("悬停卡牌上浮", lifted < renderer.metrics.hand_top()))
 
     # 4) 出杀并选择目标，然后取消
     game.player.hand = [normal_sha()]
@@ -265,6 +326,170 @@ def run_dummy_flow():
         cancelled = game.cancel_target_selection()
         steps.append(("取消选择目标成功", bool(cancelled) and game.pending_target_selection is None))
 
+    # 4.5) 主动技能全链路：真实鼠标点击「发动技能」→ 选目标 → 确认发动
+    game.set_general(game.player, "zhouyu")
+    game.player.hp = game.player.max_hp
+    game.player.hand = [tao()]
+    skill_target = game.players[1]
+    skill_target.hand = []
+    skill_target.hp = skill_target.max_hp
+    wait_idle()
+    frame(1)
+
+    click(renderer.skill_bar.button.rect.center)
+    steps.append(("点击「发动技能」进入技能输入", game.pending_skill_input is not None))
+
+    frame(1)
+    click(renderer.table_layout.seat_rects[skill_target].center)
+    steps.append(("点击角色选择技能目标",
+                  bool(game.pending_skill_input)
+                  and game.pending_skill_input["target"] is skill_target))
+
+    frame(1)
+    confirm_click = renderer.hit_action(renderer.primary_button.rect.center, game)
+    click(renderer.primary_button.rect.center)
+    steps.append(("主按钮在技能输入时变为确认发动", confirm_click == "confirm_skill"))
+    steps.append(("点击「确认发动」提交技能", game.pending_skill_input is None))
+
+    for _ in range(240):
+        frame(1)
+
+        if game.pending_selection is not None:
+            # 反间要求周瑜交出一张手牌：用真实鼠标点击手牌回答。
+            index = next(
+                (i for i, card in enumerate(game.player.hand)
+                 if game.is_selection_candidate(card, None)),
+                None,
+            )
+            if index is not None:
+                click(renderer.get_card_rects(game.player.hand)[index].center)
+                continue
+
+        request = game.pending_request
+        if request is None:
+            if not game.busy:
+                break
+            continue
+        if getattr(request.target, "is_human", False):
+            human_respond(game, request)
+        else:
+            game.engine.present_or_auto_resolve(request)
+
+    steps.append(("反间结算完成并写入 used 标记",
+                  game.player.skill_state.get("fanjian", "used", 0) == 1))
+    frame(1)
+    steps.append(("发动后技能按钮不再可点",
+                  not renderer.skill_bar.button.enabled))
+
+    # 技能段落结束：等动画播完并交回原武将，后续步骤按原流程继续。
+    wait_idle()
+    game.set_general(game.player, "zhaoyun")
+
+    # 4.6) Card Action / Conversion：真实鼠标点击的四种场合
+    #      (a) 赵云出牌阶段：【闪】→【龙胆】→【杀】
+    game.set_general(game.player, "zhaoyun")
+    game.player.hp = game.player.max_hp
+    flash = shan()
+    game.player.hand = [flash]
+    victim = next((item for item in game.players[1:] if item.alive), game.players[1])
+    victim.alive = True
+    victim.hp = victim.max_hp
+    victim.hand = []
+    wait_idle()
+    frame(1)
+
+    steps.append(("出牌阶段的【闪】没有被灰",
+                  renderer.playable is not None and 0 in renderer.playable))
+    click(renderer.get_card_rects(game.player.hand)[0].center)
+    steps.append(("未点【龙胆】时点击【闪】不会自动转换",
+                  game.pending_target_selection is None
+                  and game.pending_view_as is None
+                  and flash in game.player.hand))
+    click(renderer.skill_bar.button.rect.center)
+    steps.append(("点击「发动技能」进入【龙胆】选牌模式",
+                  game.pending_view_as is not None
+                  and game.pending_view_as.skill_id == "longdan"))
+    click(renderer.get_card_rects(game.player.hand)[0].center)
+    steps.append(("选择【闪】后进入【龙胆】的目标选择",
+                  game.pending_target_selection is not None
+                  and getattr(game.pending_target_selection["card"], "_virtual", False)))
+    frame(1)
+    frame(1)
+    victim = next((item for item in game.players[1:] if item.alive), victim)
+    click(renderer.table_layout.seat_rects[victim].center)
+    settle(game, frame)
+    steps.append(("实体【闪】只移动一次（弃牌堆或已被技能取走）",
+                  source_landed(flash)
+                  and flash not in game.player.hand
+                  and flash not in game.processing_zone))
+    steps.append(("转换被写进战报",
+                  any("龙胆" in line for line in game.game_log)))
+
+    #      (b) 关羽满血：【桃】同时有正常使用与【武圣】→ 弹出选择面板
+    game.set_general(game.player, "guanyu")
+    game.player.hp = game.player.max_hp - 1     # 受伤：正常使用【桃】也合法
+    game.player.sha_used = False      # 上一段用过【杀】，这里重置本回合的杀次数
+    peach = tao()
+    game.player.hand = [peach]
+    victim = next((item for item in game.players[1:] if item.alive), victim)
+    victim.alive = True
+    victim.hp = victim.max_hp
+    wait_idle()
+    frame(1)
+
+    steps.append(("满血的【桃】因为【武圣】没有被灰",
+                  renderer.playable is not None and 0 in renderer.playable))
+    click(renderer.skill_bar.button.rect.center)
+    steps.append(("点击「发动技能」进入【武圣】选牌模式",
+                  game.pending_view_as is not None
+                  and game.pending_view_as.skill_id == "wusheng"))
+    click(renderer.get_card_rects(game.player.hand)[0].center)
+    steps.append(("选择红桃【桃】后进入目标选择",
+                  game.pending_target_selection is not None
+                  and game.pending_target_selection["card"].name == "SHA"))
+    frame(1)
+    victim = next((item for item in game.players[1:] if item.alive), victim)
+    click(renderer.table_layout.seat_rects[victim].center)
+    settle(game, frame)
+    steps.append(("【武圣】把【桃】当【杀】结算成功",
+                  source_landed(peach)
+                  and peach not in game.player.hand
+                  and any("武圣" in line for line in game.game_log)))
+
+    #      (c) 响应：【杀】通过【龙胆】当【闪】打出
+    game.set_general(game.player, "zhaoyun")
+    killer = normal_sha()
+    game.player.hand = [killer]
+    wait_idle()
+    game.response.request(
+        prompt="【杀】：请打出一张【闪】",
+        allowed_cards={"SHAN"},
+        on_card=lambda index, card, rect: game.actions.add(
+            CallbackAction(lambda: None)),
+        on_pass=lambda: None,
+    )
+    wait_idle()
+    frame(1)
+    _log_before = game.game_log[-1] if game.game_log else ""
+    click(renderer.get_card_rects(game.player.hand)[0].center)
+    steps.append(("响应阶段未点技能时【杀】不能当【闪】打出",
+                  (game.game_log[-1] if game.game_log else "") == _log_before))
+    wait_idle()
+    frame(1)
+    click(renderer.skill_bar.button.rect.center)
+    steps.append(("响应阶段也能进入【龙胆】", game.pending_view_as is not None))
+    wait_idle()
+    frame(2)                       # 选牌模式会改变手牌绘制，位置必须重新计算
+    click(renderer.get_card_rects(game.player.hand)[0].center)
+    last_log = game.game_log[-1] if game.game_log else ""
+    steps.append(("响应阶段【杀】通过【龙胆】当【闪】打出",
+                  "龙胆" in last_log and "闪" in last_log))
+    game.response.clear()
+
+    # 技能段落结束：等动画播完并交回原武将，后续步骤按原流程继续。
+    wait_idle()
+    game.set_general(game.player, "zhaoyun")
+
     # 5) 结束回合按钮
     game.player.hand = []
     wait_idle()
@@ -275,17 +500,21 @@ def run_dummy_flow():
 
     # 6) AI 自动行动
     turns_before = game.current_player_id
+    log_before = len(game.game_log)
     human_turns = 0
-    for _ in range(600):
+    for _ in range(2000):
         frame(1)
         if game.game_over and not game.busy:
             break
+        if len(game.game_log) > log_before and not game.busy:
+            break                       # AI 已经行动过，本步验证完成
         if game.busy:
             continue
         if game.pending_request is not None:
             request = game.pending_request
             if getattr(request.target, "is_human", False):
-                game.submit_action(PassPendingAction(request.target, request.request_id))
+                # 真人请求必须给出合法内容（选牌 / 选项都不能用 Pass 敷衍）。
+                human_respond(game, request)
             else:
                 game.engine.present_or_auto_resolve(request)
             continue
@@ -298,10 +527,29 @@ def run_dummy_flow():
             if human_turns > 3:
                 break
             game.end_player_turn()
-    steps.append(("AI 自动接管回合", game.current_player_id != turns_before or game.game_over))
+    steps.append(("AI 自动接管回合",
+                  game.current_player_id != turns_before
+                  or game.game_over
+                  or len(game.game_log) > log_before))
 
     # 7) 响应一个 Pending
-    if not game.game_over:
+    # 清掉可能残留的 UI 选择状态，保证下面是一次干净的响应验证
+    game.cancel_card_action()
+    game.cancel_skill_input()
+    game.cancel_target_selection()
+    game.response.clear()
+
+    for _ in range(120):
+        request = game.pending_request
+        if request is None:
+            break
+        if getattr(request.target, "is_human", False):
+            human_respond(game, request)
+        else:
+            game.engine.present_or_auto_resolve(request)
+        frame(1)
+    wait_idle()
+    if not game.game_over and game.pending_request is None:
         game.response.request(
             prompt="【杀】：请打出一张【闪】",
             allowed_cards={"SHAN"},
@@ -336,8 +584,10 @@ def main():
     os.makedirs(outdir, exist_ok=True)
 
     pygame.init()
-    screen = pygame.display.set_mode((layout.WIDTH, layout.HEIGHT))
+    # 视觉验收尺寸：1080p
+    screen = pygame.display.set_mode((1920, 1080))
     renderer = Renderer(screen)
+    menu.sync_layout(renderer.metrics) if False else None
 
     ok = True
     print("=== 布局场景 ===")

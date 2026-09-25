@@ -3,12 +3,14 @@
 from .atoms import Atom, AtomResult, apply_atom
 from .context import GameContext
 from .domain_actions import (
+    ActivateSkillAction,
     ChooseOptionAction,
     ConfirmPendingAction,
     GameAction,
     PassPendingAction,
     RespondCardAction,
     SelectCardsAction,
+    SelectTargetsAction,
     UseCardAction,
 )
 from .events import Event, EventDispatcher, EventType
@@ -42,6 +44,7 @@ __all__ = [
     "PassPendingAction",
     "ConfirmPendingAction",
     "SelectCardsAction",
+    "SelectTargetsAction",
     "ChooseOptionAction",
     "PendingManager",
     "PendingRequest",

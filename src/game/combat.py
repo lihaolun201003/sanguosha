@@ -1150,23 +1150,9 @@ class CombatMixin:
 
             return
 
-        card = self.player.hand[index]
-
-        if not self.response.can_play(
-            card
-        ):
-
-            self.message = (
-                "这张牌不能用于当前响应。"
-            )
-
-            return
-
-        self.response.play_card(
-            index,
-            card,
-            source_rect
-        )
+        # 响应同样走统一的 Card Action Discovery：真实【闪】与
+        # 【龙胆】杀当闪这类转化动作由同一份查询选出，UI 不再自己判断牌名。
+        self.begin_card_action(self.player.hand[index], source_rect, index=index)
 
 
     # ==================================================

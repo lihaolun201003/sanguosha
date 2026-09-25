@@ -1,8 +1,7 @@
-"""Death cleanup and free-for-all result resolution."""
+"""Death cleanup; the outcome itself is decided by the active GameMode."""
 
 from src.game.engine import Event, EventType, Flow
-from src.game.engine.state import GameOutcome, GameResult
-from src.game.atoms_v2 import MoveCardAtom
+from src.game.atoms_v2 import MoveCardAtom, UnequipAtom
 
 
 class DeathFlow(Flow):
@@ -18,65 +17,27 @@ class DeathFlow(Flow):
         request = self.engine.pending.current
         if request is not None and request.target is self.dead_player:
             self.engine.clear_pending_ui()
+        # 先落死亡标记再清空区域：死亡清理不是"失去装备"，枭姬一类技能
+        # 不会因为角色退场而被触发。
+        self.dead_player.alive = False
         for card in list(self.dead_player.hand):
             self.context.apply(MoveCardAtom(card, source=self.dead_player.hand, destination=self.game.deck.discard_pile))
         for card in list(self.dead_player.judgement_zone):
             self.context.apply(MoveCardAtom(card, source=self.dead_player.judgement_zone, destination=self.game.deck.discard_pile))
         for slot, card in list(self.dead_player.equipment.items()):
             if card is not None:
-                self.dead_player.remove_equipment(slot)
-                self.context.apply(MoveCardAtom(card, destination=self.game.deck.discard_pile))
-        self.dead_player.alive = False
+                self.context.apply(UnequipAtom(
+                    self.dead_player, slot, self.game.deck.discard_pile))
         self.dead_player.chained = False
-        # 胜负只依据存活标志：正在濒死求桃的角色（hp <= 0 但 alive）还没有
-        # 死亡，不能在这一刻把别人判成最后的存活者。
-        alive = [player for player in self.game.players if player.alive]
-        winner = alive[0] if len(alive) == 1 else None
-        human_eliminated = self.dead_player is self.game.player
-        no_survivors = not alive
-        already_over = self.game.game_over
-        # 结束标记只增不减：一次连环传播里真人先死、后续角色再死时，
-        # 不能把已经结束的对局重新变成进行中。
-        self.game.game_over = already_over or human_eliminated or no_survivors or winner is not None
-        if self.game.game_over:
-            self.game.phase = "over"
 
-        if already_over:
-            # 对局已经结束（例如真人已阵亡）：剩下的只是流程收尾，
-            # 不再改写胜负，也不宣布任何 AI 获得最终胜利。
-            outcome = None
-            reason = "ALREADY_OVER"
-        elif winner is not None:
-            outcome = GameOutcome.PLAYER_WIN if winner is self.game.player else GameOutcome.AI_WIN
-            if len(self.game.players) == 2:
-                self.game.message = "你获胜了！" if winner is self.game.player else "你阵亡了！"
-            else:
-                self.game.message = "你获胜了！" if winner is self.game.player else winner.name + " 获胜"
-            reason = "LAST_SURVIVOR"
-        elif human_eliminated:
-            outcome = GameOutcome.HUMAN_ELIMINATED
-            self.game.message = "你已阵亡 / 游戏失败"
-            reason = "HUMAN_ELIMINATED"
-        elif no_survivors:
-            outcome = GameOutcome.NO_SURVIVOR
-            self.game.message = "全场阵亡，无人获胜"
-            reason = "NO_SURVIVOR"
-        else:
-            outcome = GameOutcome.LAST_SURVIVOR
-            self.game.message = self.dead_player.name + " 阵亡"
-            reason = "ELIMINATED"
+        # 胜负与死亡奖惩都属于模式规则：这里只做通用清理，然后交给
+        # GameMode 判定"这次死亡意味着什么"。核心流程不认识身份。
+        mode = getattr(self.game, "mode", None)
+        if mode is not None:
+            mode.on_death(self.dead_player, self.source)
+        resolution = mode.resolve_death(self) if mode is not None else None
 
-        if outcome is not None:
-            result = GameResult(
-                outcome=outcome,
-                winner=winner,
-                loser=self.dead_player,
-                reason=reason,
-            )
-            self.game.result = result
-            self.game.winner = winner
-        else:
-            result = self.game.result
+        result = self.game.result if (resolution is not None and resolution.finished) else None
         self.game.add_log(self.dead_player.name + " 阵亡")
         if not self.game.game_over and self.game.current_turn_player is self.dead_player:
             self.game.current_turn_player = self.game.seats.next_alive_player(self.dead_player)
@@ -95,4 +56,17 @@ class DeathFlow(Flow):
                 },
             )
         )
+        # 行殇一类"阵亡时"技能在这条事件里开窗口：遗物分配没定下来之前，
+        # 死亡清理就不能算结束（技能卸载、回合推进都要等）。
+        guard = self.guard_child_flows()
+        if guard is not None:
+            return guard
+        return self._settle(result)
+
+    def _settle(self, result):
+        # 死亡结算完毕后再卸载普通技能：DEATH 事件期间"死亡时"类技能
+        # 仍然有机会响应，卸载顺序不会把死亡结算技能一起掐掉。
+        skills = getattr(self.game, "skills", None)
+        if skills is not None:
+            skills.on_player_death(self.dead_player)
         return self.complete(result)

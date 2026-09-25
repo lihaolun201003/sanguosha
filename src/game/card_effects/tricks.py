@@ -1,9 +1,11 @@
 """First playable standard trick-card effects."""
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, TransferEquipmentAtom, SetChainedAtom
+from src.card import DISPLAY_NAMES
+from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, TransferEquipmentAtom, SetChainedAtom, UnequipAtom
 from src.game.engine import FlowStatus
 from src.game.engine.pending import PendingRequestType
 from src.game.flows.damage import DamageContext, DamageFlow
+from src.game.flows.response_requirement import ResponseRequirement
 from src.game.rules import DistanceRule, TargetRule
 
 from .base import CardEffect
@@ -33,8 +35,11 @@ class _ChooseTargetCardEffect(CardEffect):
         target = list(action.targets)[0]
         if not target.hand and not any(target.equipment.values()):
             return False, "目标没有可选择的牌。"
-        if self.distance_limit is not None and not DistanceRule.in_range(
-            game, action.actor, target, self.distance_limit
+        limit = self.distance_limit_for(game, action.actor, action.card)
+        if (
+            limit is not None
+            and not game.ignores_trick_range(action.actor)
+            and not DistanceRule.in_range(game, action.actor, target, limit)
         ):
             return False, "目标距离过远。"
         return True, ""
@@ -59,13 +64,17 @@ class _ChooseTargetCardEffect(CardEffect):
         target = flow.targets[0]
         source = target.hand
         if not any(item is card for item in source):
+            # 装备区的牌统一走 UnequipAtom 离场：失去装备事件由它发出。
             for slot, equipped in target.equipment.items():
                 if equipped is card:
-                    target.remove_equipment(slot)
+                    flow.context.apply(UnequipAtom(target, slot))
                     source = None
                     break
         destination = flow.actor.hand if self.destination_is_actor else flow.game.deck.discard_pile
         flow.context.apply(MoveCardAtom(card, source=source, destination=destination))
+        # 展示被拿走 / 被弃置的那张牌并停留片刻，让真人看清发生了什么。
+        flow.engine.show_taken_card(
+            card, target, flow.actor, to_hand=self.destination_is_actor)
         flow.game.message = flow.actor.name + "使用【" + flow.card.display_name + "】获得一张牌。" if self.destination_is_actor else flow.actor.name + "使用【过河拆桥】弃置一张牌。"
         return flow.finish(cancelled=False)
 
@@ -83,6 +92,13 @@ class ShunshouEffect(_ChooseTargetCardEffect):
 
 
 class DuelEffect(CardEffect):
+    """决斗：双方轮流打出【杀】，先交不出来的一方受到 1 点伤害。
+
+    每一轮"需要交出几张【杀】"由**响应者的对手**决定（RESPONSE_COUNT
+    modifier，例如无双 = 2）。所以吕布无论主动使用决斗还是被决斗，他的
+    对手每轮都要连续打出两张【杀】，而吕布自己每轮仍然只要一张。
+    """
+
     card_name = "JUEDOU"
     target_rule = TargetRule.SINGLE_OTHER
     min_targets = max_targets = 1
@@ -91,15 +107,27 @@ class DuelEffect(CardEffect):
 
     def begin(self, flow):
         flow.effect_state = {"responder": flow.targets[0], "other": flow.actor}
-        return self._request(flow)
+        return self._open_round(flow)
 
-    def _request(self, flow):
+    def _open_round(self, flow):
+        """开始一轮：响应者换人，需求按对手的 modifier 重新计算。"""
+
+        state = flow.effect_state
+        responder = state["responder"]
+        opponent = state["other"]
+        state["requirement"] = ResponseRequirement.for_source(
+            flow.game, opponent, responder, flow.card, {"SHA"}, "duel")
+        return self._ask(flow)
+
+    def _ask(self, flow):
+        requirement = flow.effect_state["requirement"]
         responder = flow.effect_state["responder"]
-        request = flow.engine.pending.create(
-            PendingRequestType.RESPOND_CARD, source=flow.actor, target=responder,
-            prompt="【决斗】：请打出【杀】，或选择不响应", owner_flow=flow,
-            allowed_cards={"SHA"}, min_cards=0, max_cards=1,
-            request_context={"reason": "duel", "card": flow.card},
+        request = requirement.create_request(
+            flow.engine,
+            flow=flow,
+            source=flow.actor,
+            responder=responder,
+            prompt="【决斗】：请打出【杀】，或选择不响应",
         )
         flow.stage = "effect_waiting"
         flow.wait(request)
@@ -107,12 +135,17 @@ class DuelEffect(CardEffect):
         return flow.current_result()
 
     def resume(self, flow, resolution):
+        state = flow.effect_state
+        requirement = state["requirement"]
         if resolution.card is not None:
-            state = flow.effect_state
+            # 这一张【杀】已经由引擎真实移出手牌：即使下一张交不出来，
+            # 也不会退回。
+            if not requirement.accept(resolution.card):
+                return self._ask(flow)
             state["responder"], state["other"] = state["other"], state["responder"]
-            return self._request(flow)
+            return self._open_round(flow)
         loser = resolution.actor
-        winner = flow.effect_state["other"]
+        winner = state["other"]
         damage = DamageFlow(flow.engine, DamageContext(winner, loser, 1, card=flow.card), on_complete=lambda _: flow.finish(cancelled=False))
         result = damage.start()
         if result.status is FlowStatus.WAITING:
@@ -122,10 +155,24 @@ class DuelEffect(CardEffect):
 
 
 class _MassResponseEffect(CardEffect):
+    """群体锦囊（南蛮入侵 / 万箭齐发）：逐目标要求响应牌。
+
+    生命周期刻意分成两段，二者不可混用：
+
+    * ``TRICK_NEGATION_WINDOW``——【无懈可击】窗口。它属于**锦囊本身**，
+      由 ``UseCardFlow`` 在效果开始之前统一开启一次，所有目标共用同一条
+      无懈链（无懈套无懈照常反转）。被抵消则整张牌结束。
+    * ``CARD_RESPONSE_REQUIREMENT``——效果开始之后逐个目标要求
+      【杀】/【闪】。这一段只推进目标下标，**绝不再打开无懈链**。
+
+    因此这里的 ``cancellable_by_wuxie`` 仍然为真（锦囊本身可被无懈），
+    但效果阶段自身不产生任何无懈请求。
+    """
+
     target_rule = TargetRule.ALL_OTHERS
     response_name = None
     cancellable_by_wuxie = True
-    per_target_wuxie = True
+    sequential_targets = True
 
     def begin(self, flow):
         flow.effect_state = {"index": 0}
@@ -139,32 +186,21 @@ class _MassResponseEffect(CardEffect):
         if not target.alive or target.hp <= 0:
             flow.effect_state["index"] += 1
             return self._next(flow)
-        from src.game.flows.wuxie import WuxieResponseChain
-        flow.stage = "effect_wuxie"
-        chain = WuxieResponseChain(
-            flow.engine, flow.actor, flow.card, [target],
-            lambda nullified: self._after_target_wuxie(flow, nullified),
-        )
-        flow.wait(chain)
-        chain.start()
-        return flow.current_result()
-
-    def _after_target_wuxie(self, flow, nullified):
-        if flow.status is FlowStatus.WAITING:
-            flow.status = FlowStatus.RUNNING
-            flow.pending_request = None
-        if nullified:
-            flow.effect_state["index"] += 1
-            return self._next(flow)
         return self._request_response(flow)
 
     def _request_response(self, flow):
         target = flow.targets[flow.effect_state["index"]]
+        display = DISPLAY_NAMES.get(self.response_name, self.response_name)
         request = flow.engine.pending.create(
             PendingRequestType.RESPOND_CARD, source=flow.actor, target=target,
-            prompt="【" + flow.card.display_name + "】：请打出响应牌，或选择不响应",
+            prompt="【" + flow.card.display_name + "】：请打出【" + display + "】，或选择不响应",
             owner_flow=flow, allowed_cards={self.response_name}, min_cards=0, max_cards=1,
-            request_context={"reason": self.card_name.lower(), "card": flow.card},
+            request_context={
+                "reason": self.card_name.lower(),
+                "card": flow.card,
+                # 逐目标响应请求：UI 据此一次只展示当前目标的箭头与提示。
+                "sequential_targets": True,
+            },
         )
         flow.stage = "effect_waiting"
         flow.wait(request)
@@ -176,7 +212,10 @@ class _MassResponseEffect(CardEffect):
             flow.effect_state["index"] += 1
             return self._next(flow)
         target = resolution.actor
-        damage = DamageFlow(flow.engine, DamageContext(flow.actor, target, 1, card=flow.card), on_complete=lambda _: self._after_damage(flow))
+        # 伤害来源走规则层查询：默认是使用这张锦囊的角色，【祸首】一类能力
+        # 可以把它改写成别人（"你是任何【南蛮入侵】造成伤害的来源"）。
+        damage_source = flow.game.trick_source(flow.actor, flow.card)
+        damage = DamageFlow(flow.engine, DamageContext(damage_source, target, 1, card=flow.card), on_complete=lambda _: self._after_damage(flow))
         result = damage.start()
         if result.status is FlowStatus.WAITING:
             flow.stage = "effect_child"
@@ -312,6 +351,14 @@ class _DelayedTrickEffect(CardEffect):
     def begin(self, flow):
         flow.context.apply(MoveCardAtom(flow.card, source=flow.game.processing_zone, destination=flow.targets[0].judgement_zone))
         flow.keep_processing_card = True
+        # 牌已经真实进入判定区：出牌动画留在桌面上的展示副本必须收掉，
+        # 否则它会一直停在中央（同一张牌不允许有两个视觉位置）。出牌动画
+        # 是异步的（播完才把牌放上桌面），所以等那份副本出现之后再移除。
+        from src.actions import CallbackAction
+
+        flow.game.actions.add(
+            CallbackAction(lambda placed=flow.card: flow.game.remove_table_card(placed))
+        )
         return flow.finish(cancelled=False)
 
 
@@ -325,7 +372,11 @@ class BingliangEffect(_DelayedTrickEffect):
 
     def can_use(self, game, action):
         valid, message = super().can_use(game, action)
-        if valid and not DistanceRule.in_range(game, action.actor, list(action.targets)[0], 1):
+        if (
+            valid
+            and not game.ignores_trick_range(action.actor)
+            and not DistanceRule.in_range(game, action.actor, list(action.targets)[0], 1)
+        ):
             return False, "目标距离超过 1。"
         return valid, message
 
@@ -378,6 +429,9 @@ class TiesuoEffect(CardEffect):
     min_targets = 1
     max_targets = 2
     cancellable_by_wuxie = True
+    # 铁索连环可以重铸（置入弃牌堆并摸一张牌）：本地 UI 的"连环／重铸"二选一、
+    # AI 的兜底分支、远程控制器下发的重铸选项都读这个声明。
+    can_recast = True
 
     def can_use(self, game, action):
         if action.metadata.get("recast"):

@@ -39,7 +39,9 @@ class EngineV2Phase4Tests(unittest.TestCase):
         game.submit_action(UseCardAction(game.player, card, [game.player]))
         self.assertEqual(game.player.hand, [first, second])
 
-    def test_trick_source_is_not_asked_to_wuxie_own_card_initially(self):
+    def test_trick_source_is_also_checked_in_the_wuxie_window(self):
+        """共享无懈阶段包含锦囊使用者：他可以放弃，放弃之后锦囊照常结算。"""
+
         card, own_wuxie, first, second = trick("WUZHONG"), trick("WUXIE"), tao(), normal_sha()
         game = make_test_game(
             player_hand=[card, own_wuxie],
@@ -47,9 +49,15 @@ class EngineV2Phase4Tests(unittest.TestCase):
             draw_order=[first, second],
         )
         result = game.submit_action(UseCardAction(game.player, card, [game.player]))
-        self.assertEqual(result.status.value, "completed")
+        self.assertEqual(result.status.value, "waiting")
+        request = game.pending_request
+        self.assertTrue(request.is_group, "使用者本人也要在无懈阶段的检查范围内")
+        self.assertTrue(request.is_member(game.player))
+
+        # 放弃：锦囊照常结算（摸两张），手里的无懈一张不动。
+        game.submit_action(PassPendingAction(game.player, request.request_id))
         self.assertIn(own_wuxie, game.player.hand)
-        self.assertFalse(game.response.active)
+        self.assertEqual(game.player.hand, [own_wuxie, first, second])
         self.assertIsNone(game.pending_request)
 
     def test_lebu_failure_skips_play_and_success_does_not(self):

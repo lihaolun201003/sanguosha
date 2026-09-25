@@ -14,7 +14,6 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pygame
 
 from src.choice import ChoiceOverlay
-from src.constants import AI_MINUS_RECT, AI_PLUS_RECT, SINGLE_PLAYER_RECT
 from src.game import Game
 from src.renderer import Renderer
 from src.start_menu import StartMenu
@@ -32,7 +31,8 @@ class UiTestCase(unittest.TestCase):
         self.screen = pygame.display.set_mode((layout.WIDTH, layout.HEIGHT))
         self.renderer = Renderer(self.screen)
         self.overlay = ChoiceOverlay(self.screen, self.renderer.small_font, self.renderer.tiny_font)
-        self.menu = StartMenu(self.screen, self.renderer.big_font, self.renderer.small_font, self.renderer.tiny_font)
+        self.menu = StartMenu(self.screen)
+        self.menu.sync_layout(self.renderer.metrics)
 
     def tearDown(self):
         pygame.display.quit()
@@ -430,16 +430,20 @@ class MenuAndResultTests(UiTestCase):
     def test_menu_ai_count_clamps_between_one_and_seven(self):
         game = Game(ai_count=1)
         for _ in range(10):
-            self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
+            self.menu.handle_click(self.menu.plus_button.rect.center, game)
         self.assertEqual(game.ai_count, 7)
         for _ in range(10):
-            self.menu.handle_click(pygame.Rect(*AI_MINUS_RECT).center, game)
+            self.menu.handle_click(self.menu.minus_button.rect.center, game)
         self.assertEqual(game.ai_count, 1)
 
     def test_menu_starts_a_battle_and_menu_rects_are_clickable(self):
         game = Game(ai_count=1)
-        self.menu.handle_click(pygame.Rect(*AI_PLUS_RECT).center, game)
-        self.menu.handle_click(pygame.Rect(*SINGLE_PLAYER_RECT).center, game)
+        self.menu.handle_click(self.menu.plus_button.rect.center, game)
+        self.menu.handle_click(self.menu.start_button.rect.center, game)
+        # Phase 8 起菜单先进入选将
+        self.assertEqual(game.scene, "general_select")
+        game.selected_general = game.generals.ids()[0]
+        game.confirm_general()
         self.assertEqual(game.scene, "game")
         self.assertEqual(len(game.players), 3)
         game.return_to_menu()
@@ -503,6 +507,161 @@ class PlayabilityHintTests(UiTestCase):
         rects = self.renderer.get_card_rects(game.player.hand)
         game.player_use_card(0, tuple(rects[0]))
         self.assertEqual(game.player.hand, before)
+
+
+class SpeedControlTests(UiTestCase):
+    """节奏：可调速的动画 / 停顿，以及界面上的速度控件。"""
+
+    def test_speed_steps_and_bounds(self):
+        game = Game()
+        self.assertEqual(game.speed, game.DEFAULT_SPEED)
+
+        for _ in range(10):
+            game.slower()
+        self.assertEqual(game.speed, game.SPEED_STEPS[0])
+        for _ in range(10):
+            game.faster()
+        self.assertEqual(game.speed, game.SPEED_STEPS[-1])
+
+        game.set_speed(0.1)
+        self.assertEqual(game.speed, game.SPEED_STEPS[0])
+        game.set_speed(99)
+        self.assertEqual(game.speed, game.SPEED_STEPS[-1])
+
+    def test_speed_label_is_readable(self):
+        game = Game()
+        game.set_speed(1.0)
+        self.assertEqual(game.speed_label, "1×")
+        game.set_speed(0.5)
+        self.assertEqual(game.speed_label, "0.5×")
+        game.set_speed(1.5)
+        self.assertEqual(game.speed_label, "1.5×")
+
+    def test_speed_scales_queued_actions(self):
+        from src.actions import WaitAction
+
+        game = Game()
+        game.set_speed(0.5)
+        game.actions.add(WaitAction(1.0))
+        for _ in range(3):
+            game.update(0.5)          # 实际只推进 0.75 秒
+        self.assertTrue(game.busy, "慢速下动画不该提前结束")
+        game.update(0.5)              # 累计 1.0 秒
+        self.assertFalse(game.busy)
+
+        game.set_speed(1.0)
+        game.actions.add(WaitAction(1.0))
+        game.update(1.0)
+        self.assertFalse(game.busy, "正常速度下动画应按时结束")
+
+    def test_restart_keeps_the_speed_setting(self):
+        game = self.make_game(3)
+        game.set_speed(0.5)
+        game.reset()
+        self.assertEqual(game.speed, 0.5)
+
+    def test_speed_control_is_clickable_on_the_menu(self):
+        """节奏控件在主界面调（对局中不再占按钮区）。"""
+
+        game = self.make_game(3)
+        control = self.menu.speed_control
+        self.assertTrue(control.rect.colliderect(self.screen.get_rect()))
+
+        before = game.speed
+        self.assertEqual(self.menu.handle_click(control.plus.rect.center, game), "speed")
+        self.assertGreater(game.speed, before, "点 ＋ 应该加快节奏")
+        self.assertEqual(self.menu.handle_click(control.minus.rect.center, game), "speed")
+        self.assertEqual(game.speed, before, "点 − 应该降回去")
+
+    def test_speed_control_disables_at_the_range_ends(self):
+        game = self.make_game(3)
+        control = self.menu.speed_control
+
+        game.set_speed(game.SPEED_STEPS[0])
+        self.assertIsNone(self.menu.handle_click(control.minus.rect.center, game))
+        self.assertEqual(self.menu.handle_click(control.plus.rect.center, game), "speed")
+
+        game.set_speed(game.SPEED_STEPS[-1])
+        self.assertIsNone(self.menu.handle_click(control.plus.rect.center, game))
+        self.assertEqual(self.menu.handle_click(control.minus.rect.center, game), "speed")
+
+    def test_surrender_needs_two_clicks_and_returns_to_menu(self):
+        """投降：第一次只是上膛，再点一次才真的回主界面（防误触）。"""
+
+        from src.ui.interaction import run_action
+
+        game = self.make_game(3)
+        game.scene = "game"
+        button = self.renderer.surrender_button
+
+        run_action("surrender", game, self.renderer)
+        self.assertEqual(game.scene, "game", "第一下不该直接投降")
+        self.assertGreater(self.renderer._surrender_armed, 0.0, "第一下只是上膛")
+        self.renderer.actions_for(game)     # 下一帧绘制时按钮会改文案
+        self.assertIn("确认", button.label)
+
+        run_action("surrender", game, self.renderer)
+        self.assertEqual(game.scene, "menu", "确认后应回到主界面")
+
+    def test_surrender_button_is_reachable_and_not_overlapping(self):
+        game = self.make_game(3)
+        rect = self.renderer.surrender_button.rect
+        self.assertTrue(self.screen.get_rect().contains(rect), "投降按钮要在屏幕内")
+        self.assertFalse(rect.colliderect(self.renderer.primary_button.rect))
+        self.assertFalse(rect.colliderect(self.renderer.secondary_button.rect))
+
+    def test_speed_control_does_not_overlap_seats_or_hand(self):
+        for ai_count in range(1, 8):
+            game = self.make_game(ai_count)
+            control = self.renderer.speed_control.rect
+            for rect in self.renderer.get_player_panel_rects(game).values():
+                self.assertFalse(control.colliderect(rect), "速度控件与座位重叠：AI=%d" % ai_count)
+            for rect in self.renderer.get_card_rects(game.player.hand):
+                self.assertFalse(control.colliderect(rect))
+
+    def test_pacing_defers_ai_responses_until_actions_run(self):
+        from src.game.engine import UseCardAction
+
+        game = self.make_game(3, hand_size=1)
+        game.ai_pacing = True
+        game.player.hand = [normal_sha()]
+        victim = game.players[1]
+        victim.hand = []
+
+        game.submit_action(UseCardAction(game.player, game.player.hand[0], [victim]))
+
+        self.assertIsNotNone(game.pending_request, "节奏模式下 AI 响应应当排队等待")
+        self.assertTrue(game.busy)
+
+        for _ in range(400):
+            game.update(1 / 60)
+            if game.pending_request is None:
+                break
+        self.assertIsNone(game.pending_request)
+        self.assertEqual(victim.hp, 3, "AI 的响应最终仍然要正常结算")
+
+    def test_sync_mode_resolves_ai_responses_immediately(self):
+        from src.game.engine import UseCardAction
+
+        game = self.make_game(3, hand_size=1)
+        self.assertFalse(game.ai_pacing)
+        game.player.hand = [normal_sha()]
+        victim = game.players[1]
+        victim.hand = []
+
+        game.submit_action(UseCardAction(game.player, game.player.hand[0], [victim]))
+
+        self.assertIsNone(game.pending_request)
+        self.assertEqual(victim.hp, 3)
+
+    def test_pacing_mode_game_still_reaches_an_end(self):
+        from tools.multiplayer_smoke import run_smoke
+
+        game, result = run_smoke(ai_count=3, seed=2, max_steps=60000)
+        self.assertIsNone(result.error, result.error)
+        self.assertIsNone(result.stuck_reason, result.stuck_reason)
+        self.assertTrue(result.game_over)
+        self.assertIsNone(game.pending_request)
 
 
 class DummyRenderTests(UiTestCase):

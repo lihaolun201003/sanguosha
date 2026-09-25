@@ -23,7 +23,8 @@ class EngineV2Phase3Tests(unittest.TestCase):
         # 16 tricks + Sha + the shared category-level equipment effect.
         self.assertEqual(len(game.engine.card_effects), 18)
         self.assertIs(game.engine.card_effects.require("NANMAN").target_rule, TargetRule.ALL_OTHERS)
-        self.assertEqual(len(create_development_deck()), 128)
+        # Phase 13 起 SP010【银月枪】随扩展装备一起进入牌堆（128 → 129）。
+        self.assertEqual(len(create_development_deck()), 129)
         self.assertEqual(sum(map(len, TRICK_DEFINITIONS.values())), 49)
         self.assertEqual(TRICK_DEFINITIONS["WUZHONG"], (("heart", "7"), ("heart", "8"), ("heart", "9"), ("heart", "J")))
         cards = create_development_deck()

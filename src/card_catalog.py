@@ -214,6 +214,12 @@ EQUIPMENT_DESCRIPTIONS = {
         "若有多匹坐骑，需要选择具体弃置哪一匹。"
     ),
 
+    "YINYUEQIANG": (
+        "锁定技，你于回合外打出一张黑色花色的牌时，"
+        "可以指定你攻击范围内的一名角色：该角色需打出一张【闪】，"
+        "否则失去 1 点体力（这不是伤害）。"
+    ),
+
     # ==================================================
     # 防具
     # ==================================================
@@ -673,6 +679,19 @@ def create_equipment_cards():
     )
 
 
+    # SP010 银月枪（扩展装备）：武器，方块 Q，攻击范围 3。
+    # 它不是标准军争牌堆里的牌，随 SP 卡面一起加入，规则见
+    # src/game/equipment_skills/system.py 的「银月枪」分支。
+    cards.append(
+        weapon(
+            "YINYUEQIANG",
+            3,
+            "diamond",
+            "Q"
+        )
+    )
+
+
     # ==================================================
     # 防具
     # ==================================================
@@ -799,7 +818,7 @@ def create_equipment_cards():
     )
 
 
-    assert len(cards) == 25
+    assert len(cards) == 26
 
     return cards
 
@@ -822,7 +841,7 @@ def create_development_deck():
 
     cards.extend(create_trick_cards())
 
-    assert len(cards) == 128
+    assert len(cards) == 129
 
     return cards
 

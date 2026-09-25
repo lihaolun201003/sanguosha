@@ -7,13 +7,17 @@ from src.card_catalog import (
 
 class Deck:
 
-    def __init__(self):
+    def __init__(self, rng=None):
 
         # 抽牌堆
         self.draw_pile = []
 
         # 弃牌堆
         self.discard_pile = []
+
+        # 洗牌用的随机源。Game 把自己的 rng 传进来，于是"固定种子"能覆盖到
+        # 牌堆；不传时保持旧行为（自带一个无种子的流）。
+        self.rng = rng if rng is not None else random.Random()
 
         self.reset()
 
@@ -30,7 +34,7 @@ class Deck:
 
         self.discard_pile = []
 
-        random.shuffle(
+        self.rng.shuffle(
             self.draw_pile
         )
 
@@ -86,6 +90,6 @@ class Deck:
 
         self.discard_pile.clear()
 
-        random.shuffle(
+        self.rng.shuffle(
             self.draw_pile
         )
