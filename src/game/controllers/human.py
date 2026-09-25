@@ -83,9 +83,12 @@ class HumanController(PlayerController):
         if request.request_type is PendingRequestType.CHOOSE_OPTION:
             first = request.options[0]
             second = request.options[1] if len(request.options) > 1 else first
+            from src.game.skills.mechanics import option_label
+
             game.choice.request(
                 title="请选择", prompt=request.prompt,
-                yes_label=str(first), no_label=str(second),
+                yes_label=option_label(request, first),
+                no_label=option_label(request, second),
                 responder=responder,
                 on_yes=lambda value=first, request_id=request.request_id: self.submit(
                     ChooseOptionAction(responder, request_id, value)),

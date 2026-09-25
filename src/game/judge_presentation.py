@@ -134,7 +134,8 @@ def _outcome_ganglie(result, _subject=None):
     if result is None:
         return _missing(result)
     if result.suit != "heart":
-        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "刚烈反击成功", "非红桃判定，伤害来源受到 1 点伤害。")
+        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "刚烈反击成功",
+                            "非红桃判定，伤害来源须弃置两张手牌或受到 1 点伤害。")
     return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "刚烈未反击", "红桃判定，本次反击没有生效。")
 
 
@@ -186,13 +187,13 @@ JUDGE_SOURCES = {
     "ganglie": JudgeSourceSpec(
         reason="ganglie", kind=JudgeSourceKind.SKILL,
         display_name="刚烈", skill_id="ganglie",
-        rule_text="受到伤害后判定，非红桃时伤害来源受到 1 点伤害。",
+        rule_text="受到伤害后判定，非红桃时伤害来源须弃两张手牌或受到 1 点伤害。",
         outcome_of=_outcome_ganglie,
     ),
     "luoshen": JudgeSourceSpec(
         reason="luoshen", kind=JudgeSourceKind.SKILL,
         display_name="洛神", skill_id="luoshen",
-        rule_text="回合开始时判定，黑色则获得判定牌并可再次发动。",
+        rule_text="准备阶段判定：黑色则获得此牌，然后可以重复此流程。",
         outcome_of=_outcome_luoshen,
     ),
     "tieji": JudgeSourceSpec(

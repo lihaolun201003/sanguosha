@@ -343,9 +343,11 @@ class RemoteHumanController(PlayerController):
             ]
 
         elif kind is DecisionKind.CHOOSE_OPTION:
+            from src.game.skills.mechanics import option_label
+
             options = [
-                {"value": index, "label": str(value)}
-                for index, value in enumerate(request.options)
+                {"value": value, "label": option_label(request, value)}
+                for value in request.options
             ]
 
         elif kind is DecisionKind.SELECT_CARDS:

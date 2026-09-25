@@ -663,13 +663,47 @@ def ask_cards(engine, flow, *, source, target, prompt, reason, candidates,
 
 
 def ask_option(engine, flow, *, source, target, prompt, reason, options, context=None):
+    """让玩家从若干选项里选一个。
+
+    ``options`` 支持两种写法：
+
+        纯值         ("draw", "discard")                 —— 值本身就是给玩家看的
+        (值, 文案)   (("discard", "弃置两张手牌"), ...)   —— 值给引擎，文案给玩家
+
+    规范化之后 ``PendingRequest.options`` **只存值**，文案放进
+    ``context["option_labels"]``。这样引擎校验（选项是否合法）、AI 决策、
+    本地按钮文案、远程下发的 label 四个消费点读的是同一份值，而给玩家看的
+    字面量只有一个来源——之前 (值, 文案) 会被整只元组当成选项，按钮上直接
+    显示 "('discard', '弃置两张手牌')"。
+    """
+
+    values = []
+    labels = {}
+    for item in options:
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            value, label = item
+            values.append(value)
+            labels[str(value)] = str(label)
+        else:
+            values.append(item)
+    request_context = {"reason": reason}
+    if labels:
+        request_context["option_labels"] = labels
+    request_context.update(context or {})
     request = engine.pending.create(
         PendingRequestType.CHOOSE_OPTION, source=source, target=target, prompt=prompt,
-        owner_flow=flow, options=tuple(options),
-        request_context=dict({"reason": reason}, **(context or {})))
+        owner_flow=flow, options=tuple(values),
+        request_context=request_context)
     flow.wait(request)
     engine.present_or_auto_resolve(request)
     return request
+
+
+def option_label(request, value):
+    """一个选项给玩家看的文案（没有声明文案时就用值本身）。"""
+
+    labels = request.context.get("option_labels") or {}
+    return str(labels.get(str(value), value))
 
 
 def ask_targets(engine, flow, *, source, target, prompt, reason, candidates,

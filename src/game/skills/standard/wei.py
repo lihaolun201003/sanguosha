@@ -8,6 +8,7 @@ from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.flows.judge import JudgeFlow
 from src.game.rules import TurnPhase
 
+from ..mechanics import ask_option
 from ..definitions import (
     JudgeReplacement,
     PhaseReplacement,
@@ -68,7 +69,68 @@ class Ganglie(Skill):
         if source is None or not source.alive or not self.owner.alive:
             return
         engine.game.add_log(self.owner.name + " 发动【刚烈】")
-        DamageFlow(engine, DamageContext(self.owner, source, 1)).start()
+        GanglieFlow(engine, self.owner, source).start()
+
+
+class GanglieFlow(Flow):
+    """刚烈的后续：由**伤害来源自己**选择一项。
+
+    官方标准版：
+
+        当你受到伤害后，你可以进行判定，若结果不为红桃，
+        伤害来源选择一项：1.弃置两张手牌；2.受到你造成的 1 点伤害。
+
+    两处不能省：**选择权在伤害来源手里**（不是刚烈拥有者替他选），
+    以及"手牌不足两张时没有可选项，只能承受伤害"（官方 FAQ）。
+    """
+
+    DISCARD = "discard"
+    DAMAGE = "damage"
+
+    def __init__(self, engine, owner, source):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.source = source
+
+    def begin(self):
+        if not self._can_discard():
+            # 没有"弃两张手牌"这个选项：直接承受伤害，不必再问一次。
+            self.game.message = ("%s 手牌不足两张，只能承受【刚烈】的伤害"
+                                 % self.source.name)
+            return self._hurt()
+        ask_option(self.engine, self, source=self.owner, target=self.source,
+                   prompt="【刚烈】：请选择一项",
+                   reason="ganglie",
+                   options=((self.DISCARD, "弃置两张手牌"),
+                            (self.DAMAGE,
+                             "受到 %s 造成的 1 点伤害" % self.owner.name)))
+        return self.current_result()
+
+    def advance(self, response=None):
+        option = str(getattr(response, "option", "") or "")
+        if option == self.DISCARD and self._can_discard():
+            return self._discard()
+        return self._hurt()
+
+    def _can_discard(self):
+        return len(getattr(self.source, "hand", ()) or ()) >= 2
+
+    def _discard(self):
+        cards = list(self.source.hand)[:2]
+        for card in cards:
+            self.context.apply(MoveCardAtom(
+                card, source=self.source.hand,
+                destination=self.game.deck.discard_pile))
+        self.game.add_log("%s 弃置两张手牌以免受【刚烈】"
+                          % self.source.name)
+        return self.complete({"applied": True, "mode": self.DISCARD})
+
+    def _hurt(self):
+        DamageFlow(self.engine, DamageContext(
+            self.owner, self.source, 1)).start()
+        return self.complete({"applied": True, "mode": self.DAMAGE})
 
 
 # ==================================================
@@ -349,7 +411,7 @@ WEI_SKILLS = (
     triggered(
         "ganglie",
         "刚烈",
-        "当你受到伤害后，你可以进行一次判定：若结果不为红桃，则伤害来源受到 1 点伤害。",
+        "当你受到伤害后，你可以进行判定，若结果不为红桃，伤害来源选择一项：1.弃置两张手牌；2.受到你造成的 1 点伤害。",
         factory=Ganglie,
     ),
     triggered(
