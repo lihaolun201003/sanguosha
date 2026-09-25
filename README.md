@@ -40,7 +40,6 @@ sanguosha/
 │   ├── actions.py
 │   ├── response.py
 │   └── start_menu.py
-├── tests/
 └── docs/
 ```
 
@@ -115,7 +114,6 @@ sanguosha/
 │   ├── actions.py
 │   ├── response.py
 │   └── start_menu.py
-├── tests/
 └── docs/
 ```
 
