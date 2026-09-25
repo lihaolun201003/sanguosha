@@ -1087,20 +1087,26 @@ class RemoteHumanController(PlayerController):
                 return False
 
         elif kind == DecisionKind.CHOOSE_OPTION:
-            try:
-                index = int(result.option)
-            except (TypeError, ValueError):
-                self.last_local_code = ERR_INVALID_OPTION
-                self.last_local_error = "选项不是数字"
-                return False
+            # 客户端原样回传**房主下发的那个值**（见 remote_table._submit_option），
+            # 所以这里按值解析——按索引解析会与"下发的就是值"对不上，任何选项
+            # 都会以"选项不是数字"被拒。数字索引仍然兼容，老客户端不必同步升级。
             values = list(request.options)
-            if not 0 <= index < len(values):
+            chosen = result.option
+            if chosen not in values:
+                try:
+                    index = int(chosen)
+                except (TypeError, ValueError):
+                    index = -1
+                if 0 <= index < len(values):
+                    chosen = values[index]
+            if chosen not in values:
                 self.last_local_code = ERR_INVALID_OPTION
-                self.last_local_error = "选项超出范围"
+                self.last_local_error = "选项不在可选范围内"
                 return False
             if not self._submitted(self.submit(ChooseOptionAction(
-                    self.player, request_id, values[index]))):
+                    self.player, request_id, chosen))):
                 return False
+
 
         elif kind == DecisionKind.SELECT_CARDS:
             cards = [self._resolve_card_token(request_id, card_id)

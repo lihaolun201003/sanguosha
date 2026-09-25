@@ -408,6 +408,11 @@ class GameEngine:
             count = len(action.cards)
             if count < request.min_cards or count > request.max_cards:
                 raise ValueError("selected card count is outside request bounds")
+            # 同一张实体牌不能算作两个选择：网络层会把重复的 id 去重，
+            # 但本地 / 脚本路径直接传对象，不查重就会让"选两张"用同一张牌
+            # 凑数（弃牌时同一张牌被移动两次）。与选目标的查重对称。
+            if len({id(card) for card in action.cards}) != count:
+                raise ValueError("selected cards contain duplicates")
             candidates = request.context.get("candidates")
             if candidates is not None:
                 for card in action.cards:

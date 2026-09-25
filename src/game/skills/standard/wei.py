@@ -8,7 +8,7 @@ from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.flows.judge import JudgeFlow
 from src.game.rules import TurnPhase
 
-from ..mechanics import ask_option
+from ..mechanics import ask_cards, ask_confirm, ask_option, judge
 from ..definitions import (
     JudgeReplacement,
     PhaseReplacement,
@@ -24,17 +24,15 @@ from ..state import ResetScope
 
 
 class Ganglie(Skill):
-    """受到伤害后判定，非红桃则伤害来源受到 1 点伤害。
+    """受到伤害后**可以**判定（"你可以"由夏侯惇本人决定）。
 
-    判定走通用 JudgeFlow，因此可以被鬼才一类技能改判。
+    这里只做两件事：判断能不能触发、把整条流程交给 ``GanglieFlow``。
+    判定本身仍然走统一的 ``JudgeFlow``——鬼才 / 鬼道 / JudgeGate / 最终
+    判定结果全部由它负责，这里不自己写一遍判定。
     """
 
     id = "ganglie"
     name = "刚烈"
-
-    def __init__(self, owner=None):
-        super().__init__(owner)
-        self._judge_source = None
 
     def bindings(self):
         return (SkillBinding(EventType.DAMAGE_SETTLED),)
@@ -51,37 +49,30 @@ class Ganglie(Skill):
         return source.alive and self.owner.alive
 
     def resolve(self, context, event):
-        engine = context.services["engine"]
-        self._judge_source = event.payload["damage"].source
-        self.owner.skill_state.add(self.id, "judged", 1, ResetScope.TURN)
-        judge = JudgeFlow(engine, self.owner, "ganglie")
-        outcome = judge.start()
-        if outcome.status is FlowStatus.WAITING:
-            # 判定被改判窗口打断：等它出结果后继续结算刚烈。
-            judge.on_complete = lambda result: self._after_judge(engine, result)
-            return
-        self._after_judge(engine, outcome.value)
-
-    def _after_judge(self, engine, result):
-        if result is not None and result.suit == "heart":
-            return
-        source = self._judge_source
-        if source is None or not source.alive or not self.owner.alive:
-            return
-        engine.game.add_log(self.owner.name + " 发动【刚烈】")
-        GanglieFlow(engine, self.owner, source).start()
+        # 一次受伤 = 一条独立流程。判定来源、选项、两个窗口的次序全部是流程
+        # 自己的状态，不靠 Skill 实例上的临时字段拼——那种字段在"取消"或
+        # "同一回合连续两次受伤"时会互相污染。
+        GanglieFlow(context.services["engine"], self.owner,
+                    event.payload["damage"].source).start()
 
 
 class GanglieFlow(Flow):
-    """刚烈的后续：由**伤害来源自己**选择一项。
+    """刚烈全过程：是否发动 → 判定 → 伤害来源选择一项 →（弃牌则再选牌）。
 
     官方标准版：
 
         当你受到伤害后，你可以进行判定，若结果不为红桃，
         伤害来源选择一项：1.弃置两张手牌；2.受到你造成的 1 点伤害。
 
-    两处不能省：**选择权在伤害来源手里**（不是刚烈拥有者替他选），
-    以及"手牌不足两张时没有可选项，只能承受伤害"（官方 FAQ）。
+    四处不能省：
+
+    * **"你可以"由夏侯惇本人决定**：刚烈不是锁定技，系统不能替他发动；
+      拒绝之后不写状态、不抽判定牌、不产生 JudgeGate、不留日志。
+    * **判定走统一 ``JudgeFlow``**：鬼才 / 鬼道参与，判定优先级由 JudgeGate
+      维持，判据是**最终生效判定牌**的花色（改判之后以后者为准）。
+    * **选择权在伤害来源手里**：不是刚烈拥有者替他选。
+    * **弃哪两张也由他自己挑**：真正的 ``SELECT_CARDS`` 窗口
+      （min = max = 2，候选就是他的手牌），不是程序取前两张。
     """
 
     DISCARD = "discard"
@@ -93,13 +84,54 @@ class GanglieFlow(Flow):
         self.game = engine.game
         self.owner = owner
         self.source = source
+        self.stage = "confirm"
+
+    # ---- 1. 是否发动（夏侯惇本人决定）----
 
     def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【刚烈】：是否进行判定？", reason="ganglie")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "confirm":
+            if response is None or not response.confirmed:
+                return self.complete({"applied": False})
+            return self._begin_judge()
+        if self.stage == "option":
+            return self._after_option(response)
+        return self._after_cards(response)
+
+    # ---- 2. 判定（统一 JudgeFlow）----
+
+    def _begin_judge(self):
+        self.stage = "judge"
+        flow, result = judge(self.engine, self.owner, "ganglie")
+        if result is None:
+            flow.on_complete = self._after_judge
+            self.wait(flow)
+            return self.current_result()
+        return self._after_judge(result)
+
+    def _after_judge(self, result):
+        # 判据是**最终生效判定牌**的花色：司马懿改成红桃就不反击，
+        # 改成非红桃就要反击——以后者为准。
+        if result is None or getattr(result, "suit", None) == "heart":
+            self.game.add_log(self.owner.name + " 的【刚烈】：判定为红桃，结束")
+            return self.complete({"applied": True, "mode": "heart"})
+        self.game.add_log(self.owner.name + " 发动【刚烈】")
+        return self._ask_option()
+
+    # ---- 3. 伤害来源选择一项 ----
+
+    def _ask_option(self):
         if not self._can_discard():
-            # 没有"弃两张手牌"这个选项：直接承受伤害，不必再问一次。
+            # 手牌不足两张：规则上没有"弃两张"这个选项，不摆一个假的二选一
+            # 给玩家点（官方 FAQ：此时只能受到伤害）。
             self.game.message = ("%s 手牌不足两张，只能承受【刚烈】的伤害"
                                  % self.source.name)
             return self._hurt()
+        self.stage = "option"
         ask_option(self.engine, self, source=self.owner, target=self.source,
                    prompt="【刚烈】：请选择一项",
                    reason="ganglie",
@@ -108,28 +140,59 @@ class GanglieFlow(Flow):
                              "受到 %s 造成的 1 点伤害" % self.owner.name)))
         return self.current_result()
 
-    def advance(self, response=None):
+    def _after_option(self, response):
         option = str(getattr(response, "option", "") or "")
         if option == self.DISCARD and self._can_discard():
-            return self._discard()
+            return self._ask_cards()
         return self._hurt()
+
+    # ---- 4. 弃哪两张也由他自己挑 ----
+
+    def _ask_cards(self):
+        candidates = list(getattr(self.source, "hand", ()) or ())
+        if len(candidates) < 2:
+            # 选牌之前手牌变少了：退回"只能受伤"，绝不替他补牌。
+            return self._hurt()
+        self.stage = "cards"
+        ask_cards(self.engine, self, source=self.owner, target=self.source,
+                  prompt="【刚烈】：请选择要弃置的两张手牌",
+                  reason="ganglie", candidates=candidates,
+                  min_cards=2, max_cards=2)
+        return self.current_result()
+
+    def _after_cards(self, response):
+        """**选满两张之后**才一起进弃牌堆——在此之前一张都不动。"""
+
+        chosen = []
+        for card in list(getattr(response, "cards", ()) or ()):
+            if not any(item is card for item in self.source.hand):
+                continue
+            if any(item is card for item in chosen):
+                continue
+            chosen.append(card)
+        if len(chosen) != 2:
+            # 引擎已经校验过数量与候选；这里只兜"选牌期间牌被移走"的极端
+            # 情况——兜不住就按规则退化为承受伤害，绝不替玩家补牌。
+            return self._hurt()
+        for card in chosen:
+            self.context.apply(MoveCardAtom(
+                card, source=self.source.hand,
+                destination=self.game.deck.discard_pile))
+        self.game.add_log("%s 弃置 %s 以免受【刚烈】" % (
+            self.source.name,
+            "、".join(getattr(card, "display_name", "?") for card in chosen)))
+        return self.complete({"applied": True, "mode": self.DISCARD,
+                              "cards": tuple(chosen)})
+
+    # ---- 5. 承受伤害 ----
 
     def _can_discard(self):
         return len(getattr(self.source, "hand", ()) or ()) >= 2
 
-    def _discard(self):
-        cards = list(self.source.hand)[:2]
-        for card in cards:
-            self.context.apply(MoveCardAtom(
-                card, source=self.source.hand,
-                destination=self.game.deck.discard_pile))
-        self.game.add_log("%s 弃置两张手牌以免受【刚烈】"
-                          % self.source.name)
-        return self.complete({"applied": True, "mode": self.DISCARD})
-
     def _hurt(self):
-        DamageFlow(self.engine, DamageContext(
-            self.owner, self.source, 1)).start()
+        if self.source.alive and self.owner.alive:
+            DamageFlow(self.engine, DamageContext(
+                self.owner, self.source, 1)).start()
         return self.complete({"applied": True, "mode": self.DAMAGE})
 
 
@@ -162,7 +225,9 @@ class Fankui(Skill):
         source = event.payload["damage"].source
         card = None
         if source.hand:
-            card = source.hand[0]
+            # 手牌是**暗牌**：规则上玩家不指定具体哪一张，所以在真实牌堆里
+            # 随机取一张。固定取第一张会让双方都能靠记牌预测，等于泄露暗牌。
+            card = _random_hand_card(context.state, source)
             context.apply(MoveCardAtom(card, source=source.hand, destination=self.owner.hand))
         else:
             for slot, equipped in source.equipment.items():
@@ -178,6 +243,23 @@ class Fankui(Skill):
             if engine is not None:
                 engine.show_taken_card(card, source, self.owner, to_hand=True)
             context.state.add_log(self.owner.name + " 发动【反馈】，获得 " + source.name + " 一张牌")
+
+
+def _random_hand_card(game, player):
+    """从一名角色的手牌里随机取一张（暗牌取牌的统一样式）。
+
+    ``Player.hand`` 是列表，取首元素会让"获得一张手牌"变成可预测的行为——
+    对手能记住自己手牌的顺序，等于提前知道自己会丢哪张。真实对局里这张牌
+    是未知的，所以用对局的随机源抽。
+    """
+
+    hand = list(getattr(player, "hand", ()) or ())
+    if not hand:
+        return None
+    rng = getattr(game, "rng", None)
+    if rng is None:                                      # pragma: no cover - 防御
+        return hand[0]
+    return hand[rng.randrange(len(hand))]
 
 
 def guicai_candidates(game, player, judge_context):
@@ -378,7 +460,10 @@ class TuxiFlow(Flow):
             # 引擎侧复核：目标必须仍然合法（存活、不是自己、仍有手牌）。
             if target is self.player or not target.alive or not target.hand:
                 continue
-            card = target.hand[0]
+            # 同上：突袭拿的也是暗牌，随机取一张。
+            card = _random_hand_card(self.game, target)
+            if card is None:
+                continue
             self.context.apply(
                 MoveCardAtom(card, source=target.hand, destination=self.player.hand)
             )

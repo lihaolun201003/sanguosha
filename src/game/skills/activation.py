@@ -138,6 +138,9 @@ def resolve_activation(engine, action):
             "targets": skill_targets,
         },
     ))
+    # 技能自己知道为什么发动不了（"两张牌的花色必须相同"一类），
+    # 那句提示比笼统的"技能未能发动"有用得多：先清掉旧提示，再让技能写。
+    game.message = ""
     result = definition.activate(
         game,
         player,
@@ -145,5 +148,5 @@ def resolve_activation(engine, action):
         cards=cards,
     )
     if result is False:
-        return False, "技能未能发动"
+        return False, str(game.message or "技能未能发动")
     return True, ""

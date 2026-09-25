@@ -572,12 +572,20 @@ def _can_luanji(game, player):
 
 
 def _activate_luanji(game, player, target=None, cards=None):
-    """乱击：把两张同花色的手牌当【万箭齐发】使用。"""
+    """乱击：把两张同花色的手牌当【万箭齐发】使用。
+
+    哪两张由**玩家自己挑**（spec 的 cost_cards / keep_cards 声明的就是
+    "选两张牌、但不由 activation 代付"）。这里只做最后一层复核：数量不对
+    或花色不同就明确拒绝，**绝不替他找一对同花色的牌**——那样玩家会在
+    什么都没点的情况下看到技能自己打出【万箭齐发】。
+    """
 
     chosen = list(cards or ())
-    if len(chosen) < 2 or getattr(chosen[0], "suit", None) != getattr(chosen[1], "suit", None):
-        chosen = list(_luanji_same_suit_pair(hand_cards(player)) or ())
     if len(chosen) < 2:
+        game.message = "【乱击】：请先选择两张手牌。"
+        return False
+    if getattr(chosen[0], "suit", None) != getattr(chosen[1], "suit", None):
+        game.message = "【乱击】：两张牌的花色必须相同。"
         return False
     from src.game.rules import target_candidates
 
@@ -853,7 +861,13 @@ FIRE_SKILLS = (
         "出牌阶段，你可以将两张相同花色的手牌当【万箭齐发】使用。",
         can_activate=_can_luanji,
         activate=_activate_luanji,
-        spec=ActiveSkillSpec(),
+        spec=ActiveSkillSpec(
+            # 两张牌是转化素材，不是费用：去向是"被当作【万箭齐发】使用"，
+            # 所以按素材处理，由技能自己的结算负责移动。
+            cost_cards=2,
+            keep_cards=True,
+            cost_prompt="【乱击】：请选择两张花色相同的手牌",
+        ),
         tags=("active", "forced_use"),
     ),
     SkillDef(
