@@ -536,11 +536,26 @@ class Effects:
         没有 UI 的批量演算不会调用到这里，行为完全不变。
         """
 
+        self.sync_judge_gate()
         actions = getattr(self.game, "actions", None)
         if actions is None:
             return
         if getattr(actions, "hold", None) is not self._action_gate:
             actions.hold = self._action_gate
+
+    def sync_judge_gate(self):
+        """把"判定还在演"汇报给判定闸门。
+
+        动作队列那一层只能压住"还没开始的动作"；真正要保证的是"判定牌还在
+        屏幕中央时玩家点不动任何东西"，那个判据在 ``JudgeGate`` 里，而它
+        必须知道表现层的状态——这里是唯一的汇报口。
+        """
+
+        game = self.game
+        gate = getattr(game, "judge_gate", None)
+        if gate is None:
+            return
+        gate.mark_presentation(self.judge_panel, self.judge_panel.active)
 
     # ---- 指向箭头 ----
 

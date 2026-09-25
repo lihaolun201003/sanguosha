@@ -27,6 +27,7 @@ from .combat import CombatMixin
 from .dying import DyingMixin
 from .ai import AIMixin
 from .engine import GameContext, GameEngine
+from .judge_gate import JudgeGate
 from .controllers import AIController, HumanController
 from .rules import SeatManager
 from .conversion import ConversionRegistry
@@ -86,6 +87,8 @@ class Game(
         # context events/atoms without forcing a big-bang rewrite.
         self.context = GameContext(state=self)
         self.engine = GameEngine(self.context)
+        # 判定优先闸门：判定没走完之前全场只接受判定输入（见 judge_gate.py）。
+        self.judge_gate = JudgeGate(self)
 
         # ==================================================
         # 武将 / 技能基础设施
@@ -1606,6 +1609,10 @@ class Game(
         """
 
         if self.game_over or self.busy:
+            return False
+        # 判定优先：判定没走完（规则上没走完，或者判定牌还在屏幕中央演着）
+        # 都轮不到出牌。见 src/game/judge_gate.py。
+        if not self.judge_gate.allows_local_input(self.player):
             return False
         if self.phase != "play" or self.current_turn_player is not self.player:
             return False

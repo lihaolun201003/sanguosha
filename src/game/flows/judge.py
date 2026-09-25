@@ -65,7 +65,8 @@ class JudgeContext:
 
 
 class JudgeFlow(Flow):
-    def __init__(self, engine, owner, reason="judge", on_complete=None, spec=None):
+    def __init__(self, engine, owner, reason="judge", on_complete=None, spec=None,
+                 card_recipient=None):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
@@ -80,6 +81,13 @@ class JudgeFlow(Flow):
         self.replacer_index = 0
         self.stage = "draw"
         self.result = None
+        #: 判定牌最终归谁：``callable(JudgeResult) -> player | None``。
+        #: 非 None 表示"这张判定牌由这名角色取走"，收尾时就不进弃牌堆。
+        #: 【双雄】"获得此判定牌"、天妒一类都走这条通道；改判后拿到的是
+        #: 最终生效的那张（result.card 就是锁定后的判定牌）。
+        self.card_recipient = card_recipient
+        #: 判定是否已经在规则上走完（闸门据此解除"判定优先"）。
+        self.settled = False
 
     # ==================================================
     # 主流程
@@ -105,6 +113,11 @@ class JudgeFlow(Flow):
         self.judge_context = JudgeContext(self.owner, self.reason, card, card)
         self.game.judge_context = self.judge_context
         self.game.judge_card = card
+        # 判定真正开始：登记到闸门，从这一刻到收尾为止全场只允许判定输入
+        # （见 src/game/judge_gate.py）。
+        gate = getattr(self.game, "judge_gate", None)
+        if gate is not None:
+            gate.register_judge(self)
         # 判定牌进入处理区：替换与最终结算都按真实区域移动。
         if not any(item is card for item in self.game.processing_zone):
             self.game.processing_zone.append(card)
@@ -275,27 +288,79 @@ class JudgeFlow(Flow):
         return self._settle_judgement()
 
     def _settle_judgement(self):
-        """判定收尾：仍在处理区的判定牌进弃牌堆，并清理判定状态。"""
+        """判定收尾：判定牌的最终去向，以及清理判定状态。
+
+        判定牌默认进弃牌堆；声明了 ``card_recipient`` 的判定由那名角色取走
+        （【双雄】"获得此判定牌"）。取走的一定是**最终生效**的那张：
+        ``result.card`` 在改判窗口锁定时就定下来了，旧判定牌早已离开处理区。
+        """
 
         if self.status is FlowStatus.COMPLETED:
             return self.current_result()
         result = self.result
-        card = self.judge_context.current_card if self.judge_context else None
+        context = self.judge_context
+        card = context.current_card if context is not None else None
         if card is not None and any(item is card for item in self.game.processing_zone):
-            self.context.apply(MoveCardAtom(
-                card,
-                source=self.game.processing_zone,
-                destination=self.game.deck.discard_pile,
-            ))
+            taker = self._card_taker(result)
+            if taker is not None:
+                self.context.apply(MoveCardAtom(
+                    card,
+                    source=self.game.processing_zone,
+                    destination=taker.hand,
+                ))
+                self.game.add_log("%s 获得判定牌 %s" % (
+                    taker.name,
+                    self._card_identity(card),
+                ))
+            else:
+                self.context.apply(MoveCardAtom(
+                    card,
+                    source=self.game.processing_zone,
+                    destination=self.game.deck.discard_pile,
+                ))
         self.game.judge_context = None
         self.game.judge_card = None
+        self._release_gate()
         self.stage = "completed"
         return self._complete_with(result)
+
+    # ---- 判定牌归属 ----
+
+    def _card_taker(self, result):
+        recipient = self.card_recipient
+        if recipient is None:
+            return None
+        try:
+            taker = recipient(result)
+        except Exception as error:                      # noqa: BLE001
+            # 声明方（技能）自己出错不能把判定卡在收尾这一步：判定照常收尾，
+            # 判定牌按默认去向进弃牌堆，错误只记一条日志。
+            self.game.add_log("判定牌归属声明出错：%s" % (error,))
+            return None
+        if taker is None or not getattr(taker, "alive", True):
+            return None
+        return taker
+
+    @staticmethod
+    def _card_identity(card):
+        return (getattr(card, "identity_label", "")
+                or getattr(card, "display_name", "?"))
+
+    def _release_gate(self):
+        """判定已经在规则上走完：解除"判定优先"。"""
+
+        self.settled = True
+        gate = getattr(self.game, "judge_gate", None)
+        if gate is not None:
+            gate.unregister_judge(self)
 
     def _complete_with(self, result):
         return self.complete(result)
 
     def on_settled(self, result):
+        # 兜底：牌堆抽空一类"没有判定牌"的路径直接完成，没有走
+        # ``_settle_judgement``，闸门也必须在这里解除。
+        self._release_gate()
         # 判定流程的调用方接的是 **JudgeResult**（不是 FlowResult）：保持这个
         # 约定，否则每个调用点都要跟着改。
         if self.on_complete is not None:

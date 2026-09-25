@@ -491,14 +491,26 @@ class CardActionSessionMixin:
         return self._commit_view_as()
 
     def cancel_view_as(self):
-        """取消 View-As：不弃牌、不写 used、不播放技能 FX。"""
+        """取消 View-As：不弃牌、不写 used、不播放技能 FX。
 
-        if self.pending_view_as is None:
-            return False
-        name = self.pending_view_as.skill_name
-        self.pending_view_as = None
-        self.message = "已取消发动【" + name + "】。"
-        return True
+        取消必须覆盖**整条技能发动链**：素材选齐之后流程已经进入目标选择
+        （``_commit_view_as``），那时 ``pending_view_as`` 已经被收掉，只剩
+        一条挂在目标选择上的半途动作。玩家按"取消"就是要放弃这次发动，
+        所以这里把由 View-As 建立的那次目标选择一并收回——否则他会留在
+        一次从未提交过的攻击里，而那个状态谁也不会再清。
+        """
+
+        session = self.pending_view_as
+        if session is not None:
+            name = session.skill_name
+            self.pending_view_as = None
+            self.message = "已取消发动【" + name + "】。"
+            return True
+        selection = self.pending_target_selection
+        metadata = (selection or {}).get("metadata") or {}
+        if metadata.get("view_as") is not None:
+            return self.cancel_target_selection()
+        return False
 
     def view_as_ready(self):
         session = self.pending_view_as

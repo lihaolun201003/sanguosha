@@ -26,7 +26,7 @@ from .domain_actions import (
     UseCardAction,
 )
 from .events import Event, EventType
-from .flows import FlowStatus
+from .flows import FlowResult, FlowStatus
 from .pending import PendingManager, PendingRequestType, PendingResolution
 
 
@@ -121,6 +121,18 @@ class GameEngine:
         return self._response_windows
 
     def submit(self, action):
+        # 判定优先：判定没走完之前只接受判定流程自己要的输入。
+        # 这里是权威闸门——真人 UI、AI 控制器、LAN 客户端提交的动作
+        # 全部经过它，所以远端不能靠绕过界面抢先出牌。
+        gate = getattr(self.game, "judge_gate", None)
+        if gate is not None:
+            reason = gate.guard(action)
+            if reason:
+                # 拒绝就是拒绝：不改任何状态、不推进任何流程，只把原因写到
+                # 提示里。返回"已取消"而不是抛异常——AI 的推进路径里有几条
+                # 靠 status == cancelled 才能接回回合，抛异常会把它们打断。
+                self.game.message = reason
+                return FlowResult(FlowStatus.CANCELLED, None)
         if isinstance(action, UseCardAction):
             return self._use_card(action)
         if isinstance(action, RespondCardAction):

@@ -173,8 +173,11 @@ class JudgePanel:
             if self.result is not None:
                 if self.timer <= 0:
                     self._enter(JudgeStage.FINAL_RESULT, timing.judge_final)
-            elif self.hold_elapsed > MAX_HOLD:
+            elif self.hold_elapsed > MAX_HOLD and not self._engine_is_judging(game):
                 # 兜底：判定流程异常结束也不会让面板永远挂着。
+                # 判据必须问引擎——"等得久"不等于"出错了"：改判窗口开着
+                # 的时候（司马懿在挑牌 / 真人在想）判定逻辑**确实还在跑**，
+                # 那时把面板收掉会变成"判定牌自己消失"。
                 self._enter(JudgeStage.FADE_OUT, timing.judge_fade_out)
             else:
                 # 改判窗口开着：保持展示，等引擎给出最终结果。
@@ -192,6 +195,15 @@ class JudgePanel:
                 self.active = False
                 self.stage = JudgeStage.DONE
         return self
+
+    @staticmethod
+    def _engine_is_judging(game):
+        """引擎里判定逻辑是不是还没走完（没有 UI / 只读视图时当作"已结束"）。"""
+
+        gate = getattr(game, "judge_gate", None)
+        if gate is None:
+            return False
+        return bool(gate.logical_pending)
 
     def _enter(self, stage, duration):
         self.stage = stage

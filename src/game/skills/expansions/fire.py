@@ -658,7 +658,10 @@ class ShuangxiongFlow(Flow):
         control = getattr(self.turn_flow, "phase_control", None)
         if control is not None:
             control.skip(TurnPhase.DRAW)
-        flow, result = judge(self.engine, self.owner, "shuangxiong")
+        # 「获得此判定牌」由判定流程自己完成：card_recipient 取走的是**最终
+        # 生效**的那张判定牌，被改判换掉的旧牌早已离开处理区。
+        flow, result = judge(self.engine, self.owner, "shuangxiong",
+                             card_recipient=lambda _result: self.owner)
         if result is None:
             flow.on_complete = self._after_judge
             self.wait(flow)
@@ -668,53 +671,55 @@ class ShuangxiongFlow(Flow):
     def _after_judge(self, result):
         card = getattr(result, "card", None)
         if card is not None:
-            # 判定牌由 JudgeFlow 的收尾逻辑送进弃牌堆；这里只记颜色。
+            # 判定牌此刻已经到手（判定流程收尾时移入）。这里只记颜色：
+            # 本回合的出牌阶段可以把**颜色与它不同**的手牌当【决斗】使用。
             self.owner.skill_state.set(
                 "shuangxiong", "judge_color", getattr(card, "card_color", None),
                 ResetScope.TURN)
-            self.game.add_log("%s 发动【双雄】，判定为 %s（本回合可将异色手牌当【决斗】）"
+            self.game.add_log("%s 发动【双雄】，获得判定牌 %s（本回合可将异色手牌当【决斗】）"
                               % (self.owner.name,
                                  getattr(card, "identity_label", "") or "?"))
         return self.complete({"applied": True})
 
 
-def _shuangxiong_duel_sources(game, player):
-    """本回合可以当【决斗】使用的异色手牌。"""
+# ---- 双雄的转化：异色手牌当【决斗】 ----
+#
+# 规则原文是"本回合可以将与判定结果**颜色**不同的一张手牌当【决斗】使用"，
+# 所以谓词只看 card_color（红 / 黑），不是花色。牌由**玩家自己**通过统一的
+# 视为技通道挑选（点技能 → 点合法手牌 → 选目标 → 确认），没有任何
+# "自动拿第一张"的兜底。
 
-    judge_color = player.skill_state.get("shuangxiong", "judge_color", None)
-    if judge_color is None:
-        return []
-    return [
-        card for card in hand_cards(player)
-        if getattr(card, "card_color", None) and getattr(card, "card_color", None) != judge_color
-    ]
+def _shuangxiong_judge_color(player):
+    """本回合【双雄】判定结果的颜色；还没判定过就是 None。"""
 
-
-def _can_shuangxiong_duel(game, player):
-    if game.game_over or not player.alive:
-        return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "play":
-        return False, "只能在你的出牌阶段发动"
-    if not _shuangxiong_duel_sources(game, player):
-        return False, "没有与判定牌颜色不同的手牌"
-    if not other_alive_players(game, player):
-        return False, "没有其他角色"
-    return True, ""
+    return player.skill_state.get("shuangxiong", "judge_color", None)
 
 
-def _activate_shuangxiong_duel(game, player, target=None, cards=None):
-    """双雄：将一张异色手牌当【决斗】使用。"""
+def _shuangxiong_card_is_color(card):
+    """任何手牌都能进候选，颜色条件交给 owner_matches（它看得见判定结果）。"""
 
-    if target is None:
-        return False
-    sources = list(cards or ())
-    if not sources:
-        sources = _shuangxiong_duel_sources(game, player)[:1]
-    if not sources:
-        return False
-    use_virtual(game, player, "JUEDOU", sources=sources[:1], targets=[target])
-    game.add_log("%s 的【双雄】将一张异色手牌当【决斗】使用" % player.name)
     return True
+
+
+def _shuangxiong_conversion_available(game, player):
+    """本回合已经用【双雄】判定过，颜色已经定下来。"""
+
+    if game.game_over or not getattr(player, "alive", False):
+        return False
+    if not player.skill_state.get("shuangxiong", "used", 0):
+        return False
+    return _shuangxiong_judge_color(player) is not None
+
+
+def _shuangxiong_owner_matches(game, player, card):
+    """这张牌的颜色与本次判定结果**不同**才算合法素材。"""
+
+    judge_color = _shuangxiong_judge_color(player)
+    if judge_color is None:
+        return False
+    card_color = getattr(card, "card_color", None)
+    # 没有颜色的牌（理论上不存在于手牌）不算异色，避免和 None 比较时误判。
+    return bool(card_color) and card_color != judge_color
 
 
 # ==================================================
@@ -867,15 +872,22 @@ FIRE_SKILLS = (
         name="双雄",
         description="摸牌阶段，你可以放弃摸牌并进行一次判定：你获得此判定牌，"
         "且于此回合的出牌阶段，你可以将一张与此判定牌颜色不同的手牌当【决斗】使用。",
-        kind=SkillKind.ACTIVE,
+        # 摸牌阶段的"是否判定"由 factory 的触发技负责；出牌阶段的转化是
+        # 视为技（点技能 → 自己挑合法手牌 → 选目标），两条路共用同一个
+        # SkillDef，所以 kind 取 VIEW_AS：它决定玩家从哪里进得来。
+        kind=SkillKind.VIEW_AS,
         factory=Shuangxiong,
-        can_activate=_can_shuangxiong_duel,
-        activate=_activate_shuangxiong_duel,
-        active_spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=_tianyi_targets,
-            target_prompt="【双雄】：请选择【决斗】的目标",
+        conversions=(
+            CardConversion(
+                skill_id="shuangxiong",
+                matches=_shuangxiong_card_is_color,
+                owner_matches=_shuangxiong_owner_matches,
+                name="JUEDOU",
+                category="trick",
+                contexts=(PLAY_CONTEXT,),
+                available=_shuangxiong_conversion_available,
+            ),
         ),
-        tags=("active", "draw_phase"),
+        tags=("view_as", "conversion", "draw_phase"),
     ),
 )

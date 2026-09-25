@@ -351,6 +351,13 @@ class Renderer:
         if game.game_over:
             return self.result_overlay.handle_click(position)
 
+        # 判定优先：判定面板是牌桌最高层级，它捕获牌桌点击。唯一的例外是
+        # "当前这条判定请求问的正是本机玩家"（改判窗口的「跳过」按钮之类），
+        # 那属于判定流程自己要求的输入。见 src/game/judge_gate.py。
+        gate = getattr(game, "judge_gate", None)
+        if gate is not None and not gate.allows_local_input():
+            return None
+
         # 用牌方式选择面板（Card Action Picker）与技能选择面板都是模态的。
         if game.card_action_picker():
             return self.action_picker.hit(position, game)

@@ -113,7 +113,11 @@ class SkillManager:
             )
 
         for conversion in definition.conversions:
-            self.game.conversions.register(conversion, player)
+            # 绑定时刻把"需要 owner 的谓词"折进 matches（见
+            # CardConversion.for_owner）：绑定之后的每一次查询都自带这名
+            # 角色的状态，UI 与引擎不会再各判一次。
+            self.game.conversions.register(
+                conversion.for_owner(player, self.game), player)
 
         if definition.is_active:
             self._active.setdefault(player.player_id, {})[definition.id] = definition

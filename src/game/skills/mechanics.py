@@ -491,12 +491,18 @@ def start_pindian(engine, initiator, target, *, reason="pindian", on_complete=No
 # 判定 / 伤害的通用小工具
 # ==================================================
 
-def judge(engine, owner, reason, on_complete=None):
-    """发起一次判定；返回 (flow, result)。``result`` 为 None 表示还在改判窗口。"""
+def judge(engine, owner, reason, on_complete=None, card_recipient=None):
+    """发起一次判定；返回 (flow, result)。``result`` 为 None 表示还在改判窗口。
+
+    ``card_recipient`` 声明"这张判定牌最终归谁"（``callable(result) -> player``，
+    返回 None 表示照常进弃牌堆）。取到的一定是**最终生效**的那张判定牌：
+    中间被改判换掉的旧牌早已离开处理区。
+    """
 
     from ..flows.judge import JudgeFlow
 
-    flow = JudgeFlow(engine, owner, reason, on_complete=on_complete)
+    flow = JudgeFlow(engine, owner, reason, on_complete=on_complete,
+                     card_recipient=card_recipient)
     outcome = flow.start()
     from ..engine.flows import FlowStatus
 

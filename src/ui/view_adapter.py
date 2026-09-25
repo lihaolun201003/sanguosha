@@ -18,6 +18,7 @@ Renderer / TableLayout / seats / player / table / prompt 原本读的是权威 `
 import pygame
 
 from src.card import Card as CardData
+from src.game.judge_gate import JudgeGate
 from src.game.view.view_model import ClientGameView, PlayerView, ViewCard
 from src.network.decisions import DecisionKind
 
@@ -595,6 +596,11 @@ class RemoteGameView:
         self.current_turn_player = None
         self.pending_request = None
         self.busy = False
+        #: 判定优先闸门：客户端没有引擎，所以规则侧永远是"没有判定在跑"；
+        #: 起作用的是表现侧——本地判定面板还在演时，牌桌一律点不动。
+        #: 房主不会在判定期间下发新的出牌决策，但"判定刚结束、决策已经到、
+        #: 判定牌还在屏幕中央"这一帧是真实存在的。
+        self.judge_gate = JudgeGate(self)
         self.network_notice = ""
         if view is not None:
             self.update(view)
@@ -755,6 +761,10 @@ class RemoteGameView:
 
         decision = self.decision
         if not isinstance(decision, dict):
+            return False
+        if not self.judge_gate.allows_local_input(self.player):
+            # 判定牌还在这台机器上展示：房主那边可能已经推进到下一步并发来了
+            # 新的出牌决策，但玩家不该在判定还占着屏幕中央时提前出下一张牌。
             return False
         return str(decision.get("kind") or "") == DecisionKind.PLAY_PHASE
 

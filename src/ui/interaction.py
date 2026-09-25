@@ -93,6 +93,15 @@ def handle_game_click(position, game, renderer, human=None):
 
     human = human or LocalHumanController(game)
 
+    # 判定优先：判定没走完（规则上没走完，或判定牌还在屏幕中央展示）时，
+    # 判定面板就是牌桌最高层级——它捕获所有点击。唯一的例外是"这条判定
+    # 请求问的正是本机玩家"（司马懿的改判窗口之类），那属于判定流程自己
+    # 要求的输入，继续往下走正常的选择路径。
+    gate = getattr(game, "judge_gate", None)
+    if gate is not None and not gate.allows_local_input():
+        # hover 之类的视觉效果保留，但这一下不产生任何 Gameplay Action。
+        return False
+
     # 结算界面 / 节奏控件 / 技能选择面板 / 技能按钮 / 固定按钮
     action = renderer.hit_action(position, game)
     if action is not None:

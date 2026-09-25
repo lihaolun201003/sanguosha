@@ -8,7 +8,7 @@ Conversions are declared by skills exactly like modifiers: the SkillManager
 registers them on bind and removes them on unbind.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import count
 from typing import Any, Callable, Optional, Tuple
 
@@ -132,6 +132,13 @@ class CardConversion:
     # 时机条件：callable(game, player) -> bool。例如【急救】只在回合外可用。
     # None 表示任何时候都可用。只影响"能否被选中"，不改变牌本身。
     available: Any = None
+    # 需要看**拥有者状态**的源牌谓词：callable(game, owner, card) -> bool。
+    # ``matches`` 只看得见牌本身（"是不是红色"），而【双雄】这类判断是
+    # "这张牌对**这个**角色算不算素材"（颜色与本次判定不同）。绑定技能时
+    # ``for_owner`` 会把它折进 ``matches``，于是所有拿不到 owner 的查询点
+    # （CardActionDiscovery / UI 高亮 / 引擎校验）读到的都是同一份结果，
+    # 不会出现"界面高亮合法、引擎却拒绝"的分叉。
+    owner_matches: Any = None
     # 张数由当前局面决定时的取值函数：callable(game, owner) -> int。
     # 例：龙魂 X = 自己的当前体力值（至少 1）。声明了它时，
     # min_sources / max_sources 只作为"兜底范围"，实际判定一律走
@@ -187,6 +194,25 @@ class CardConversion:
 
     def uses_zone(self, zone):
         return zone in self.source_zones
+
+    # ---- 拥有者绑定 ----
+
+    def for_owner(self, owner, game=None):
+        """折叠成"某个角色专用的"声明（技能绑定时调用一次）。
+
+        只有声明了 ``owner_matches`` 才会产生新副本；其余技能拿到的还是
+        原对象，行为与绑定方式完全不变。
+        """
+
+        if self.owner_matches is None:
+            return self
+        base = self.matches
+        extra = self.owner_matches
+
+        def bound(card, _base=base, _extra=extra, _owner=owner, _game=game):
+            return bool(_base(card)) and bool(_extra(_game, _owner, card))
+
+        return replace(self, matches=bound, owner_matches=None)
 
     def build(self, owner, cards):
         return VirtualCard(

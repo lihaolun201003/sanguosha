@@ -24,6 +24,12 @@ class TurnMixin:
             return ["结算动画还没结束"]
         if self.response.active:
             return ["还有响应窗口在等你回答"]
+        # 判定优先：规则上判定还没结束时不能结束出牌阶段——否则回合会在判定
+        # 结算到一半时推进到下一个人。这里只拦"规则上没走完"：判定牌仍在
+        # 屏幕上展示时规则早已结束，AI 的回合必须能继续推进（拦了会把它卡死）。
+        gate = getattr(self, "judge_gate", None)
+        if gate is not None and gate.blocks:
+            return [gate.blocks_message() or "判定尚未结束"]
         # 还有请求在等答案（共享无懈阶段 / 别人的响应 / 锦囊仍在结算）：
         # 现在结束回合会把结算打断，必须等它结束。
         if self.engine.pending.active:
