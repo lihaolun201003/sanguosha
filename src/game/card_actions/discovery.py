@@ -147,6 +147,13 @@ class CardActionDiscovery:
                     if not _conversion_available(conversion, self.game, actor):
                         continue
                     seen.add(id(card))
+                    # 正常使用也放进同一个池子：去重的判据是"这次转化的
+                    # 结果与正常使用是否完全一样"，池子里少了正常使用那一条，
+                    # 判据就永远不成立——【武圣】把一张红色【杀】当【杀】
+                    # 会被列成合法素材，玩家点得中、却提交不了。
+                    normal = self._normal_option(actor, card, context)
+                    if normal is not None:
+                        result.append(normal)
                     result.extend(self._conversion_options(actor, (card,), context))
         return [
             option for option in self._dedupe(result)

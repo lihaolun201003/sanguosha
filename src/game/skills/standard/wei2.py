@@ -9,10 +9,11 @@ from src.game.conversion import (
     RESPONSE_CONTEXT,
     CardConversion,
 )
-from src.game.engine import EventType
+from src.game.engine import EventType, Flow
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
+from ..mechanics import ask_confirm, judge
 from ..definitions import (
     ActiveSkillSpec,
     ModifierSpec,
@@ -46,11 +47,61 @@ def _game_of(context):
     return getattr(engine, "game", None)
 
 
-class Luoshen(Skill):
-    """准备阶段开始时判定：黑色则获得该判定牌。
+class LuoshenFlow(Flow):
+    """洛神：先问"是否发动"，再判定；黑色判定牌**直接**收进手里。
 
-    第一版只判定一次（获得黑牌），不循环——循环判定需要另一个通用流程，
-    留待后续；技能本体与【鬼才】【天妒】的交互走的就是标准判定流程。
+    判定牌的去向交给 ``JudgeFlow.card_recipient`` 声明，而不是"先让它进
+    弃牌堆、事后从弃牌堆里捞回来"：后者会凭空产生一次弃牌事件，任何监听
+    弃牌的技能（固政一类）都会看到一个规则上从未发生过的弃牌。
+    """
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【洛神】：是否进行判定？", reason="luoshen")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if response is None or not response.confirmed:
+            # 取消不留痕迹：不写 used、不判定、什么都不动。
+            return self.complete({"applied": False})
+        self.owner.skill_state.set("luoshen", "used", 1, ResetScope.TURN)
+        flow, result = judge(self.engine, self.owner, "luoshen",
+                             card_recipient=self._recipient)
+        if result is None:
+            flow.on_complete = self._after_judge
+            self.wait(flow)
+            return self.current_result()
+        return self._after_judge(result)
+
+    def _recipient(self, result):
+        """只有黑色判定牌归自己；红色照常进弃牌堆。"""
+
+        card = getattr(result, "card", None)
+        if card is not None and getattr(card, "card_color", None) == "black":
+            return self.owner
+        return None
+
+    def _after_judge(self, result):
+        card = getattr(result, "card", None)
+        if card is not None:
+            if getattr(card, "card_color", None) == "black":
+                self.game.add_log("%s 发动【洛神】，获得判定牌 %s"
+                                  % (self.owner.name, card.display_name))
+            else:
+                self.game.add_log(self.owner.name + " 发动【洛神】：判定为红色，结束")
+        return self.complete({"applied": True})
+
+
+class Luoshen(Skill):
+    """准备阶段开始时可以判定：黑色则获得该判定牌。
+
+    本项目实现的是经典版（只判定一次，不循环），与 SkillDef 的描述一致。
     """
 
     id = "luoshen"
@@ -72,32 +123,7 @@ class Luoshen(Skill):
         return len(game.deck.draw_pile) > 0
 
     def resolve(self, context, event):
-        from src.game.engine import FlowStatus
-        from src.game.flows.judge import JudgeFlow
-
-        engine = context.services["engine"]
-        game = engine.game
-        self.owner.skill_state.set(self.id, "used", 1, ResetScope.TURN)
-        judge = JudgeFlow(engine, self.owner, "luoshen")
-        outcome = judge.start()
-        if outcome.status is FlowStatus.WAITING:
-            judge.on_complete = lambda result: self._after_judge(game, result)
-            return
-        self._after_judge(game, outcome.value)
-
-    def _after_judge(self, game, result):
-        card = getattr(result, "card", None)
-        if card is None or not self.owner.alive:
-            return
-        if getattr(card, "card_color", None) != "black":
-            game.add_log(self.owner.name + " 发动【洛神】：判定为红色，结束")
-            return
-        # 判定牌已在弃牌堆：收回手牌。
-        pile = game.deck.discard_pile
-        if any(item is card for item in pile):
-            game.engine.context.apply(
-                MoveCardAtom(card, source=pile, destination=self.owner.hand))
-        game.add_log(self.owner.name + " 发动【洛神】，获得判定牌 " + card.display_name)
+        LuoshenFlow(context.services["engine"], self.owner).start()
 
 
 # ==================================================
