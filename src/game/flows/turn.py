@@ -187,8 +187,7 @@ class TurnFlow(Flow):
             if self.on_play_phase is not None:
                 # 让回合驱动方知道本回合不会再有出牌阶段，需要直接收尾。
                 self.on_play_phase(False)
-        if self.on_complete is not None:
-            self.on_complete(result)
+        self.notify_on_complete(result)
 
     # ==================================================
     # 全自动回合
@@ -371,9 +370,15 @@ class TurnFlow(Flow):
         return self.current_result()
 
     def _finish_replacement_child(self, phase, result):
-        """阶段替代的子流程结束：按它的结果决定跳过阶段还是照常结算。"""
+        """阶段替代的子流程结束：按它的结果决定跳过阶段还是照常结算。
 
-        applied = bool(result and result.get("applied"))
+        回调拿到的是 ``FlowResult``（流程的完成值在它的 ``value`` 里），不是
+        子流程返回的那个字典——必须顺着 ``value`` 取，否则"是否替代成功"
+        永远读成一个不存在的属性，阶段替代会整个失效。
+        """
+
+        value = getattr(result, "value", result)
+        applied = bool(isinstance(value, dict) and value.get("applied"))
         if applied:
             self.phase_control.skip(phase)
         elif phase is TurnPhase.DRAW:

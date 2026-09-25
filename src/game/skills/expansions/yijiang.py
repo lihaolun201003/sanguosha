@@ -704,6 +704,13 @@ class EnyuanFlow(Flow):
         return self.current_result()
 
     def advance(self, response=None):
+        # 两个窗口按 stage 区分：先问"给不给红桃牌"，再问"给哪一张"。
+        # 这段判断**必须**留在类里：曾经它被写成一个模块级的 monkey patch
+        # （``EnyuanFlow.advance = _enyuan_advance``），而 patch 函数内部又
+        # 调用 ``EnyuanFlow.advance``——替换之后那就是它自己，伤害结算一到
+        # 【恩怨】就无限递归。
+        if self.stage == "card":
+            return self._after_card(response)
         if response is None or not response.confirmed:
             return self._punish()
         return self._ask_card()
@@ -739,13 +746,6 @@ class EnyuanFlow(Flow):
         return self.complete({"applied": True})
 
 
-def _enyuan_advance(self, response=None):
-    if self.stage == "card":
-        return self._after_card(response)
-    return EnyuanFlow.advance(self, response)
-
-
-EnyuanFlow.advance = _enyuan_advance
 
 
 def _can_xuanhuo(game, player):

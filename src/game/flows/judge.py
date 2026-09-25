@@ -363,6 +363,5 @@ class JudgeFlow(Flow):
         self._release_gate()
         # 判定流程的调用方接的是 **JudgeResult**（不是 FlowResult）：保持这个
         # 约定，否则每个调用点都要跟着改。
-        if self.on_complete is not None:
-            self.on_complete(self.result)
+        self.notify_on_complete(self.result)
 

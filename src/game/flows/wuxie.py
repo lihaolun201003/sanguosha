@@ -140,5 +140,5 @@ class WuxieResponseChain(Flow):
             "nullified": self.nullified,
             "wuxie_count": self.wuxie_count,
         })
-        self.on_complete(self.nullified)
+        self.notify_on_complete(self.nullified)
         return result

@@ -471,6 +471,8 @@ class PindianFlow:
         if not result.cancelled:
             self.game.add_log("拼点：" + result.describe())
             self.game.message = "拼点结果：" + ("发起者赢" if result.initiator_wins else "发起者没赢")
+        # 拼点流程不是 ``Flow`` 的子类（它自己管两次 PendingRequest），
+        # 因此没有基类那个幂等入口，只能按原样触发一次。
         if self.on_complete is not None:
             self.on_complete(result)
         return FlowResult(FlowStatus.COMPLETED, result)

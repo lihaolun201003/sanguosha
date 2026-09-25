@@ -50,8 +50,7 @@ class ChainDamageFlow(Flow):
                 return self.wait(child)
             return self.current_result()
         result = self.complete({"chain_id": self.chain_id, "visited": self.visited})
-        if self.on_complete:
-            self.on_complete(result)
+        self.notify_on_complete(result)
         return result
 
     def _after_child(self):

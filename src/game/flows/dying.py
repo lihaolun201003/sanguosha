@@ -195,5 +195,4 @@ class DyingFlow(Flow):
         return self.complete(value)
 
     def on_settled(self, result):
-        if self.on_complete is not None:
-            self.on_complete(result)
+        self.notify_on_complete(result)

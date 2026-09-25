@@ -116,8 +116,27 @@ class Flow(ABC):
         # 先做自己的收尾（on_complete 回调通常会推进调用方的状态），再唤醒
         # 等在子流程上的父流程——反过来会让父流程从一个还没收尾的阶段恢复。
         self.on_settled(result)
+        # 兜底：``on_complete`` 是"这条流程结束后接回调用方结算"的公开约定，
+        # 不能在"子类忘了在自己的 on_settled 里调一次"时静默丢掉。调用方
+        # （回合流程的阶段替代就是典型）会永远停在等一个已经结束的子流程上。
+        self.notify_on_complete(result)
         self._notify_parent()
         return result
+
+    def notify_on_complete(self, result: FlowResult) -> None:
+        """触发 ``on_complete`` 回调；**幂等**，重复调用只生效一次。
+
+        流程收尾时基类会调一次（见 ``complete``）；自己覆写了 ``on_settled``
+        或者走别的路径收尾的流程也应该用这个入口，而不是直接
+        ``self.on_complete(...)``——两边都调的话父流程会被推进两次。
+        """
+
+        if getattr(self, "_on_complete_notified", False):
+            return
+        self._on_complete_notified = True
+        callback = getattr(self, "on_complete", None)
+        if callback is not None:
+            callback(result)
 
     def cancel(self, reason: Any = None) -> FlowResult:
         self.pending_request = None

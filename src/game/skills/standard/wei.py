@@ -333,8 +333,7 @@ class TuxiFlow(Flow):
 
     def _finish(self, applied):
         self.complete({"applied": applied})
-        if self.on_complete is not None:
-            self.on_complete({"applied": applied})
+        self.notify_on_complete({"applied": applied})
         return self.current_result()
 
 
