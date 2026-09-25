@@ -576,16 +576,27 @@ class AIController(PlayerController):
         return False
 
     def _active_skill_cards(self, skill_id):
-        """主动技能需要的费用牌：弃掉手上最没价值的那几张。
+        """主动技能需要的牌：弃掉手上最没价值的那几张。
 
-        需要几张来自共同查询（``activation_inputs``）；选哪几张是 AI 的策略。
+        需要几张、**能用哪些**都来自共同查询（``activation_inputs``）；选哪
+        几张才是 AI 的策略。候选这一层不能省：牌不是想给就能给的（眩惑只能
+        交红桃手牌、明策只能给装备或【杀】、直谏只能给装备），AI 必须按同一
+        份名单挑，否则房主会拒绝它提交的牌。
         """
 
         inputs = self._available_actions().skill_inputs(self.player, skill_id)
-        need = int(inputs.get("cost_cards") or 0)
+        candidates = list(inputs.get("cost_candidates") or ())
+        if not candidates:
+            return []
+        if inputs.get("variable_cost"):
+            cap = int(inputs.get("max_cost_cards") or 0)
+            need = min(cap, len(candidates)) if cap else len(candidates)
+            need = max(1, need)
+        else:
+            need = int(inputs.get("cost_cards") or 0)
         if need <= 0:
             return []
-        ranked = sorted(self.player.hand, key=self.card_value)
+        ranked = sorted(candidates, key=self.card_value)
         return ranked[:need]
 
     def _active_skill_target(self, skill_id):

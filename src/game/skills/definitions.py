@@ -67,8 +67,23 @@ class ActiveSkillSpec:
     cost_prompt: str = "请选择要弃置的牌"
     # 费用牌数量可变（制衡）：0 或 1 .. 手牌数，由玩家决定。
     variable_cost: bool = False
+    # ``variable_cost`` 时玩家最多能挑几张（0 = 不设上限，按手牌数算）。
+    # 【举荐】是"弃置至多三张"，上限来自规则而不是手牌。
+    max_cost_cards: int = 0
     # 费用牌不弃置，而是交给目标角色（仁德）。
     transfer_cards: bool = False
+    # 费用牌的**合法候选**：``callable(game, player, card) -> bool``。
+    # 声明了它，本地界面高亮、引擎校验、远程下发的候选读的都是这一份判断，
+    # 玩家挑不出非法牌——也没有任何一条路径能替他挑。
+    cost_candidates: Any = None
+    # 这些牌**不是费用**：不弃置、也不交给目标，去向完全由技能自己的
+    # ``activate`` 决定（把红桃手牌交给目标【眩惑】、把装备牌装进对方装备区
+    # 【直谏】、当成转化的实体来源【双雄】）。
+    #
+    # 为什么必须有这个开关：费用语义是"先支付再结算"，而那类牌的语义是
+    # "这张牌就是这次技能动作本身"。把它当费用先弃掉，技能只能凭空造出
+    # 结果；把它交给技能、由技能决定去向，才是真实规则。
+    keep_cards: bool = False
 
 
 @dataclass(frozen=True)

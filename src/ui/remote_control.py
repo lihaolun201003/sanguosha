@@ -302,10 +302,16 @@ class RemoteHumanController(HumanController):
             skill_input = view.pending_skill_input
             if skill_input is None:
                 return None
-            limit = skill_input["variable_cost"] and len(view.player.hand) \
-                or int(skill_input["cost_cards"])
+            limit = view.skill_cost_limit()
             if card_id not in {card.id for card in view.player.hand}:
                 state.notice = "技能费用只能从自己的手牌里选"
+                return None
+            candidates = skill_input.get("cost_candidates")
+            if candidates is not None and not any(
+                    card.id == card_id for card in candidates):
+                # 房主下发的候选之外一张都不能选。这里只是提前给出提示，
+                # 真正的拒绝仍然在房主那边——客户端从不自己判规则。
+                state.notice = skill_input.get("cost_prompt") or "这张牌不能用于这次发动"
                 return None
             if not limit:
                 return None

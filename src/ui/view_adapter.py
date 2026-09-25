@@ -941,7 +941,15 @@ class RemoteGameView:
             "cost_cards": int(entry.get("cost_cards") or 0),
             "cost_prompt": str(entry.get("cost_prompt") or ""),
             "variable_cost": bool(entry.get("variable_cost")),
+            "max_cost_cards": int(entry.get("max_cost_cards") or 0),
             "transfer_cards": bool(entry.get("transfer_cards")),
+            # 候选由房主算好下发（``allowed_card_ids`` 就是它），客户端只按
+            # 同一份名单限制点击，一条规则都不自己算。
+            "cost_candidates": (
+                [card for card in self.player.hand
+                 if card is not None and card.id in self.allowed_card_ids]
+                if self.allowed_card_ids is not None else None
+            ),
             "targets": targets,
             "target": self.player_by_id(target_id) if target_id else None,
             "cards": cards,
@@ -958,6 +966,18 @@ class RemoteGameView:
         if state["variable_cost"]:
             return bool(state["cards"])
         return len(state["cards"]) >= state["cost_cards"]
+
+    def skill_cost_limit(self):
+        """这次发动玩家最多能挑几张牌（与单机的同名查询一致）。"""
+
+        state = self.pending_skill_input
+        if state is None:
+            return 0
+        if state.get("variable_cost"):
+            cap = int(state.get("max_cost_cards") or 0)
+            hand = len(self.player.hand)
+            return min(hand, cap) if cap else hand
+        return int(state["cost_cards"])
 
     def _apply_choice(self, request):
         options = [item for item in (request.get("options") or ()) if isinstance(item, dict)]

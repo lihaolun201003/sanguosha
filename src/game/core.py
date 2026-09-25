@@ -599,7 +599,12 @@ class Game(
             "cost_cards": int(inputs.get("cost_cards") or 0),
             "cost_prompt": spec.cost_prompt,
             "variable_cost": bool(inputs.get("variable_cost")),
+            "max_cost_cards": int(inputs.get("max_cost_cards") or 0),
             "transfer_cards": bool(inputs.get("transfer_cards")),
+            # 玩家能自己挑的牌：与引擎校验、远程下发的候选是**同一份判断**
+            # （见 activation.cost_candidates），所以界面高亮出来的牌
+            # 一定是引擎会接受的牌。
+            "cost_candidates": list(inputs.get("cost_candidates") or ()),
             "targets": targets,
             "target": None,
             "cards": [],
@@ -619,14 +624,18 @@ class Game(
                 parts.append(state["target_prompt"] or "请选择目标")
             else:
                 parts.append("目标：" + state["target"].name)
-        if state["cost_cards"]:
+        if state["cost_cards"] or state.get("variable_cost"):
             chosen = len(state["cards"])
-            if chosen < state["cost_cards"]:
+            required = int(state["cost_cards"])
+            limit = required or self.skill_cost_limit() or len(self.player.hand)
+            if chosen < required:
                 parts.append(
                     state["cost_prompt"]
-                    or ("请选择 %d 张手牌弃置" % state["cost_cards"])
+                    or ("请选择 %d 张手牌弃置" % required)
                 )
-            parts.append("已选 %d/%d 张" % (chosen, state["cost_cards"]))
+            elif required:
+                parts.append(state["cost_prompt"] or "")
+            parts.append("已选 %d/%d 张" % (chosen, limit))
         if self.skill_input_ready():
             parts.append("点击「确认发动」结算")
         self.message = "　".join(parts)
@@ -641,15 +650,29 @@ class Game(
         self._update_skill_input_message()
         return True
 
+    def skill_cost_limit(self):
+        """这次发动玩家最多能挑几张牌（0 = 这次不需要挑牌）。"""
+
+        state = self.pending_skill_input
+        if state is None:
+            return 0
+        if state.get("variable_cost"):
+            cap = int(state.get("max_cost_cards") or 0)
+            limit = min(len(self.player.hand), cap) if cap else len(self.player.hand)
+            return limit
+        return int(state["cost_cards"])
+
     def select_skill_cost_card(self, card):
         state = self.pending_skill_input
         if state is None:
             return False
-        variable = bool(state.get("variable_cost"))
-        limit = len(self.player.hand) if variable else int(state["cost_cards"])
+        limit = self.skill_cost_limit()
         if not limit:
             return False
-        if not any(item is card for item in self.player.hand):
+        candidates = state.get("cost_candidates")
+        if candidates is not None and not any(card is item for item in candidates):
+            # 不是这次发动的合法素材：点它什么也不发生，更不替玩家改选。
+            self.message = state.get("cost_prompt") or "这张牌不能用于这次发动。"
             return False
         if any(item is card for item in state["cards"]):
             state["cards"].remove(card)
@@ -665,7 +688,8 @@ class Game(
         if state["needs_target"] and state["target"] is None:
             return False
         if state.get("variable_cost"):
-            # 可变费用（制衡 / 仁德）：至少要选一张，上限由手牌决定。
+            # 可变费用（制衡 / 仁德 / 举荐）：至少要选一张，上限由手牌或
+            # 规则给出的张数（max_cost_cards）决定。
             if not state["cards"]:
                 return False
             return True

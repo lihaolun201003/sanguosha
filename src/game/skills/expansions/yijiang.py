@@ -492,11 +492,12 @@ def _activate_jujian(game, player, target=None, cards=None):
 
     if target is None:
         return False
-    chosen = list(cards or ())
+    # 弃哪几张由玩家自己挑（张数上限写在 spec 的 max_cost_cards 里）。
+    # 这里不再有任何"没传就替他挑一张"的兜底：那种兜底会让真人点了技能
+    # 却看到程序自己丢了牌。
+    chosen = list(cards or ())[:3]
     if not chosen:
-        chosen = sorted(player.hand, key=lambda card: getattr(card, "rank", "0"))[:1]
-    chosen = chosen[:3]
-    if not chosen:
+        game.message = "【举荐】：请先选择要弃置的牌。"
         return False
     for card in chosen:
         if any(item is card for item in player.hand):
@@ -764,17 +765,23 @@ def _can_xuanhuo(game, player):
     return True, ""
 
 
+def _is_xuanhuo_source(game, player, card):
+    """眩惑的素材：一张红桃手牌（花色按当前生效的花色算）。"""
+
+    return hand_cards(player, lambda item: item is card) and (
+        effective_suit(game, card, player) == "heart")
+
+
 def _activate_xuanhuo(game, player, target=None, cards=None):
     if target is None:
         return False
-    player.skill_state.set("xuanhuo", "used", 1, ResetScope.TURN)
-    sources = list(cards or [])
+    # 交给谁、交哪一张都由玩家自己决定（见 SkillDef 的 spec）。这里只做
+    # 最后一层复核：没有素材就什么也不发生，**绝不替他挑一张**。
+    sources = list(cards or ())
     if not sources:
-        hearts = hand_cards(
-            player, lambda card: effective_suit(game, card, player) == "heart")
-        sources = hearts[:1]
-    if not sources:
+        game.message = "【眩惑】：请先选择一张红桃手牌。"
         return False
+    player.skill_state.set("xuanhuo", "used", 1, ResetScope.TURN)
     game.engine.context.apply(MoveCardAtom(
         sources[0], source=player.hand, destination=target.hand))
     game.add_log("%s 发动【眩惑】，将一张红桃手牌交给 %s" % (player.name, target.name))
@@ -867,13 +874,20 @@ def _can_mingce(game, player):
     return True, ""
 
 
+def _is_mingce_source(game, player, card):
+    """明策的素材：一张装备牌或一张【杀】手牌。"""
+
+    return bool((getattr(card, "category", None) == "equipment")
+                or (getattr(card, "name", None) == "SHA"))
+
+
 def _activate_mingce(game, player, target=None, cards=None):
     if target is None:
         return False
-    sources = list(cards or [])
-    if not sources or not any(item is sources[0] for item in _mingce_sources(player)):
-        sources = _mingce_sources(player)[:1]
+    # 交给哪一张由玩家自己挑；没有素材就直接不发动。
+    sources = list(cards or ())
     if not sources:
+        game.message = "【明策】：请先选择一张装备牌或【杀】。"
         return False
     player.skill_state.set("mingce", "used", 1, ResetScope.TURN)
     game.engine.context.apply(MoveCardAtom(
@@ -1265,6 +1279,11 @@ YIJIANG_SKILLS = (
             needs_target=True,
             target_candidates=_jujian_targets,
             target_prompt="【举荐】：请选择摸牌的角色",
+            # 举荐的牌是**真的要弃置**（不是素材），所以走费用语义；
+            # 上限来自规则本身："至多三张"。
+            variable_cost=True,
+            max_cost_cards=3,
+            cost_prompt="【举荐】：请选择至多三张牌弃置",
         ),
         tags=("active",),
     ),
@@ -1312,6 +1331,11 @@ YIJIANG_SKILLS = (
             needs_target=True,
             target_candidates=_ganlu_targets,
             target_prompt="【眩惑】：请选择获得其一张牌的角色",
+            # 素材牌不是费用：它要交到目标手上，去向由技能自己的结算决定。
+            cost_cards=1,
+            keep_cards=True,
+            cost_prompt="【眩惑】：请选择一张红桃手牌交给目标",
+            cost_candidates=_is_xuanhuo_source,
         ),
         tags=("active",),
     ),
@@ -1327,6 +1351,10 @@ YIJIANG_SKILLS = (
             needs_target=True,
             target_candidates=_mingce_targets,
             target_prompt="【明策】：请选择接受装备牌或【杀】的角色",
+            cost_cards=1,
+            keep_cards=True,
+            cost_prompt="【明策】：请选择一张装备牌或【杀】交给目标",
+            cost_candidates=_is_mingce_source,
         ),
         tags=("active",),
     ),

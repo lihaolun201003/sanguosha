@@ -364,13 +364,19 @@ def _can_zhijian(game, player):
     return True, ""
 
 
+def _is_zhijian_source(game, player, card):
+    """直谏的素材：一张装备手牌。"""
+
+    return getattr(card, "category", None) == "equipment"
+
+
 def _activate_zhijian(game, player, target=None, cards=None):
     if target is None:
         return False
+    # 装哪一张由玩家自己挑；没有素材就不发动，绝不替他挑。
     chosen = list(cards or ())
     if not chosen:
-        chosen = _zhijian_equipment(player)[:1]
-    if not chosen:
+        game.message = "【直谏】：请先选择一张装备牌。"
         return False
     card = chosen[0]
     if not any(item is card for item in player.hand):
@@ -834,6 +840,12 @@ MOUNTAIN_SKILLS = (
             needs_target=True,
             target_candidates=_zhijian_targets,
             target_prompt="【直谏】：请选择获得装备的角色",
+            # 装备牌的去向是"装进对方的装备区"，不是弃置、也不是交手牌，
+            # 所以它按素材处理，由技能自己的结算负责移动。
+            cost_cards=1,
+            keep_cards=True,
+            cost_prompt="【直谏】：请选择一张装备牌置入目标的装备区",
+            cost_candidates=_is_zhijian_source,
         ),
         tags=("active",),
     ),
