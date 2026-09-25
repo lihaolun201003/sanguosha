@@ -60,6 +60,11 @@ Run:
 python3 main.py
 ```
 
+> **Assets:** some game art (card faces, generals) is not distributed with this
+> repository for licensing reasons — the game falls back to procedurally drawn
+> graphics. To use the original art, place the image files under `assets/`
+> yourself.
+
 ### Status
 
 This project is still under development.
@@ -129,6 +134,10 @@ pip install pygame
 ```bash
 python3 main.py
 ```
+
+> **素材说明：** 部分游戏素材（卡面、武将图）因授权原因不随本仓库分发，
+> 缺少素材时游戏会退回程序绘制的图形。如需原始素材，请自行把图片放到
+> `assets/` 目录下。
 
 ### 项目状态
 
