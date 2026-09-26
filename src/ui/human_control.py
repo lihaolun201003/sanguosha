@@ -159,7 +159,7 @@ class LocalHumanController(HumanController):
         elif action == "cancel_skill":
             game.cancel_skill_input()
         elif action == "skill_info":
-            pass                      # 只展开说明，不改任何规则状态
+            pass                      # 说明只跟 hover，这里不会再有这个动作
         elif isinstance(action, tuple) and action and action[0] == "view_as":
             game.begin_view_as(action[1])
         elif isinstance(action, tuple) and action and action[0] in ("skill", "activate_skill"):

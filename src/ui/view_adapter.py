@@ -1093,6 +1093,16 @@ class RemoteGameView:
             "只读视图没有 " + name + "：客户端不构造第二个 Game")
 
     # ---- 节奏（本地显示设置） ----
+    #
+    # 速度是**这台客户端自己的**表现设置：状态就在 ``ViewSpeed`` 里，房主
+    # 从头到尾不知道它，网络载荷里也没有这个字段。它只喂给本地表现队列
+    # （动画节奏），不参与任何规则判定。
+
+    @property
+    def speed(self):
+        """本机的表现速度倍率（本地设置，不来自房主）。"""
+
+        return self.speed_state.value
 
     def speed_index(self):
         return self.speed_state.index

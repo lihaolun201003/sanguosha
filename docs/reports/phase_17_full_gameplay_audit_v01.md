@@ -310,3 +310,126 @@ A 选【借刀杀人】→ 选持武器者 B
 | 42/42 卡牌规则完成审计 | **修复并重新验证后重新成立**（42 种逐张；借刀从"看起来通过"改为有 26 项断言的专项覆盖）|
 | 真人被自动选牌 / 选目标为 0 | **修正为 1 处**（借刀的第二目标与"用哪一种杀"），已修复 |
 | "Local / LAN 已不存在已知规则级差异" | **改为更准确的表述**：核心卡牌 / 规则路径 Local 与 LAN 一致（对照矩阵全绿）；但仍有两个缺口——**3 个 `needs_local_ui` 技能尚未迁移**（攻心 / 心战 / 观星），以及**借刀的完整远程流程（3 人局）本轮未跑通**（现有 LAN 脚手架只有两个座位，2 人局下"没有合法第二目标"是正确行为，完整链路未验证）。因此**完整玩家能力尚未 100% 对齐**。|
+
+---
+
+# Phase 17.2 · Local Presentation Settings & Skill Tooltip
+
+> 本轮只动表现层：**表现速度本地化**与**技能描述只跟 hover**。
+> 没有改任何武将规则、卡牌规则、JudgeGate 逻辑或 AvailableActions 语义。
+
+## 19.1 表现速度放在哪里
+
+审计结论：项目**已经有**一套节奏机制，本轮不重建第二套。
+
+| 位置 | 现状 |
+| --- | --- |
+| `Game.SPEED_STEPS` | 6 档：0.4 / 0.55 / 0.75 / 1.0 / 1.5 / 2.0 |
+| `Game.speed` | 座主（本机权威）的表现倍率，只喂给 `Game.update` 里的 `ActionQueue` |
+| `RemoteGameView.speed_state`（`ViewSpeed`）| 联网客户端**自己的**倍率，状态在本地适配层 |
+| `ui/speed.py` 的 `SpeedControl` | 角落里的 `− 值 ＋` 部件 |
+| `Effects` / `FXTiming` | 各段动画的基础时长；队列按 `dt * speed` 推进 |
+
+本轮只补了三处缺口：
+
+1. **局内入口**：`SpeedControl` 以前只在**启动菜单**里 hit/draw，牌桌上虽然创建了
+   却从没画出来也没命中过。现在 `Renderer.draw` 画它、`Renderer.hit_action`
+   命中它（`metrics.speed_control` 的位置是现成的左上角，牌桌布局没动）。
+2. **档位文案统一**：档位名字（很慢/慢/稍慢/正常/快/很快）原先只写在客户端那张表里，
+   座主显示的是 `0.75×`。现在两边读同一份 `SpeedControl.LABELS`。
+3. **客户端速度查询**：`RemoteGameView` 补了 `speed` 属性（原来只有
+   `speed_index/speed_label/slower/faster`，`SpeedControl.draw` 读不到值）。
+
+## 19.2 为什么不进入网络同步
+
+**速度是这台机器的表现设置，不是游戏状态。** 落点刻意分开：
+
+```text
+座主：Game.speed            ← 只喂 ActionQueue 的 dt 缩放
+游客：RemoteGameView.speed  ← 只喂本地表现队列
+```
+
+两者之间没有任何通道：
+
+* 不在 `Game` 的权威状态里（客户端的 `Game` 根本不存在）；
+* 不在 `ClientGameView` / `view snapshot` 里；
+* 不进 `revision`；
+* 不进 `DecisionRequest`；
+* `src/network/` 与 `src/game/view/` 里**没有任何** speed 相关字段（已 grep 确认）。
+
+客户端点速度控件走的是 `RemoteHumanController.run_action` 的
+`slower/faster` 分支——它**只改本地视图**并直接返回，不构造任何决策、不发消息。
+
+## 19.3 Host / Client 独立验证（13 项断言全通过）
+
+| 场景 | 结果 |
+| --- | --- |
+| 初始：座主 0.75 / 客户端 1.00（两个独立对象）| PASS |
+| A：座主调慢 → 只改自己；客户端**没有**被带着变 | PASS |
+| B：座主调快 5 档 → 客户端仍是自己那个值 | PASS |
+| C：客户端调慢 → 只改自己；座主**没有**被带着变 | PASS |
+| 网络载荷里完全没有 speed / pace / animation_speed 字段 | PASS |
+| D：两台机器速度差到最大（0.4 vs 2.0）时，客户端照常拿到出牌决策、房主权威状态与 revision 不受影响 | PASS |
+| 规则侧：最慢档与最快档结算同一个场景，结果完全一致（目标掉血都是 1 点）| PASS |
+
+## 19.4 Judge presentation 仍然安全
+
+速度只缩放**动画时长**，不参与任何门控判据：
+
+* `JudgeGate` 的三个状态由 `JudgeFlow` 的注册表与 `PendingRequest` 决定，
+  与 `speed` 无关；
+* `JudgePanel` 的各段时长按 `timing()` 播放，快慢只影响"演多久"；
+* 规则上的 `JudgeFlow` 何时完成由引擎决定，**不会因为另一台机器的速度设置改变**。
+  两边动画不同步结束是允许的——各自在自己的 presentation 未结束前都不会误操作
+  （真人输入门控走 `JudgeGate`，与速度无关）。
+
+## 19.5 技能描述：hover / selected 彻底分离
+
+**问题**：`SkillBar.hit()` 在点击"不可发动 / 非主动"技能时会**切换**
+`info_skill_id`，而 `tooltip()` 里有一条 `if self.info_skill_id: return self.info_text(game)`
+——于是点击之后鼠标移开，技能描述仍然常驻。
+
+**改法**：把两个概念彻底拆开：
+
+| 状态 | 职责 | 谁决定 |
+| --- | --- | --- |
+| `selected_skill_id` | **游戏交互状态**（View-As / 主动技选中）| 点击 |
+| Tooltip 内容 | **技能介绍** | **只有鼠标 hover** |
+
+* `tooltip(game, mouse_pos)` 现在只有一条路径：鼠标停在哪个技能按钮上就返回
+  哪个技能的说明；不在按钮上（手牌 / 座位 / 技能栏空白 / 头像）一律返回 `None`；
+* `hit()` 对可发动的技能仍然进入交互并**记下 selected**（按钮的选中视觉不变），
+  对锁定技 / 触发技则**什么都不做**（说明已由 hover 给出）；
+* `info_text()` 整块删除——它的职责就是那个被修掉的常驻说明。
+
+## 19.6 实际 main.py 手玩结果（18 项断言全通过）
+
+探针挂在**真实主循环**上（`SGS_RUNTIME_SCRIPT=ui_probe`），screen / game /
+renderer 都是玩家正常启动时那一个：
+
+| # | 场景 | 结果 |
+| --- | --- | --- |
+| — | 局内存在速度控件；点「＋」/「−」被识别；点一下立刻改变；档位有中文名 | PASS |
+| 1 | hover【武圣】→ 显示技能描述 | PASS |
+| 2 | 鼠标移到手牌 → 描述立刻消失 | PASS |
+| 3 | 点击【武圣】→ 进入选中状态，View-As 会话建立 | PASS |
+| 4 | 鼠标移到手牌 → **描述消失**，但【武圣】仍是选中状态、View-As 仍有效 | PASS |
+| 5 | 点合法素材（红桃牌）→ View-As 正常推进 | PASS |
+| 6 | 取消 → 没有残留的选中 / 交互状态 | PASS |
+| 7 | hover 锁定技【咆哮】→ 显示描述 | PASS |
+| 8 | 移开 → 立刻消失 | PASS |
+| 9 | 两个技能来回 hover → 说明跟着鼠标走，不残留上一个 | PASS |
+| 10 | 技能栏空白处 / 手牌上 → 都不显示任何描述 | PASS |
+
+**远程**：技能描述是纯本地 UI——网络载荷里没有 hover / tooltip 字段
+（已 grep 确认），客户端有自己的技能栏，鼠标不在技能上时同样没有描述。
+
+## 19.7 本轮修改清单
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/ui/skill_bar.py` | `tooltip` 改为 hover-only；`info_skill_id` → `selected_skill_id`（只管视觉）；删除 `info_text` |
+| `src/ui/speed.py` | 补档位中文表 `LABELS` / `label_for`；控件标题改"动画速度"；文档写明它是本地 UI 设置 |
+| `src/renderer.py` | 牌桌上绘制并命中 `speed_control`（局内入口）|
+| `src/ui/remote_control.py` | `slower/faster` 只改本地视图，不发任何决策 |
+| `src/ui/view_adapter.py` | `RemoteGameView` 补 `speed` 属性 |

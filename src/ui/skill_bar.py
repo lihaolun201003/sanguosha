@@ -41,7 +41,9 @@ class SkillBar:
         self.rects = []           # [(skill_id, pygame.Rect)]
         self.enabled_ids = set()  # 当前真的可发动的技能
         self.blocked_reasons = {}  # skill_id -> 不能发动的原因
-        self.info_skill_id = None  # 正在查看说明的技能
+        #: 已经**点下去**的技能（View-As / 主动技交互中）：只用于按钮的
+        #: 选中视觉，与"鼠标正停在哪个技能上"完全分开——技能说明只跟 hover。
+        self.selected_skill_id = None
         self.metrics = None
         self.reason = ""
         self.sync_layout(None, 0)
@@ -88,9 +90,9 @@ class SkillBar:
 
         if [item.id for item in definitions] != [item.id for item in self.skills]:
             self.skills = definitions
-            if self.info_skill_id and self.info_skill_id not in [
+            if self.selected_skill_id and self.selected_skill_id not in [
                     item.id for item in definitions]:
-                self.info_skill_id = None
+                self.selected_skill_id = None
             self.sync_layout(self.metrics, len(definitions))
 
         # 联网客户端：技能名照常显示（武将技能是公开信息），但"能不能发动"
@@ -168,7 +170,12 @@ class SkillBar:
         return None
 
     def hit(self, position, game):
-        """返回要执行的动作；点击不可发动的技能只会展开说明。"""
+        """返回要执行的动作。
+
+        技能说明**只由鼠标 hover 决定**（见 ``tooltip``）：点击不再"展开"
+        任何常驻文案——鼠标一离开按钮，说明就消失。锁定技 / 触发技没有可
+        执行的动作，点击它们什么也不发生（hover 仍然能看到说明）。
+        """
 
         self.sync(game)
         definition = self.skill_at(position)
@@ -177,11 +184,9 @@ class SkillBar:
         if definition.id in self.enabled_ids:
             # 主动技与视为技共用一个入口：start_skill_activation 自己会区分
             # （视为技进入"先点技能再选牌"模式）。
+            self.selected_skill_id = definition.id
             return ("skill", definition.id)
-        # 不可发动 / 非主动技能：切换说明展开状态，不改变任何规则状态。
-        self.info_skill_id = (
-            None if self.info_skill_id == definition.id else definition.id)
-        return "skill_info"
+        return None
 
     def _describe(self, game, definition):
         """一个技能的说明文本（类型 / 描述 / 当前不可发动的原因）。"""
@@ -195,32 +200,27 @@ class SkillBar:
             lines.append("当前无法发动：" + reason)
         return "\n".join(lines)
 
-    def info_text(self, game):
-        """当前展开的技能说明（纯文本，内容来自 SkillDef）。"""
+    def skill_at_position(self, mouse_pos):
+        """鼠标现在停在哪个技能按钮上（不在技能上就是 None）。"""
 
-        if not self.info_skill_id:
+        if mouse_pos is None:
             return None
-        definition = game.skill_registry.get(self.info_skill_id)
-        if definition is None:
-            return None
-        return self._describe(game, definition)
+        return self.skill_at(mouse_pos)
 
     def tooltip(self, game, mouse_pos=None):
-        """悬停提示：鼠标停在某个技能按钮上时，显示那个技能的说明。
+        """悬停提示：**只有**鼠标停在技能按钮上时才有内容。
 
-        可发动状态由按钮自身的高亮表达（见 ``draw``），不再常驻一条
-        "可发动"提示条——它会一直挂在手牌上方挡视线，也容易被误读成
-        需要玩家操作。
+        点击技能（进入 View-As / 主动技交互）**不会**让说明常驻——"已经
+        选了它"与"正在看它的说明"是两件事：前者是游戏交互状态
+        （``selected_skill_id``，只影响按钮的选中视觉），后者只由鼠标位置
+        决定。鼠标离开按钮、停在手牌 / 座位 / 技能栏空白处，说明立刻消失。
         """
 
         self.sync(game)
-        if mouse_pos is not None:
-            definition = self.skill_at(mouse_pos)
-            if definition is not None:
-                return self._describe(game, definition)
-        if self.info_skill_id:
-            return self.info_text(game)
-        return None
+        definition = self.skill_at_position(mouse_pos)
+        if definition is None:
+            return None
+        return self._describe(game, definition)
 
     # ---- 绘制 ----
 
@@ -235,7 +235,7 @@ class SkillBar:
                 break
             rect = self.rects[index]
             enabled = definition.id in self.enabled_ids
-            viewing = self.info_skill_id == definition.id
+            viewing = self.selected_skill_id == definition.id
             hovered = mouse_pos is not None and rect.collidepoint(mouse_pos)
 
             actionable = definition.is_active or definition.is_view_as

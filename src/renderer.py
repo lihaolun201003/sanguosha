@@ -378,6 +378,11 @@ class Renderer:
             return actions["secondary_action"]
         if self.surrender_button.enabled and self.surrender_button.contains(position):
             return "surrender"
+        # 动画速度是**这台机器自己的**表现设置（见 ui/speed.py）：座主改的是
+        # Game.speed，客户端改的是它自己视图上的 ViewSpeed，两边不通信。
+        speed_hit = self.speed_control.hit(position, game)
+        if speed_hit is not None:
+            return speed_hit
         return None
 
     def set_pressed(self, action):
@@ -809,6 +814,7 @@ class Renderer:
         self._draw_floats(metrics)
         table.draw_log(self.screen, game, metrics)
         self.skill_bar.draw(self.screen, game, self.mouse_pos)
+        self.speed_control.draw(self.screen, game, self.mouse_pos)
         if self.interaction_layers(game):
             self.skill_picker.draw(self.screen, game, self.mouse_pos)
             self.action_picker.draw(self.screen, game, self.mouse_pos)

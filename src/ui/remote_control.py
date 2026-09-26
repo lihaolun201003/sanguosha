@@ -126,6 +126,13 @@ class RemoteHumanController(HumanController):
             # 展开说明 / 面板外的点击：什么都不做，也什么都不提交。
             return None
 
+        if action in ("slower", "faster"):
+            # 表现速度是本地设置：只改这台客户端自己的展示节奏，
+            # **不**作为决策发回房主，也不进任何网络载荷。
+            view = self.view
+            (view.slower if action == "slower" else view.faster)()
+            return None
+
         if action == "cancel":
             # 技能选择面板的取消：与「取消发动」同一语义。
             self._reset_skill()
