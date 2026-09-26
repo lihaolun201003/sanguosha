@@ -93,7 +93,7 @@
     {
       "ok": true,
       "label": "火攻弃置窗口出现（问的是使用者）",
-      "detail": "<src.player.Player object at 0x0000020BD56EAEF0>"
+      "detail": "<src.player.Player object at 0x000001819A4BAD70>"
     },
     {
       "ok": true,
@@ -208,7 +208,7 @@
     {
       "ok": true,
       "label": "客户端收到了火攻弃牌决策请求（取自 socket 原始报文）",
-      "detail": "{'request': {'match_id': 'E4E9EE01', 'request_id': 2, 'player_id': 'a24bf560598a', 'kind': 'select_cards', 'prompt': '弃置"
+      "detail": "{'request': {'match_id': '3D2D7A81', 'request_id': 2, 'player_id': '35144dc43350', 'kind': 'select_cards', 'prompt': '弃置"
     },
     {
       "ok": true,

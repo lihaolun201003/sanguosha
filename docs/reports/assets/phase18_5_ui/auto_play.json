@@ -1,0 +1,501 @@
+{
+  "steps": [
+    {
+      "n": 1,
+      "label": "开局完成",
+      "detail": "scene=game",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 6,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": null
+    },
+    {
+      "n": 2,
+      "label": "出牌",
+      "detail": "点 出牌 at (1605, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 6,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 3,
+      "label": "出牌",
+      "detail": "点 出牌 at (1714, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 5,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 4,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 4,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 5,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 4,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 6,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 4,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 7,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 4,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 8,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 9,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 10,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 11,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 12,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 13,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 14,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1497, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "request=respond_card/duel+response",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 15,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "hold:step=skill",
+      "changed": false,
+      "why": "hold=step:skill busy=False primary(?,en=True,hit) secondary(?,en=False,miss) hit_action=None slot=False"
+    },
+    {
+      "n": 16,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "hold:step=skill",
+      "changed": false,
+      "why": "hold=no busy=False primary(?,en=True,hit) secondary(?,en=False,miss) hit_action=end_turn slot=False"
+    },
+    {
+      "n": 17,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 18,
+      "label": "出牌",
+      "detail": "点 出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": false,
+      "why": "hold=no busy=False primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 19,
+      "label": "确认选项",
+      "detail": "点 确认选项 at (1025, 864)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "choice",
+      "blockers": "-",
+      "changed": false,
+      "why": "hold=no busy=False primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 20,
+      "label": "选目标",
+      "detail": "点 选目标 at (1280, 152)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "targets",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 21,
+      "label": "确认目标",
+      "detail": "点 确认目标 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "targets",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 22,
+      "label": "出牌",
+      "detail": "点 出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 2,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 23,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 0,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 24,
+      "label": "出牌",
+      "detail": "点 出牌 at (1171, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 2,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 25,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 26,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "AI 1",
+      "hand": 1,
+      "hp": 3,
+      "pending": "request=respond_card/sha+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 27,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "AI 1",
+      "hand": 1,
+      "hp": 3,
+      "pending": "request=respond_card/sha+response",
+      "blockers": "busy",
+      "changed": false,
+      "why": "hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True"
+    },
+    {
+      "n": 28,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "AI 1",
+      "hand": 1,
+      "hp": 3,
+      "pending": "request=respond_card/sha+response",
+      "blockers": "busy",
+      "changed": false
+    },
+    {
+      "n": 29,
+      "label": "响应出牌",
+      "detail": "点 响应出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "AI 1",
+      "hand": 1,
+      "hp": 3,
+      "pending": "request=respond_card/sha+response",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 30,
+      "label": "出牌",
+      "detail": "点 出牌 at (1171, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 2,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 31,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 32,
+      "label": "出牌",
+      "detail": "点 出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 33,
+      "label": "选牌",
+      "detail": "点 选牌 at (1123, 365)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 2,
+      "hp": 3,
+      "pending": "request=select_cards/guohe+selection",
+      "blockers": "busy",
+      "changed": true
+    },
+    {
+      "n": 34,
+      "label": "出牌",
+      "detail": "点 出牌 at (1389, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 2,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 35,
+      "label": "结束回合",
+      "detail": "点 结束回合 at (2336, 1235)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 1,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    },
+    {
+      "n": 36,
+      "label": "出牌",
+      "detail": "点 出牌 at (1280, 1274)",
+      "phase": "play",
+      "turn": "玩家",
+      "hand": 3,
+      "hp": 3,
+      "pending": "-",
+      "blockers": "-",
+      "changed": true
+    }
+  ],
+  "problems": [
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1389,1274) 之后局面无变化（phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1389,1274) 之后局面无变化（phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "疑似卡住",
+      "detail": "连续 1.5 秒局面无变化，phase=play pending=request=respond_card/duel 手牌=3"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1497,1274) 之后局面无变化（phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1497,1274) 之后局面无变化（phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "疑似卡住",
+      "detail": "连续 1.5 秒局面无变化，phase=play pending=request=respond_card/duel 手牌=2"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "结束回合 点 (2336,1235) 之后局面无变化（phase=play pending=- 原因=hold=step:skill busy=False primary(?,en=True,hit) secondary(?,en=False,miss) hit_action=None slot=False）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "结束回合 点 (2336,1235) 之后局面无变化（phase=play pending=- 原因=hold=no busy=False primary(?,en=True,hit) secondary(?,en=False,miss) hit_action=end_turn slot=False）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "出牌 点 (1280,1274) 之后局面无变化（phase=play pending=choice 原因=hold=no busy=False primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "确认选项 点 (1025,864) 之后局面无变化（phase=play pending=targets 原因=hold=no busy=False primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1280,1274) 之后局面无变化（phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "点了没反应",
+      "detail": "响应出牌 点 (1280,1274) 之后局面无变化（phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True primary(?,en=False,miss) secondary(?,en=True,miss) hit_action=None slot=True）"
+    },
+    {
+      "kind": "疑似卡住",
+      "detail": "连续 1.5 秒局面无变化，phase=play pending=- 手牌=2"
+    }
+  ],
+  "elapsed_s": 33.5
+}

@@ -831,6 +831,11 @@ class Renderer:
         # 技能提示这类关键演出还在播时，操作层整体让路（见 Effects.interaction_hold）。
         show_interaction = (self.interaction_layers(game)
                             and not self.effects.interaction_hold())
+        if not show_interaction and self.interaction_layers(game):
+            # 演出让路：操作层整体不出现。但**不能什么都不说**——玩家看到的
+            # 是"界面突然没了、点哪都没反应"。这里补一条轻量说明，让他知道
+            # "正在演技能，等一下就会回来"。
+            self._draw_hold_notice(game, metrics)
         if show_interaction:
             info = prompt.describe(game)
             prompt.draw(self.screen, info, metrics)
@@ -973,6 +978,28 @@ class Renderer:
                     if game.card_actions.is_operable(context.actor, card, context):
                         candidates.add(slot)
         return selected, candidates
+
+    def _draw_hold_notice(self, game, metrics):
+        """操作层让路时的一句说明（"技能发动中…"）。"""
+
+        step = self.effects.storyboard.current
+        kind = str(getattr(step, "kind", ""))
+        if kind == "skill":
+            text = "技能发动中…"
+        elif kind in ("judge", "result"):
+            text = "判定结算中…"
+        elif kind:
+            text = "演出播放中…"
+        else:
+            # 不是队列里的演出（例如判定面板在演）：判定面板自己会说明，
+            # 这里不重复占屏。
+            return
+        rect = metrics.prompt
+        font = metrics.fonts.get("normal")
+        surface = font.render(text, True, theme.TEXT_MUTED)
+        surface.set_alpha(200)
+        self.screen.blit(surface, surface.get_rect(
+            center=(rect.centerx, rect.centery)))
 
     def _draw_floats(self, metrics):
         fonts = metrics.fonts

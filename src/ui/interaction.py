@@ -63,10 +63,10 @@ def _card_action_context(game):
 
 
 def _in_interactive_slot(game):
-    """玩家现在是不是正处在一个"自己挑牌 / 挑目标"的交互槽位里。
+    """玩家现在是不是正处在一个"自己挑牌 / 挑目标 / 自己回答"的交互槽位里。
 
     这些槽位里的点击属于**玩家自己的操作**（丈八蛇矛选来源牌、五谷选牌、
-    技能选目标…），与动作队列此刻在播什么无关。
+    技能选目标、出闪求桃…），与动作队列此刻在播什么无关。
     """
 
     return any((
@@ -75,6 +75,15 @@ def _in_interactive_slot(game):
         game.pending_skill_input is not None,
         game.pending_selection is not None,
         game.pending_target_selection is not None,
+        # 响应窗口（出闪 / 求桃 / 无懈）与二选一浮层**同样**是"玩家必须回答"
+        # 的槽位，必须一起放行。
+        #
+        # 漏掉它们的后果是实测出来的：响应窗口开着的时候，只要动作队列里还有
+        # 动画在播（上一张牌的余波、AI 那边的结算），game.busy 就一直是 True，
+        # 于是玩家点「不出」、点【闪】全都被静默吞掉——表现为"点了没反应，
+        # 得等一会儿再点"。玩家会以为按钮坏了。
+        getattr(getattr(game, "response", None), "active", False),
+        getattr(getattr(game, "choice", None), "active", False),
     ))
 
 
