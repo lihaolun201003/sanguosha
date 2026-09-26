@@ -225,8 +225,8 @@ class StartMenu:
         # 装饰光晕
         glow_radius = max(metrics.px(190), metrics.screen_w // 8)
         for center, color in (
-            ((metrics.screen_w // 6, metrics.screen_h // 5), (24, 40, 52)),
-            ((metrics.screen_w - metrics.screen_w // 8, metrics.screen_h - metrics.screen_h // 6), (20, 34, 46)),
+            ((metrics.screen_w // 6, metrics.screen_h // 5), theme.PANEL_DEEP),
+            ((metrics.screen_w - metrics.screen_w // 8, metrics.screen_h - metrics.screen_h // 6), theme.PANEL_SUNKEN),
         ):
             halo = theme.radial_glow(glow_radius, color, alpha=120)
             self.screen.blit(halo, halo.get_rect(center=center))

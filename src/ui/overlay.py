@@ -121,7 +121,7 @@ class GameOverOverlay:
             metrics = self.metrics
 
         veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((6, 9, 13, 190))
+        veil.fill((*theme.VEIL, 190))
         surface.blit(veil, (0, 0))
 
         fonts = metrics.fonts
@@ -232,7 +232,7 @@ class GameOverOverlay:
                     surface.blit(scaled, target.topleft)
                     if not alive:
                         veil = pygame.Surface(target.size, pygame.SRCALPHA)
-                        veil.fill((26, 30, 36, 140))
+                        veil.fill((*theme.VEIL, 140))
                         surface.blit(veil, target.topleft)
                     return
         pygame.draw.rect(surface, theme.PANEL_SUNKEN, rect, border_radius=metrics.px(4))

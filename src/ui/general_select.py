@@ -328,7 +328,7 @@ class GeneralSelectScreen:
 
         if lift:
             shadow = pygame.Surface((card.width, card.height), pygame.SRCALPHA)
-            pygame.draw.rect(shadow, (0, 0, 0, 130), shadow.get_rect(),
+            pygame.draw.rect(shadow, (*theme.SHADOW, 130), shadow.get_rect(),
                              border_radius=metrics.px(14))
             self.screen.blit(shadow, (card.x + metrics.px(3), card.y + metrics.px(9)))
 

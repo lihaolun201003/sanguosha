@@ -240,21 +240,21 @@ class SkillBar:
 
             actionable = definition.is_active or definition.is_view_as
             if actionable and enabled:
-                fill = (150, 116, 46)
+                fill = (150, 116, 60)
                 border = theme.GOLD_BRIGHT
-                text_color = (252, 244, 222)
+                text_color = theme.TEXT
             elif actionable:
                 # 存在但当前不可发动：变暗，不假装可用。
-                fill = (48, 58, 70)
-                border = (96, 108, 122)
+                fill = theme.PANEL_ALT
+                border = theme.GOLD
                 text_color = theme.DISABLED_TEXT
             else:
                 # 锁定技 / 触发技：只作为查看说明的入口。
-                fill = (38, 50, 64)
+                fill = theme.PANEL_DEEP
                 border = theme.GOLD_DIM
                 text_color = theme.TEXT_DIM
 
-            pygame.draw.rect(surface, (8, 11, 15), rect.move(0, 3),
+            pygame.draw.rect(surface, theme.SHADOW, rect.move(0, 3),
                              border_radius=theme.RADIUS_BUTTON)
             pygame.draw.rect(surface, fill, rect, border_radius=theme.RADIUS_BUTTON)
             pygame.draw.rect(surface, border, rect, 2,
@@ -358,7 +358,7 @@ class SkillPicker:
         fonts = metrics.fonts
 
         veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((6, 9, 13, 168))
+        veil.fill((*theme.VEIL, 168))
         surface.blit(veil, (0, 0))
 
         draw_panel(surface, self.panel_rect, fill=theme.PANEL, border=theme.GOLD,
@@ -380,7 +380,7 @@ class SkillPicker:
         fonts = metrics.fonts
         hovered = allowed and rect.collidepoint(mouse_pos)
         fill = theme.PANEL_ALT if hovered else theme.PANEL_DEEP
-        border = theme.TARGET_BLUE if allowed else (86, 92, 100)
+        border = theme.TARGET_BLUE if allowed else theme.CARD_EMPTY_BORDER
         draw_panel(surface, rect, fill=fill, border=border,
                    border_width=theme.BORDER, radius=metrics.px(10))
 

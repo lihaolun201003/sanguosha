@@ -992,7 +992,7 @@ class Renderer:
             "busy=" + str(game.busy),
         ]
         for index, line in enumerate(lines):
-            text = fonts.get("micro").render(line, True, (140, 220, 160))
+            text = fonts.get("micro").render(line, True, theme.HEAL)
             self.screen.blit(text, (metrics.px(12), metrics.screen_h - metrics.px(90) + index * metrics.px(18)))
 
 

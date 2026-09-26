@@ -287,7 +287,7 @@ def draw_action_banner(surface, metrics, info):
     text = info.get("text", "")
     if not text:
         return
-    rendered = fonts.get("large").render(text, True, (250, 236, 206))
+    rendered = fonts.get("large").render(text, True, theme.TEXT_BRIGHT)
     plate = pygame.Surface(
         (rendered.get_width() + metrics.px(44), rendered.get_height() + metrics.px(16)),
         pygame.SRCALPHA,
@@ -330,7 +330,7 @@ def draw_story_banner(surface, metrics, info):
     }.get(tone, theme.GOLD)
 
     title_font = fonts.get("large")
-    rendered = title_font.render(title, True, (250, 236, 206))
+    rendered = title_font.render(title, True, theme.TEXT_BRIGHT)
     detail_rendered = None
     if detail:
         detail_font = fonts.get("small")
@@ -581,7 +581,7 @@ def draw_turn_banner(surface, metrics, info):
         return
     fonts = metrics.fonts
     text = fonts.get("huge").render(info.get("text", ""), True, theme.GOLD_BRIGHT)
-    shadow = fonts.get("huge").render(info.get("text", ""), True, (10, 12, 16))
+    shadow = fonts.get("huge").render(info.get("text", ""), True, theme.SHADOW)
     rect = text.get_rect(center=(metrics.screen_w // 2, metrics.central.y + metrics.px(52)))
 
     plate = pygame.Surface((rect.width + metrics.px(72), rect.height + metrics.px(26)), pygame.SRCALPHA)
@@ -623,7 +623,7 @@ def draw_log(surface, game, metrics, *, max_entries=5):
     rect = metrics.log_rect
 
     panel = pygame.Surface(rect.size, pygame.SRCALPHA)
-    pygame.draw.rect(panel, (10, 14, 19, 150), panel.get_rect(), border_radius=metrics.px(10))
+    pygame.draw.rect(panel, (*theme.PLATE, 150), panel.get_rect(), border_radius=metrics.px(10))
     pygame.draw.rect(panel, (*theme.GOLD_DIM, 120), panel.get_rect(), 1, border_radius=metrics.px(10))
     surface.blit(panel, rect.topleft)
 
@@ -637,6 +637,6 @@ def draw_log(surface, game, metrics, *, max_entries=5):
     for index, entry in enumerate(entries):
         text = ellipsize_text(entry, line_font, available)
         surface.blit(
-            line_font.render(text, True, (206, 214, 222)),
+            line_font.render(text, True, theme.TEXT_DIM),
             (rect.x + pad, rect.y + metrics.px(22) + index * line_height),
         )

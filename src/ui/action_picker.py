@@ -83,7 +83,7 @@ class CardActionPicker:
         fonts = metrics.fonts
 
         veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((6, 9, 13, 172))
+        veil.fill((*theme.VEIL, 172))
         surface.blit(veil, (0, 0))
 
         draw_panel(surface, self.panel_rect, fill=theme.PANEL, border=theme.GOLD,
@@ -109,7 +109,7 @@ class CardActionPicker:
         hovered = option.enabled and rect.collidepoint(mouse_pos)
         fill = theme.PANEL_ALT if hovered else theme.PANEL_DEEP
         if not option.enabled:
-            border = (86, 92, 100)
+            border = theme.CARD_EMPTY_BORDER
         elif option.is_conversion:
             border = theme.TARGET_BLUE
         else:

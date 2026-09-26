@@ -571,8 +571,8 @@ def arrow_color_for_card(card):
     if getattr(card, "card_color", None) == "red":
         return (255, 152, 118)
     if getattr(card, "card_color", None) == "black":
-        return (132, 198, 255)
-    return (200, 220, 245)
+        return theme.TARGET_BLUE
+    return theme.TEXT
 
 
 class Effects:
@@ -1014,7 +1014,7 @@ class Effects:
             return
         self._seat_flash[player] = (timing().flash, theme.HEAL)
         x, y = self._anchor(player)
-        self.floats.append(FloatText("+" + str(int(amount)), (x, y), (146, 226, 160)))
+        self.floats.append(FloatText("+" + str(int(amount)), (x, y), theme.HEAL))
 
     def show_lose_hp(self, player, amount):
         """失去体力（不是伤害）：用偏黄的飘字区分于伤害。"""

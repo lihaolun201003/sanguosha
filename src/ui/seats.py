@@ -62,26 +62,26 @@ def general_art(general, rect, registry=None):
 def _avatar(surface, rect, player, *, alive, current, metrics, general=None):
     """头像位：能拿到武将牌就画缩略图，否则退回圆形占位。"""
 
-    ring = theme.GOLD_BRIGHT if current else (theme.TARGET_BLUE if alive else (92, 100, 110))
+    ring = theme.GOLD_BRIGHT if current else (theme.TARGET_BLUE if alive else theme.CARD_EMPTY_TEXT)
 
     art = general_art(general, rect)
     if art is not None:
         scaled, target = art
         frame = target.inflate(metrics.px(4), metrics.px(4))
-        pygame.draw.rect(surface, (30, 42, 54), frame, border_radius=metrics.px(5))
+        pygame.draw.rect(surface, theme.SEAT_BODY, frame, border_radius=metrics.px(5))
         pygame.draw.rect(surface, ring, frame, max(1, metrics.px(2)), border_radius=metrics.px(5))
         surface.blit(scaled, target.topleft)
         if not alive:
             veil = pygame.Surface(target.size, pygame.SRCALPHA)
-            veil.fill((26, 30, 36, 150))
+            veil.fill((*theme.VEIL, 150))
             surface.blit(veil, target.topleft)
         return
 
     radius = min(rect.width, rect.height) // 2
     center = (rect.x + radius, rect.y + radius)
-    pygame.draw.circle(surface, (30, 42, 54), center, radius)
+    pygame.draw.circle(surface, theme.SEAT_BODY, center, radius)
     pygame.draw.circle(surface, ring, center, radius, max(2, metrics.px(2)))
-    pygame.draw.circle(surface, (24, 34, 44), center, max(1, radius - metrics.px(4)))
+    pygame.draw.circle(surface, theme.SEAT_AVATAR, center, max(1, radius - metrics.px(4)))
 
     label = "玩家" if player.is_human else str(player.seat)
     font = metrics.fonts.get("seat_name" if player.is_human else "normal")
@@ -189,7 +189,7 @@ def draw_seat(
         badge_rect = pygame.Rect(
             0, 0, text.get_width() + metrics.px(12), text.get_height() + metrics.px(6))
         badge_rect.midright = (anchor_right, anchor_y)
-        pygame.draw.rect(surface, (52, 66, 96), badge_rect, border_radius=metrics.px(7))
+        pygame.draw.rect(surface, theme.TAG_NEUTRAL_BG, badge_rect, border_radius=metrics.px(7))
         pygame.draw.rect(surface, theme.CHAIN, badge_rect, 1, border_radius=metrics.px(7))
         surface.blit(text, text.get_rect(center=badge_rect.center))
 
@@ -200,7 +200,7 @@ def draw_seat(
         hint_rect = pygame.Rect(
             0, 0, text.get_width() + metrics.px(14), text.get_height() + metrics.px(7))
         hint_rect.topright = (rect.right - metrics.px(7), anchor_y + metrics.px(14))
-        pygame.draw.rect(surface, (14, 19, 26), hint_rect, border_radius=metrics.px(7))
+        pygame.draw.rect(surface, theme.PLATE, hint_rect, border_radius=metrics.px(7))
         pygame.draw.rect(surface, theme.GOLD_DIM, hint_rect, 1, border_radius=metrics.px(7))
         surface.blit(text, text.get_rect(center=hint_rect.center))
 
@@ -236,11 +236,11 @@ def draw_seat(
         thumb_width = max(9, int(tag_height * AVATAR_ASPECT))
         for card in player.judgement_zone:
             label = JUDGE_SHORT.get(card.name, card.display_name[:1])
-            text = tag_font.render(label, True, (222, 206, 244))
+            text = tag_font.render(label, True, theme.TAG_TEXT)
             tag_width = thumb_width + text.get_width() + metrics.px(11)
             tag_rect = pygame.Rect(tag_x, judge_y, tag_width, tag_height)
-            pygame.draw.rect(surface, (58, 44, 74), tag_rect, border_radius=metrics.px(6))
-            pygame.draw.rect(surface, (176, 142, 214), tag_rect, 1, border_radius=metrics.px(6))
+            pygame.draw.rect(surface, theme.TAG_BG, tag_rect, border_radius=metrics.px(6))
+            pygame.draw.rect(surface, theme.TAG_BORDER, tag_rect, 1, border_radius=metrics.px(6))
 
             thumb = pygame.Rect(0, 0, thumb_width, tag_height)
             thumb.midleft = (tag_rect.x + metrics.px(3), tag_rect.centery)
@@ -248,7 +248,7 @@ def draw_seat(
             if art is not None:
                 surface.blit(art[0], art[1].topleft)
             else:
-                pygame.draw.rect(surface, (86, 70, 104), thumb.inflate(0, -4),
+                pygame.draw.rect(surface, theme.TAG_BG, thumb.inflate(0, -4),
                                  border_radius=metrics.px(3))
             surface.blit(text, text.get_rect(
                 midleft=(tag_rect.x + metrics.px(7) + thumb_width, tag_rect.centery)))
@@ -300,7 +300,7 @@ def _draw_equipment_slot(surface, rect, slot, card, font, metrics):
     rect = pygame.Rect(rect)
     pygame.draw.rect(surface, theme.PANEL_SUNKEN, rect,
                      border_radius=metrics.px(5))
-    border = theme.GOLD_DIM if card is not None else (74, 84, 96)
+    border = theme.GOLD_DIM if card is not None else theme.CARD_EMPTY_BORDER
     pygame.draw.rect(surface, border, rect, 1, border_radius=metrics.px(5))
 
     icon_size = metrics.px(13)
@@ -310,7 +310,7 @@ def _draw_equipment_slot(surface, rect, slot, card, font, metrics):
         icon_center,
         slot,
         size=max(5, metrics.px(7)),
-        color=theme.GOLD_BRIGHT if card is not None else (86, 96, 108),
+        color=theme.GOLD_BRIGHT if card is not None else theme.CARD_EMPTY_TEXT,
     )
 
     text_x = icon_center[0] + icon_size // 2 + metrics.px(4)

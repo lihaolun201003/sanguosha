@@ -160,7 +160,7 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
         surface.blit(scaled, target.topleft)
         if not alive:
             veil = pygame.Surface(target.size, pygame.SRCALPHA)
-            veil.fill((26, 30, 36, 150))
+            veil.fill((*theme.VEIL, 150))
             surface.blit(veil, target.topleft)
         left = target.right + metrics.px(14)
 
@@ -237,10 +237,10 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
             card_draw.draw_slot_icon(
                 surface, icon_center, slot,
                 size=max(6, metrics.px(10)),
-                color=theme.GOLD_BRIGHT if card is not None else (92, 102, 114),
+                color=theme.GOLD_BRIGHT if card is not None else theme.CARD_EMPTY_TEXT,
             )
 
-        border_color = theme.GOLD_DIM if card is not None else (74, 84, 96)
+        border_color = theme.GOLD_DIM if card is not None else theme.CARD_EMPTY_BORDER
         if slot in source_slots or slot in candidate_slots:
             # 技能转化（View-As / 多 source）的槽位走统一的视觉状态。
             draw_state_border(
@@ -262,7 +262,7 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
             strip_height = metrics.px(17)
             strip = pygame.Surface(
                 (slot_rect.width - metrics.px(8), strip_height), pygame.SRCALPHA)
-            pygame.draw.rect(strip, (12, 16, 22, 214), strip.get_rect(),
+            pygame.draw.rect(strip, (*theme.PLATE, 214), strip.get_rect(),
                              border_radius=metrics.px(4))
             surface.blit(strip, (slot_rect.x + metrics.px(4),
                                  slot_rect.bottom - strip_height - metrics.px(4)))
@@ -285,7 +285,7 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
         label = tag_font.render("横置", True, theme.CHAIN)
         tag_rect = pygame.Rect(0, 0, label.get_width() + metrics.px(14), metrics.px(20))
         tag_rect.topright = (tag_x, rect.y + metrics.px(10))
-        pygame.draw.rect(surface, (46, 58, 86), tag_rect, border_radius=metrics.px(6))
+        pygame.draw.rect(surface, theme.TAG_NEUTRAL_BG, tag_rect, border_radius=metrics.px(6))
         pygame.draw.rect(surface, theme.CHAIN, tag_rect, 1, border_radius=metrics.px(6))
         surface.blit(label, label.get_rect(center=tag_rect.center))
         tag_x -= tag_rect.width + metrics.px(8)
@@ -295,13 +295,13 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
         thumb_width = max(10, int(tag_height * AVATAR_ASPECT))
         for card in reversed(player.judgement_zone):
             label = tag_font.render(JUDGE_SHORT.get(card.name, card.display_name[:1]),
-                                    True, (224, 208, 246))
+                                    True, theme.TAG_NEUTRAL_TEXT)
             tag_rect = pygame.Rect(
                 0, 0, thumb_width + label.get_width() + metrics.px(12), tag_height)
             tag_rect.topright = (tag_x, rect.y + metrics.px(10))
             judge_rects.append((card, pygame.Rect(tag_rect)))
-            pygame.draw.rect(surface, (58, 44, 74), tag_rect, border_radius=metrics.px(6))
-            pygame.draw.rect(surface, (176, 142, 214), tag_rect, 1, border_radius=metrics.px(6))
+            pygame.draw.rect(surface, theme.TAG_BG, tag_rect, border_radius=metrics.px(6))
+            pygame.draw.rect(surface, theme.TAG_BORDER, tag_rect, 1, border_radius=metrics.px(6))
 
             thumb = pygame.Rect(0, 0, thumb_width, tag_height)
             thumb.midleft = (tag_rect.x + metrics.px(3), tag_rect.centery)

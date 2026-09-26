@@ -123,7 +123,7 @@ def draw_card(
     face = pygame.Surface(rect.size, pygame.SRCALPHA)
     body = pygame.Rect(0, 0, rect.width, rect.height)
 
-    pygame.draw.rect(face, (8, 11, 15, 90), body.move(0, 3), border_radius=theme.RADIUS_CARD)
+    pygame.draw.rect(face, (*theme.SHADOW, 90), body.move(0, 3), border_radius=theme.RADIUS_CARD)
     pygame.draw.rect(face, face_color(card), body, border_radius=theme.RADIUS_CARD)
 
     art = None if compact else card_art(card, body, registry)
@@ -133,7 +133,7 @@ def draw_card(
     else:
         # 内描边让牌面有印刷感
         inner = body.inflate(-8, -8)
-        pygame.draw.rect(face, (255, 255, 255, 46), inner, 1, border_radius=6)
+        pygame.draw.rect(face, theme.CARD_EDGE_LIGHT + (46,), inner, 1, border_radius=6)
         _draw_face_content(face, card, body, font_set, compact=compact)
 
     pygame.draw.rect(face, theme.CARD_BORDER, body, 2, border_radius=theme.RADIUS_CARD)
@@ -182,7 +182,7 @@ def _draw_suit_rank_badge(face, card, body, font_set, *, muted=False):
         # 技能生成的虚拟牌没有花色点数，不画。
         return
 
-    color = (150, 154, 160) if muted else suit_color(card)
+    color = theme.CARD_MUTED_TEXT if muted else suit_color(card)
     suit_font = font_set.suit(22)
     rank_font = font_set.get("card_meta")
     suit = suit_font.render(card.suit_symbol, True, color)
@@ -198,7 +198,7 @@ def _draw_suit_rank_badge(face, card, body, font_set, *, muted=False):
 
     radius = max(3, badge.height // 3)
     plate = pygame.Surface(badge.size, pygame.SRCALPHA)
-    pygame.draw.rect(plate, (12, 16, 22, 196), plate.get_rect(), border_radius=radius)
+    pygame.draw.rect(plate, (*theme.VEIL, 196), plate.get_rect(), border_radius=radius)
     pygame.draw.rect(plate, (*theme.GOLD_DIM, 170), plate.get_rect(), 1, border_radius=radius)
     face.blit(plate, badge.topleft)
 

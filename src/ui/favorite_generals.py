@@ -602,7 +602,7 @@ class FavoriteGeneralsScreen:
 
     def _draw_confirm(self, metrics):
         veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((10, 8, 6, 170))
+        veil.fill((*theme.VEIL, 170))
         self.screen.blit(veil, (0, 0))
 
         rect = self._modal_rect(metrics)

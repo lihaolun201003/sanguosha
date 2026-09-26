@@ -11,10 +11,10 @@ from . import theme
 from .widgets import Button, draw_panel
 
 IDENTITY_COLORS = {
-    "lord": (214, 176, 92),
-    "loyalist": (108, 168, 222),
-    "rebel": (206, 96, 88),
-    "renegade": (168, 132, 206),
+    "lord": theme.GOLD,
+    "loyalist": theme.TARGET_BLUE,
+    "rebel": theme.DANGER,
+    "renegade": theme.TAG_BORDER,
 }
 
 

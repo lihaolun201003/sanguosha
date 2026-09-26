@@ -161,7 +161,7 @@ class TextField:
         box = self.box_rect
         hovered = box.collidepoint(mouse)
         border = theme.GOLD_BRIGHT if self.focused else (
-            theme.GOLD_DIM if hovered else (96, 116, 136))
+            theme.GOLD_DIM if hovered else theme.CARD_EMPTY_BORDER)
         pygame.draw.rect(surface, theme.PANEL_SUNKEN, box, border_radius=metrics.px(8))
         pygame.draw.rect(surface, border, box, 2 if self.focused else 1,
                          border_radius=metrics.px(8))

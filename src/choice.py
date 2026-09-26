@@ -250,7 +250,7 @@ class ChoiceOverlay:
         fonts = metrics.fonts
 
         veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((6, 9, 13, 176))
+        veil.fill((*theme.VEIL, 176))
         self.screen.blit(veil, (0, 0))
 
         draw_panel(

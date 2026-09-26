@@ -35,7 +35,7 @@ def draw_panel(
     if shadow:
         pygame.draw.rect(
             surface,
-            (8, 11, 15),
+            theme.SHADOW,
             rect.move(shadow_offset, shadow_offset),
             border_radius=radius,
         )
@@ -44,7 +44,7 @@ def draw_panel(
 
     # 顶部高光，让面板有厚度
     highlight = pygame.Surface((rect.width - 4, max(2, rect.height // 3)), pygame.SRCALPHA)
-    highlight.fill((255, 255, 255, 14))
+    highlight.fill(theme.PANEL_HIGHLIGHT)
     surface.blit(highlight, (rect.x + 2, rect.y + 2))
 
     if border_width > 0:
@@ -137,7 +137,7 @@ def draw_state_border(surface, rect, state_name, *, radius=None, alpha=132):
     dim = int(state.get("dim") or 0)
     if dim > 0:
         veil = pygame.Surface(rect.size, pygame.SRCALPHA)
-        veil.fill((12, 16, 22, dim))
+        veil.fill((*theme.VEIL, dim))
         surface.blit(veil, rect.topleft)
 
     stroke = int(state.get("width") or 0)
@@ -257,13 +257,16 @@ def draw_center_text(surface, text, center, font, color):
     return draw_text(surface, text, center, font, color, anchor="center")
 
 
+#: 按钮配色。四档的"重量"靠金色的多少区分：primary 是实心金，
+#: secondary 是暖棕面板 + 金边，ghost 只有暗金细边，danger 用暗红。
+#: 全部取自 theme 的暖色板，不再有蓝灰档。
 BUTTON_STYLES = {
     "primary": {
-        "fill": (150, 116, 46),
-        "fill_hover": (178, 140, 58),
-        "fill_pressed": (120, 92, 36),
+        "fill": (150, 116, 60),
+        "fill_hover": (180, 142, 74),
+        "fill_pressed": (118, 90, 46),
         "border": theme.GOLD_BRIGHT,
-        "text": (252, 244, 222),
+        "text": theme.TEXT,
     },
     "danger": {
         "fill": (128, 48, 42),
@@ -273,17 +276,17 @@ BUTTON_STYLES = {
         "text": (252, 238, 234),
     },
     "secondary": {
-        "fill": (52, 74, 94),
-        "fill_hover": (66, 92, 116),
-        "fill_pressed": (42, 60, 78),
-        "border": (120, 158, 190),
+        "fill": theme.PANEL_ALT,
+        "fill_hover": (92, 80, 66),
+        "fill_pressed": theme.PANEL_ALT_PRESSED,
+        "border": theme.GOLD,
         "text": theme.TEXT,
     },
     "ghost": {
-        "fill": (34, 48, 62),
-        "fill_hover": (46, 64, 82),
-        "fill_pressed": (28, 40, 52),
-        "border": (96, 116, 136),
+        "fill": theme.PANEL_DEEP,
+        "fill_hover": theme.PANEL,
+        "fill_pressed": theme.PANEL_SUNKEN,
+        "border": theme.GOLD_DIM,
         "text": theme.TEXT_DIM,
     },
 }
@@ -321,7 +324,7 @@ class Button:
 
         if not self.enabled:
             fill = theme.DISABLED_FILL
-            border = (96, 104, 112)
+            border = theme.CARD_EMPTY_BORDER
             text_color = theme.DISABLED_TEXT
         else:
             hover = self.hovered(mouse_pos)
@@ -335,7 +338,7 @@ class Button:
             border = style["border"]
             text_color = style["text"]
 
-        pygame.draw.rect(surface, (8, 11, 15), self.rect.move(0, 3), border_radius=self.radius)
+        pygame.draw.rect(surface, theme.SHADOW, self.rect.move(0, 3), border_radius=self.radius)
         pygame.draw.rect(surface, fill, rect, border_radius=self.radius)
         pygame.draw.rect(surface, border, rect, 2, border_radius=self.radius)
 
@@ -365,7 +368,7 @@ class ButtonBar:
             button.draw(surface, font_set, mouse_pos, pressed=button is pressed_button)
 
 
-def draw_badge(surface, center, text, font, *, fill=(44, 60, 78), border=theme.GOLD_DIM, text_color=theme.TEXT, radius=8, padding=(8, 3)):
+def draw_badge(surface, center, text, font, *, fill=theme.TAG_NEUTRAL_BG, border=theme.GOLD_DIM, text_color=theme.TEXT, radius=8, padding=(8, 3)):
     rendered = font.render(str(text), True, text_color)
     rect = pygame.Rect(0, 0, rendered.get_width() + padding[0] * 2, rendered.get_height() + padding[1] * 2)
     rect.center = center
@@ -381,7 +384,7 @@ def draw_hp_pips(surface, origin, hp, max_hp, *, spacing=15, radius=6, vertical=
 
     ratio = hp / max_hp if max_hp else 0
     if ratio > 0.6:
-        full_color = (104, 196, 118)
+        full_color = theme.HEAL
     elif ratio > 0.3:
         full_color = (226, 166, 74)
     else:
@@ -394,9 +397,9 @@ def draw_hp_pips(surface, origin, hp, max_hp, *, spacing=15, radius=6, vertical=
             center = (origin[0] + index * spacing, origin[1])
         if index < hp:
             pygame.draw.circle(surface, full_color, center, radius)
-            pygame.draw.circle(surface, (26, 32, 40), center, radius, 1)
+            pygame.draw.circle(surface, theme.SEAT_AVATAR, center, radius, 1)
         else:
-            pygame.draw.circle(surface, (38, 48, 58), center, radius)
-            pygame.draw.circle(surface, (78, 92, 104), center, radius, 1)
+            pygame.draw.circle(surface, theme.PANEL_SUNKEN, center, radius)
+            pygame.draw.circle(surface, theme.CARD_EMPTY_BORDER, center, radius, 1)
 
     return origin[0] + max_hp * spacing if not vertical else origin[0]

@@ -27,14 +27,7 @@ from .text_input import TextField, accepts_digits_only
 from .widgets import Button, draw_panel, ellipsize_text
 
 KINGDOM_ORDER = ("wei", "shu", "wu", "qun", "god")
-KINGDOM_COLORS = {
-    "wei": (86, 116, 178),
-    "shu": (176, 84, 72),
-    "wu": (72, 152, 118),
-    "qun": (140, 132, 108),
-    # 神势力：金色（与神将卡的印玺 / 卡框一致）。
-    "god": (198, 166, 74),
-}
+KINGDOM_COLORS = theme.KINGDOM_COLORS
 KINGDOM_LABELS = {"wei": "魏", "shu": "蜀", "wu": "吴", "qun": "群", "god": "神"}
 
 DESIGN_WIDTH = 1600
@@ -89,7 +82,7 @@ RIGHT_FLOW = (
 # 一律从标签列右侧开始排——标签贴在面板外面会直接压到武将网格上。
 SETTINGS_LABEL_WIDTH = 112
 SETTINGS_ROW_HEIGHT = 38
-SETTINGS_ROW_TOPS = (12, 54, 96)
+SETTINGS_ROW_TOPS = (12, 54, 96)   # 三行的顶部 y 偏移，不是颜色
 
 
 class DuelSetupScreen:
@@ -983,14 +976,14 @@ class DuelSetupScreen:
             self.screen.blit(scaled, target.topleft)
             if unavailable:
                 veil = pygame.Surface(target.size, pygame.SRCALPHA)
-                veil.fill((18, 22, 28, 170))
+                veil.fill((*theme.VEIL, 170))
                 self.screen.blit(veil, target.topleft)
             return target
         # 没有卡面素材时的兜底：姓氏首字 + 势力色圆环。
         fonts = metrics.fonts
         size = max(metrics.px(28), min(art_rect.width, art_rect.height) - metrics.px(16))
         center = (art_rect.centerx, art_rect.y + size // 2 + metrics.px(8))
-        pygame.draw.circle(self.screen, (30, 42, 54), center, size // 2)
+        pygame.draw.circle(self.screen, theme.SEAT_BODY, center, size // 2)
         pygame.draw.circle(self.screen, kingdom_color, center, size // 2, max(2, metrics.px(2)))
         initial = fonts.get("large").render(general.name[:1], True, theme.TEXT)
         self.screen.blit(initial, initial.get_rect(center=center))

@@ -10,26 +10,18 @@
 
 import pygame
 
+from src.game import interaction_presentation
+
 from . import assets as assets_module
 from . import theme
 from .widgets import wrap_text
 
 #: 势力 → 主色（只影响色条与角标，不改文字色）。
-KINGDOM_TONES = {
-    "wei": (86, 116, 178),
-    "shu": (176, 84, 72),
-    "wu": (72, 152, 118),
-    "qun": (140, 132, 108),
-    "god": (168, 132, 78),
-}
+#: 与 1v1 阵营 / 图鉴共用 theme 里的同一份势力色。
+KINGDOM_TONES = theme.KINGDOM_COLORS
 
-#: 技能类型 → 中文（与技能栏同一份口径）。
-SKILL_KIND_LABELS = {
-    "active": "主动技",
-    "view_as": "视为技",
-    "locked": "锁定技",
-    "passive": "触发技",
-}
+#: 技能类型 → 中文：与技能栏 / 判定面板 / 演出队列共用规则层的那一份。
+SKILL_KIND_LABELS = interaction_presentation.SKILL_KIND_LABELS
 
 
 def kingdom_tone(general):

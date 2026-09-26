@@ -601,8 +601,8 @@ class JudgePanel:
         if not symbol or not rank:
             return None
         font = metrics.fonts.suit(max(16, int(metrics.px(30))))
-        color = (238, 122, 108) if getattr(card, "card_color", "") == "red" \
-            else (228, 234, 242)
+        color = theme.CARD_FACE_RED if getattr(card, "card_color", "") == "red" \
+            else theme.CARD_FACE_TEXT
         return font.render("%s %s" % (symbol, rank), True, color)
 
     @staticmethod

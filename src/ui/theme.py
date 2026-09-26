@@ -1,7 +1,18 @@
-"""Dark-ink table theme: colours, fonts, and cached decoration surfaces.
+"""古风桌游主题：颜色、字体、缓存装饰面。
 
-Everything visual in the game reads from here so the palette stays coherent
-and no surface is rebuilt per frame.
+**全项目只有这一份颜色**：所有界面（牌桌、大厅、菜单、设置、选将、结算）
+都从这里取色，组件不许自己写 RGB 字面量。改一处，全场跟着变。
+
+# 唯一色系：暖灰棕 + 暗金 + 玉绿
+
+牌桌最初是冷色调（蓝黑桌面 + 亮金）；选将 / 武将池那两屏换成暖色（低饱和
+暖灰棕背景、青铜边、玉绿选中）之后明显更贴近"实体卡牌"的观感，于是暖色系
+被提升为**全局默认**：下面的 ``BG_*`` / ``PANEL_*`` / ``GOLD*`` / ``TEXT*``
+就是暖色值，而 ``PANEL_WARM*`` / ``BRONZE*`` / ``TEXT_WARM*`` 是同一批颜色的
+**别名**（保留旧名字，免得改一堆调用点）。
+
+冷色只留在必须保持辨识度的语义色上（目标 / 响应 / 危险 / 连环），并且都做了
+降饱和处理，好跟暖背景待在同一张画面里。
 """
 
 import os
@@ -12,75 +23,144 @@ import pygame
 
 # ==================================================
 # 颜色
+#
+# 层次约定（从深到浅，牌桌与菜单共用同一套刻度）：
+#     BG_DEEP < PANEL_SUNKEN < PANEL_DEEP < PANEL < PANEL_ALT
+# 深色是"凹下去的底"，浅色是"浮起来的面"，越靠后越抢视线。
 # ==================================================
 
 # 桌面与面板
-BG_DEEP = (14, 19, 26)
-BG_TABLE = (23, 33, 44)
-BG_TABLE_EDGE = (12, 16, 22)
-PANEL = (35, 51, 66)
-PANEL_ALT = (48, 70, 90)
-PANEL_DEEP = (24, 35, 46)
-PANEL_SUNKEN = (18, 27, 36)
+BG_DEEP = (24, 21, 18)
+BG_TABLE = (48, 42, 36)
+BG_TABLE_EDGE = (30, 26, 22)
+PANEL = (56, 48, 41)
+PANEL_ALT = (72, 62, 52)
+PANEL_DEEP = (40, 34, 29)
+PANEL_SUNKEN = (30, 26, 22)
 
-# 强调
-GOLD = (211, 176, 92)
+# 强调：暗金 / 青铜（古风卡牌的描边色）
+GOLD = (198, 164, 104)
 GOLD_BRIGHT = (246, 215, 130)
-GOLD_DIM = (138, 114, 60)
-INK = (16, 20, 26)
+GOLD_DIM = (120, 96, 58)
+INK = (24, 21, 18)
 
-# 文本
-TEXT = (234, 239, 244)
-TEXT_DIM = (156, 170, 184)
-TEXT_MUTED = (104, 118, 132)
+# 文本：暖白 → 暖灰
+TEXT = (236, 228, 212)
+TEXT_DIM = (186, 172, 150)
+TEXT_MUTED = (134, 122, 104)
 
 # 状态
-TARGET_BLUE = (86, 172, 245)
+TARGET_BLUE = (96, 168, 208)
 TARGET_YELLOW = (245, 205, 70)
 # 正在等待这个角色做出响应（引擎把 Pending 派给了他）
-RESPONDING = (96, 216, 226)
-DANGER = (200, 74, 62)
-DANGER_DEEP = (116, 44, 40)
-HEAL = (98, 198, 122)
+RESPONDING = (96, 206, 214)
+DANGER = (196, 78, 62)
+DANGER_DEEP = (112, 44, 38)
+HEAL = (108, 186, 152)
 CHAIN = (146, 176, 232)
-DEAD_TINT = (62, 70, 80)
-DISABLED_FILL = (70, 80, 90)
-DISABLED_TEXT = (128, 138, 148)
+DEAD_TINT = (78, 72, 64)
+DISABLED_FILL = (74, 66, 58)
+DISABLED_TEXT = (132, 122, 106)
 
 # ==================================================
-# 武将池 / 选将界面（Phase 19）：暖灰棕 + 暗金 + 玉绿
+# 阴影 / 遮罩 / 底衬
 #
-# 桌面牌局仍是上面的冷色调；这两屏是"翻看武将牌"的界面，用一套更接近
-# 实体卡牌的暖色：低饱和暖灰棕背景、旧纸色文字、青铜边、玉绿选中。
-# 只新增常量与状态，不改动牌局里任何既有颜色。
+# 这些原来是散落在 20 多个组件里的 RGB 字面量：同一个"面板投影色"在
+# widgets / cards / skill_bar 里就有三份不同的值，色调一旦统一就会显出割裂。
+# 现在只有一处定义。
+# ==================================================
+
+#: 面板 / 按钮的投影色（不带 alpha，绘制时按需加）
+SHADOW = (14, 11, 9)
+#: 面板顶部的白色高光（带 alpha，让面有厚度）
+PANEL_HIGHLIGHT = (255, 255, 255, 14)
+#: PANEL_ALT 被按下时的颜色
+PANEL_ALT_PRESSED = (60, 51, 43)
+#: 弹出层背后的压暗遮罩
+VEIL = (10, 8, 6)
+#: 文字底衬（卡面下方那种深色小板）
+PLATE = (26, 22, 19)
+#: 座位面板底板
+SEAT_BODY = (50, 43, 37)
+#: 座位头像圆底（比底板再深一档）
+SEAT_AVATAR = (36, 31, 27)
+
+#: 状态角标（"翻面"一类）的底 / 边 / 字
+TAG_BG = (68, 54, 44)
+TAG_BORDER = (176, 142, 214)
+TAG_TEXT = (226, 210, 246)
+#: 中性角标（非异常状态）
+TAG_NEUTRAL_BG = (62, 54, 46)
+TAG_NEUTRAL_TEXT = (214, 204, 186)
+
+# ==================================================
+# 势力色（武将卡边框 / 图鉴 / 1v1 阵营标识）
+#
+# 玩家靠颜色认势力，所以**保留色相**，只做降饱和处理，好跟暖色背景待得住。
+# 这张表原来在 ``duel_setup`` 与 ``general_cards`` 里各有一份，现在只有这里一处。
+# ==================================================
+
+KINGDOM_COLORS = {
+    "wei": (96, 118, 168),
+    "shu": (176, 88, 74),
+    "wu": (86, 148, 122),
+    "qun": (140, 132, 108),
+    # 神势力：金色（与神将卡的印玺 / 卡框一致）。
+    "god": (198, 166, 74),
+}
+KINGDOM_ORDER = ("wei", "shu", "wu", "qun", "god")
+
+
+def kingdom_color(kingdom):
+    """势力 → 颜色；未知势力用群势力的暖灰。"""
+
+    return KINGDOM_COLORS.get(str(kingdom or ""), KINGDOM_COLORS["qun"])
+
+
+#: 卡面（暖白纸面）上的文字：正文与红黑花色
+CARD_FACE_TEXT = (232, 224, 208)
+CARD_FACE_RED = (222, 112, 96)
+#: 比 TEXT 更亮的一档（面板标题 / 大字）
+TEXT_BRIGHT = (250, 236, 206)
+
+#: 卡面文字 / 边框的中性档（灰化时用）
+CARD_MUTED_TEXT = (150, 142, 128)
+CARD_EMPTY_BORDER = (98, 88, 76)
+CARD_EMPTY_TEXT = (120, 110, 96)
+
+# ==================================================
+# 武将池 / 选将界面：暖色系就是上面的默认色板
+#
+# 这几个名字保留下来，是因为它们最早诞生在选将 / 武将池两屏。现在它们与
+# ``PANEL*`` / ``GOLD*`` / ``TEXT*`` 是**同一个值**（别名），改一处两边都变。
 # ==================================================
 
 # 背景（从深到浅的三层棕灰）
-MENU_BG_TOP = (44, 38, 33)
+MENU_BG_TOP = BG_TABLE
 MENU_BG_MID = (58, 50, 43)
-MENU_BG_BOTTOM = (33, 29, 25)
+MENU_BG_BOTTOM = BG_DEEP
 #: 背景纹理（程序生成的细颗粒，低对比）
 MENU_TEXTURE = (86, 74, 60)
 
 # 暖色面板
-PANEL_WARM = (52, 45, 39)
-PANEL_WARM_DEEP = (37, 32, 28)
-PANEL_WARM_SUNKEN = (28, 24, 21)
+PANEL_WARM = PANEL
+PANEL_WARM_DEEP = PANEL_DEEP
+PANEL_WARM_SUNKEN = PANEL_SUNKEN
 
 # 强调：暗金 / 青铜
 BRONZE = (150, 116, 66)
-BRONZE_BRIGHT = (198, 164, 104)
+BRONZE_BRIGHT = GOLD
 BRONZE_DIM = (104, 82, 50)
 
 # 玉绿（选中）：不要荧光绿
-JADE = (108, 186, 152)
+JADE = HEAL
 JADE_BRIGHT = (150, 214, 182)
 JADE_DIM = (62, 112, 94)
 
 # 暖白文字 / 灰金次要文字
-TEXT_WARM = (236, 228, 212)
-TEXT_WARM_DIM = (186, 172, 150)
-TEXT_WARM_MUTED = (134, 122, 104)
+TEXT_WARM = TEXT
+TEXT_WARM_DIM = TEXT_DIM
+TEXT_WARM_MUTED = TEXT_MUTED
 
 # 危险 / 删除（暗红）
 BLOOD = (150, 60, 52)
@@ -92,7 +172,7 @@ BLOOD_DIM = (98, 44, 40)
 # 判定条件的真假。判定展示面板与任何结果文本都从这里取色。
 JUDGE_POSITIVE = (108, 214, 138)
 JUDGE_NEGATIVE = (232, 106, 92)
-JUDGE_NEUTRAL = (176, 190, 206)
+JUDGE_NEUTRAL = (196, 186, 168)
 
 JUDGE_TONE_COLORS = {
     "positive": JUDGE_POSITIVE,
@@ -137,15 +217,15 @@ CARD_FACE = {
     "equipment": (238, 226, 196),
 }
 CARD_FACE_FALLBACK = (236, 232, 220)
-CARD_BORDER = (96, 88, 74)
+CARD_BORDER = (104, 94, 78)
 CARD_EDGE_LIGHT = (255, 250, 236)
 CARD_RED = (186, 46, 52)
 CARD_BLACK = (38, 40, 46)
-CARD_BACK_DARK = (86, 30, 30)
-CARD_BACK_LIGHT = (128, 46, 42)
-CARD_BACK_LINE = (206, 170, 96)
-CARD_SHADOW = (10, 13, 18, 120)
-CARD_DISABLED = (110, 116, 124)
+CARD_BACK_DARK = (92, 34, 32)
+CARD_BACK_LIGHT = (134, 50, 44)
+CARD_BACK_LINE = GOLD
+CARD_SHADOW = (*SHADOW, 120)
+CARD_DISABLED = CARD_MUTED_TEXT
 
 # 圆角
 RADIUS_CARD = 9
@@ -182,7 +262,7 @@ VISUAL_STATES = {
     },
     # 鼠标悬停：亮边 + 轻微发光
     "hover": {
-        "border": (120, 196, 255), "width": 4, "glow": TARGET_BLUE,
+        "border": (146, 200, 232), "width": 4, "glow": TARGET_BLUE,
         "glow_width": 4, "dim": 0, "label": None,
     },
     # 已选中（手牌 / source / 费用牌）：最粗 + 双层发光 + 角标
@@ -192,12 +272,12 @@ VISUAL_STATES = {
     },
     # 合法目标：整块 seat 外圈发光
     "valid_target": {
-        "border": (108, 186, 255), "width": 4, "glow": TARGET_BLUE,
+        "border": (128, 190, 226), "width": 4, "glow": TARGET_BLUE,
         "glow_width": 7, "dim": 0, "label": None,
     },
     # 合法目标 + 鼠标悬停：更强一档
     "valid_target_hover": {
-        "border": (156, 214, 255), "width": 5, "glow": (130, 200, 255),
+        "border": (172, 218, 242), "width": 5, "glow": (146, 204, 232),
         "glow_width": 11, "dim": 0, "label": "可选",
     },
     # 已选中的目标：最强
@@ -207,7 +287,7 @@ VISUAL_STATES = {
     },
     # 非法目标：轻微压暗，仍然看得清
     "invalid_target": {
-        "border": (86, 94, 104), "width": BORDER_THIN, "glow": None,
+        "border": (100, 92, 80), "width": BORDER_THIN, "glow": None,
         "glow_width": 0, "dim": 92, "label": None,
     },
     # 当前回合角色：常驻金色外圈 + 角标
@@ -222,12 +302,12 @@ VISUAL_STATES = {
     },
     # 可响应 / 可出牌的手牌
     "playable": {
-        "border": (120, 206, 150), "width": 3, "glow": (98, 198, 122),
+        "border": JADE_BRIGHT, "width": 3, "glow": HEAL,
         "glow_width": 3, "dim": 0, "label": None,
     },
     # 技能的合法 source 牌
     "view_as_candidate": {
-        "border": (120, 196, 255), "width": 3, "glow": TARGET_BLUE,
+        "border": (146, 200, 232), "width": 3, "glow": TARGET_BLUE,
         "glow_width": 4, "dim": 0, "label": None,
     },
     # 已选为 source 的牌
@@ -237,7 +317,7 @@ VISUAL_STATES = {
     },
     # 不可用：压暗但不隐藏
     "disabled": {
-        "border": (96, 104, 112), "width": BORDER_THIN, "glow": None,
+        "border": (102, 94, 82), "width": BORDER_THIN, "glow": None,
         "glow_width": 0, "dim": 148, "label": None,
     },
     # ---- 武将池 / 选将界面（Phase 19）----
@@ -258,7 +338,7 @@ VISUAL_STATES = {
     },
     # 阵亡
     "dead": {
-        "border": (78, 86, 96), "width": BORDER_THIN, "glow": None,
+        "border": (88, 82, 74), "width": BORDER_THIN, "glow": None,
         "glow_width": 0, "dim": 150, "label": "阵亡",
     },
 }
@@ -543,7 +623,7 @@ def card_back_surface(width, height):
         pygame.draw.polygon(surface, CARD_BACK_LINE, points, width_step)
 
     pygame.draw.circle(surface, CARD_BACK_LINE, center, max(4, width // 12), 2)
-    pygame.draw.rect(surface, (222, 190, 120), body, 3, border_radius=9)
+    pygame.draw.rect(surface, CARD_BACK_LINE, body, 3, border_radius=9)
 
     _card_back_cache[key] = surface
     return surface
