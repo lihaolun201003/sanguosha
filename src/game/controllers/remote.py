@@ -359,6 +359,17 @@ class RemoteHumanController(PlayerController):
                 owner, request.context.get("candidates", ()),
                 request.context.get("zone", "hand"),
                 request_id=request.request_id)
+            # 有上下文的选择（火攻）：把"已经公开亮出的那张牌"一起下发，
+            # 客户端才能画出专门的界面（谁展示了什么、我要弃哪一张）。
+            # 这张牌在规则上已经公开，不存在泄露；窗口一关就不再出现。
+            revealed = request.context.get("revealed_card")
+            if revealed is not None:
+                context["revealed_card"] = card_entry(revealed)
+                revealed_by = request.context.get("revealed_by")
+                context["revealed_by"] = str(getattr(revealed_by, "player_id", "") or "")
+            caster = request.context.get("caster")
+            if caster is not None:
+                context["caster"] = str(getattr(caster, "player_id", "") or "")
 
         elif kind is DecisionKind.SELECT_TARGETS:
             candidates = list(request.context.get("candidates", ()))

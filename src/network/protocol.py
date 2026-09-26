@@ -99,6 +99,9 @@ class MessageType:
     # 开局流程（Phase 11.4.4：与单机同一套"先看身份，再选将"）
     IDENTITY_ASSIGN = "IDENTITY_ASSIGN"        # Host → Client：**你自己的**身份（别人的不发）
     IDENTITY_READY = "IDENTITY_READY"          # Client → Host：我看过自己的身份了
+    # Client → Host：「我的武将池」——**这名玩家自己的**偏好，房主据此为他抽候选。
+    # 它只服务于抽签，房主不会转发给其他玩家（别人只需要知道最终选了谁）。
+    FAVORITE_POOL = "FAVORITE_POOL"
     GENERAL_CANDIDATES = "GENERAL_CANDIDATES"  # Host → Client：给你的候选武将，选一个
     GENERAL_PICKED = "GENERAL_PICKED"          # Client → Host：我选的武将
     # 通用

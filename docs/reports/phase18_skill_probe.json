@@ -1,0 +1,77 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "TRIGGERED：遗计发动时弹出技能提示",
+      "detail": "[{'name': '遗计', 'kind': '触发技', 'text': '当你受到 1 点伤害后，你可以摸两张牌。', 'player': '玩家'}]"
+    },
+    {
+      "ok": true,
+      "label": "TRIGGERED：提示里带技能类型",
+      "detail": "{'name': '遗计', 'kind': '触发技', 'text': '当你受到 1 点伤害后，你可以摸两张牌。', 'player': '玩家'}"
+    },
+    {
+      "ok": true,
+      "label": "TRIGGERED：提示里带技能说明",
+      "detail": "{'name': '遗计', 'kind': '触发技', 'text': '当你受到 1 点伤害后，你可以摸两张牌。', 'player': '玩家'}"
+    },
+    {
+      "ok": true,
+      "label": "ACTIVE：结姻发动时弹出技能提示",
+      "detail": "[{'name': '结姻', 'kind': '主动技'}]"
+    },
+    {
+      "ok": true,
+      "label": "ACTIVE：提示里类型是主动技",
+      "detail": "{'name': '结姻', 'kind': '主动技'}"
+    },
+    {
+      "ok": true,
+      "label": "VIEW_AS：武圣转化后弹出技能提示",
+      "detail": "[{'name': '奸雄', 'kind': '触发技'}, {'name': '武圣', 'kind': '视为技'}]"
+    },
+    {
+      "ok": true,
+      "label": "VIEW_AS：提示里类型是视为技",
+      "detail": "{'name': '武圣', 'kind': '视为技'}"
+    },
+    {
+      "ok": true,
+      "label": "VIEW_AS：仍然是先点技能再选牌的显式流程",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "LOCKED：仁王盾真的生效时弹出技能提示",
+      "detail": "[{'name': '仁王盾', 'kind': '锁定技', 'text': '锁定技，黑色普通【杀】对你无效。', 'player': 'AI 1'}]"
+    },
+    {
+      "ok": true,
+      "label": "LOCKED：提示里类型是锁定技",
+      "detail": "{'name': '仁王盾', 'kind': '锁定技', 'text': '锁定技，黑色普通【杀】对你无效。', 'player': 'AI 1'}"
+    },
+    {
+      "ok": true,
+      "label": "LOCKED：提示里带装备卡面的规则说明",
+      "detail": "{'name': '仁王盾', 'kind': '锁定技', 'text': '锁定技，黑色普通【杀】对你无效。', 'player': 'AI 1'}"
+    },
+    {
+      "ok": true,
+      "label": "LOCKED：这一杀确实被无效了",
+      "detail": "hp=4/4"
+    },
+    {
+      "ok": true,
+      "label": "标记变化不会弹技能提示（不刷屏）",
+      "detail": "[]"
+    }
+  ],
+  "notes": [
+    "遗计提示：{'name': '遗计', 'kind': '触发技', 'text': '当你受到 1 点伤害后，你可以摸两张牌。', 'player': '玩家'}",
+    "结姻提示：{'name': '结姻', 'kind': '主动技'}",
+    "武圣提示：{'name': '武圣', 'kind': '视为技'}",
+    "仁王盾提示：{'name': '仁王盾', 'kind': '锁定技', 'text': '锁定技，黑色普通【杀】对你无效。', 'player': 'AI 1'}"
+  ],
+  "failed": 0,
+  "total": 13
+}

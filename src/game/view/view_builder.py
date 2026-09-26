@@ -248,12 +248,21 @@ def build_selection_view(game, viewer_id):
         str(getattr(card, "id", "") or "")
         for card, _rect, _key in selection.get("selected", ())
     )
+    # 已经公开亮出的牌（火攻的展示牌）：它在规则上已经是公开信息，只发给
+    # 正在做这次选择的人，用来把他的专用界面画完整。
+    revealed = selection.get("revealed")
+    revealed_player = selection.get("revealed_player")
+    caster = selection.get("caster")
     return SelectionView(
         zone=str(selection.get("zone") or "hand"),
         prompt=str(selection.get("prompt") or ""),
         number=int(selection.get("number") or 0),
         candidates=tuple(candidates),
         selected_ids=selected,
+        reason=str(selection.get("reason") or ""),
+        revealed=(view_card(revealed) if revealed is not None else None),
+        revealed_player_id=str(getattr(revealed_player, "player_id", "") or ""),
+        caster_id=str(getattr(caster, "player_id", "") or ""),
     )
 
 

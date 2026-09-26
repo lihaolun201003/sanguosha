@@ -28,6 +28,9 @@ from .base import PlayerController
 SELF_RESCUE_NAMES = ("TAO", "JIU")
 # 对全场（含自己）有利的牌，AI 不会用无懈可击去抵消。
 BENEFICIAL_TRICKS = {"WUZHONG", "TAOYUAN", "WUGU"}
+# 「选一个人给他好处」的请求（节命补牌一类）：目标必须挑自己或自己人，
+# 通用分支取候选前 N 个会直接把牌补给对手。
+BENEFIT_REASONS = frozenset({"jieming"})
 
 
 class AIController(PlayerController):
@@ -569,17 +572,47 @@ class AIController(PlayerController):
         game = self.game
         if game.game_over or not self.player.is_alive:
             return False
-        for skill_id in game.skills.activatable_skills(self.player):
+        # 优先级：限定技 / 大招（big_play）先于普通主动技。否则神吕布会把
+        # 标记零散花在【无前】上，永远攒不到 6 枚放【神愤】。
+        def _priority(skill_id):
+            definition = game.skill_registry.get(skill_id)
+            tags = getattr(definition, "tags", ()) if definition is not None else ()
+            if "limited" in tags:
+                return 0
+            if "big_play" in tags:
+                return 1
+            return 2
+
+        for skill_id in sorted(game.skills.activatable_skills(self.player), key=_priority):
             allowed, _reason = game.skills.can_activate(self.player, skill_id)
             if not allowed:
                 continue
             if skill_id in self._used_skills_this_turn:
                 continue
+            definition = game.skill_registry.get(skill_id)
+            inputs = self._available_actions().skill_inputs(self.player, skill_id)
+            if definition is not None and getattr(definition, "needs_local_ui", False):
+                # 这个技能的交互还挂在"只有本地真人界面才有"的选牌通道上
+                # （心战 / 观星）：AI 发出去只会一直等一个永远不会出现的答案，
+                # 整个回合就此卡住。可用性过滤在其实入口已经把它标成 disabled，
+                # 这里走的是另一条路（skills.activatable_skills），必须同样跳过。
+                continue
+            if definition is not None and "granted" in getattr(definition, "tags", ()):
+                # 「极略」这类"临时获得别的技能"的主动技：AI 没有能力判断
+                # 鬼才 / 放逐的发动时机，盲目发动只会白扣「忍」标记。
+                continue
             target = self._active_skill_target(skill_id)
-            if target is None and skill_id != "tuxi":
+            if inputs.get("needs_target") and target is None:
+                # 需要目标却没找到合法目标 → 这条不发动。**不需要目标**的
+                # 主动技（神愤 / 业炎）以前也被这里一刀切掉，AI 从来放不出
+                # 神愤，等于把神吕布的大招删了。
                 continue
             if skill_id == "jieyin" and self.player.hp > 1:
                 # 只在体力偏低时用结姻，避免浪费两张手牌。
+                continue
+            if self._would_gift_to_enemy(skill_id, target):
+                # 把牌送给对手是净亏（自由混战 / 1v1 里没有队友可言）：
+                # 宁可这一手不用技能，也不给对面送资源。
                 continue
             self._used_skills_this_turn.add(skill_id)
             from src.game.engine import ActivateSkillAction
@@ -592,6 +625,51 @@ class AIController(PlayerController):
                 return True
             self._used_skills_this_turn.discard(skill_id)
         return False
+
+    # ---- 赠予类技能（card_transfer）的自我伤害防护 ----
+
+    def _would_gift_to_enemy(self, skill_id, target):
+        """这次发动会不会把资源白送给对手。
+
+        判据全部来自**数据声明**，不按技能名分支：
+        ``SkillDef.tags`` 里带 ``card_transfer`` 的技能（仁德 / 举荐 / 眩惑 /
+        明策 / 直谏）结算后会把牌或装备交给目标，所以只有在目标是自己人时
+        才值得发动。没有队友的模式（自由混战 / 1v1 / 身份局里的内奸）一律
+        不发——AI 之前正是靠"把整手牌交给对手"把刘备 / 徐庶 / 陈宫玩成
+        0% 胜率的。
+        """
+
+        definition = self.game.skill_registry.get(skill_id)
+        if definition is None or "card_transfer" not in getattr(definition, "tags", ()):
+            return False
+        if target is None or target is self.player:
+            return False
+        return not self.is_ally(target)
+
+    def is_ally(self, other):
+        """这名角色是不是"自己人"（只用公开信息判断，不做弊）。
+
+        身份模式：主公与忠臣互为同伴；反贼之间互为同伴（这是自己的身份，
+        本来就知道）；内奸没有同伴。其它模式没有阵营概念，统一返回 False。
+        """
+
+        from src.game.identity import Identity
+
+        if other is None or other is self.player:
+            return False
+        mode = getattr(self.game, "mode", None)
+        if mode is None or not getattr(mode, "uses_identities", False):
+            return False
+        own = getattr(self.player, "identity", None)
+        theirs = getattr(other, "identity", None)
+        if own is None or theirs is None:
+            return False
+        if own is Identity.RENEGADE:
+            return False
+        if own is Identity.REBEL:
+            return theirs is Identity.REBEL
+        # 主公 / 忠臣：彼此是同伴（反贼与内奸不是）。
+        return theirs in (Identity.LORD, Identity.LOYALIST)
 
     def _active_skill_cards(self, skill_id):
         """主动技能需要的牌：弃掉手上最没价值的那几张。
@@ -609,6 +687,11 @@ class AIController(PlayerController):
         if inputs.get("variable_cost"):
             cap = int(inputs.get("max_cost_cards") or 0)
             need = min(cap, len(candidates)) if cap else len(candidates)
+            if self._skill_gives_cards_away(skill_id):
+                # 白送出去的牌只给"最小可用量"：以前按上限给，仁德会把整手
+                # 牌一次送光（连自己的防御都不留）。制衡这类"回炉自己的牌"
+                # 不带 card_transfer，不受这条影响。
+                need = min(need, 2)
             need = max(1, need)
         else:
             need = int(inputs.get("cost_cards") or 0)
@@ -616,6 +699,11 @@ class AIController(PlayerController):
             return []
         ranked = sorted(candidates, key=self.card_value)
         return ranked[:need]
+
+    def _skill_gives_cards_away(self, skill_id):
+        definition = self.game.skill_registry.get(skill_id)
+        return bool(definition is not None
+                    and "card_transfer" in getattr(definition, "tags", ()))
 
     def _active_skill_target(self, skill_id):
         """主动技的目标候选来自共同查询；"挑谁"仍是 AI 的策略。"""
@@ -694,10 +782,82 @@ class AIController(PlayerController):
         if not candidates:
             self._pass(request)
             return
+        reason = str(request.context.get("reason") or "")
+        if reason == "yeyan":
+            picked = self._yeyan_targets(request, candidates)
+            if not picked:
+                self._pass(request)          # 分配到此为止（不再往同一个人身上堆）
+                return
+            self.submit(SelectTargetsAction(
+                request.target, request.request_id, picked))
+            return
+        if reason in BENEFIT_REASONS:
+            picked = self._beneficiary_target(candidates)
+            if not picked:
+                self._pass(request)
+                return
+            self.submit(SelectTargetsAction(
+                request.target, request.request_id, picked))
+            return
         want = max(1, min(int(request.max_cards or 1), len(candidates)))
         self.submit(
             SelectTargetsAction(request.target, request.request_id, candidates[:want])
         )
+
+    def _yeyan_targets(self, request, candidates):
+        """业炎的逐点分配：优先摊到"还没被打到"的人身上。
+
+        对同一名角色分配 2 点及以上要弃四张不同花色的手牌并**失去 3 点体力**
+        ——AI 算不清这笔账，一律避免；只在对手只剩 1 点体力、堆第二点能直接
+        击杀时才考虑，而那需要先确认自己付得起代价。
+        """
+
+        allocation = request.context.get("allocation") or {}
+        fresh = [player for player in candidates
+                 if not int(allocation.get(str(player.player_id), 0) or 0)]
+        if fresh:
+            return [fresh[0]]
+        # 每个人都至少吃到 1 点了：只有"再补一刀就能杀掉"才值得付重额代价。
+        payable = self._can_pay_yeyan_heavy()
+        if not payable:
+            return []
+        killable = [player for player in candidates if int(player.hp) <= 1]
+        return [killable[0]] if killable else []
+
+    def _beneficiary_target(self, candidates):
+        """挑一个"给他好处"的目标：自己人优先，绝不补给已知的敌人。
+
+        评分 = 阵营权重 × 100 + 还差几张补满，所以权重压倒补牌数——只要
+        有自己人（或自己）可补，哪怕他只差 1 张，也不会去补一个缺 5 张的敌人。
+        没有队友的模式（自由混战）里大家都不是敌人，按缺牌数挑最需要的。
+        """
+
+        mode = getattr(self.game, "mode", None)
+        best = None
+        best_score = None
+        for player in candidates:
+            limit = min(5, int(getattr(player, "max_hp", 0) or 0))
+            lack = max(0, limit - len(getattr(player, "hand", ()) or ()))
+            if lack <= 0:
+                continue
+            if player is self.player or self.is_ally(player):
+                weight = 2
+            elif (mode is not None and getattr(mode, "uses_identities", False)
+                  and self._is_known_enemy(mode, player)):
+                weight = 0
+            else:
+                weight = 1
+            score = weight * 100 + lack
+            if best_score is None or score > best_score:
+                best, best_score = player, score
+        return [best] if best is not None else []
+
+    def _can_pay_yeyan_heavy(self):
+        """重额业炎的代价：四张不同花色的手牌 + 3 点体力。"""
+
+        suits = {getattr(card, "suit", None) for card in self.player.hand}
+        suits.discard(None)
+        return len(suits) >= 4 and int(self.player.hp) > 3
 
     def _pass(self, request):
         self.submit(PassPendingAction(self.answerer(request), request.request_id))
@@ -726,38 +886,105 @@ class AIController(PlayerController):
         return self.game.card_actions.usable_options(responder, context)
 
     def converted_response(self, request):
-        """没有真实响应牌时，用技能转化出来的虚拟牌（武圣 / 龙胆）。
+        """没有真实响应牌时，用技能转化出来的虚拟牌（武圣 / 龙胆 / 龙魂）。
 
-        只取**已经凑齐来源**的转化：多来源转化（丈八蛇矛：两张手牌当【杀】）
-        在收齐两张之前只是个候选，把它当成一张牌的转化交出去等于凭空少付
-        一张牌。AI 现版本不做多来源收集，所以这里直接跳过候选态。
+        多来源转化（龙魂要 X 张同花色、丈八蛇矛要两张手牌）在这里**把来源
+        凑齐**后再交出去：以前只认"已经凑齐的"，于是神赵云在 2 体力时
+        永远打不出龙魂的【闪】【桃】【无懈】——等于没有防御技。
         """
 
-        options = [
-            option for option in self.response_options(request)
-            if option.is_conversion and not option.needs_more_sources
-        ]
+        options = self._assembled_options(
+            self.response_context(request),
+            lambda option: option.result_name in tuple(request.allowed_cards))
         if not options:
             return None
         options.sort(key=lambda option: self.card_value(option.source_cards[0]))
         return self.game.card_actions.effective_card(options[0])
 
     def converted_play_card(self, card_name):
-        """出牌阶段：用技能把某张实体牌当 card_name 使用（优先用最没用的牌）。
-
-        与响应一样只看已凑齐来源的转化（见 ``converted_response``）。
-        """
+        """出牌阶段：用技能把实体牌当 card_name 使用（优先用最没用的牌）。"""
 
         context = self.game.card_actions.play_context(self.player)
-        options = [
-            option for option in self.game.card_actions.usable_options(self.player, context)
-            if option.is_conversion and option.result_name == card_name
-            and not option.needs_more_sources
-        ]
+        options = self._assembled_options(
+            context, lambda option: option.result_name == card_name)
         if not options:
             return None
         options.sort(key=lambda option: self.card_value(option.source_cards[0]))
         return self.game.card_actions.effective_card(options[0])
+
+    # ---- 多来源转化的"凑牌" ----
+
+    def _assembled_options(self, context, predicate):
+        """按谓词挑转化候选，并把需要多张来源的那些**凑齐**（返回完整候选）。
+
+        凑牌策略：只在候选中优先挑"手上最没用"的那几张，并且只在这个小集合
+        里做组合——够用即可，不做全组合搜索。
+        """
+
+        discovery = self.game.card_actions
+        options = [option for option in discovery.usable_options(context.actor, context)
+                   if option.is_conversion and predicate(option)]
+        ready = [option for option in options if option.complete and option.enabled]
+        for option in options:
+            if not option.enabled or not option.needs_more_sources:
+                continue
+            assembled = self._assemble_sources(option, context, discovery)
+            if assembled is not None:
+                ready.append(assembled)
+        return ready
+
+    def _assemble_sources(self, option, context, discovery):
+        """把这条多来源转化凑齐：起始牌就是候选自带的 source_cards，
+        再按转化自己的谓词挑够剩下的张数（优先挑手上最没用的）。"""
+
+        import itertools
+
+        conversion = discovery.conversion_of(option)
+        if conversion is None:
+            return None
+        actor = context.actor
+        starting = list(option.source_cards or ())
+        need = max(1, int(option.min_sources))
+        missing = need - len(starting)
+        if missing < 0 or not starting:
+            return None
+        if missing == 0:
+            return option if option.complete and option.enabled else None
+
+        pool = [card for card in self._conversion_materials(actor, conversion, discovery)
+                if not any(card is item for item in starting)]
+        if len(pool) < missing:
+            return None
+        # 只在"最没用的几张"里组合：够用即可，不做全组合搜索。
+        pool = sorted(pool, key=self.card_value)[:missing + 3]
+        for combo in itertools.combinations(pool, missing):
+            picked = starting + list(combo)
+            for item in discovery.actions_for_sources(actor, picked, context):
+                if (item.complete and item.enabled
+                        and item.result_name == option.result_name):
+                    return item
+        return None
+
+    def _conversion_materials(self, actor, conversion, discovery):
+        """这名角色身上符合该转化谓词、且区域允许的实体牌。"""
+
+        zones = tuple(getattr(conversion, "source_zones", ()) or ())
+        cards = []
+        if not zones or "hand" in zones:
+            cards.extend(card for card in getattr(actor, "hand", ()) or ()
+                         if card is not None)
+        if not zones or "equipment" in zones:
+            cards.extend(card for card in (getattr(actor, "equipment", None)
+                                           or {}).values() if card is not None)
+        matches = getattr(conversion, "matches", None)
+        return [card for card in cards if matches is None or matches(card)]
+
+    def response_context(self, request):
+        """一次响应请求对应的 Action 上下文（转化候选都从它出）。"""
+
+        responder = self.answerer(request)
+        return self.game.card_actions.response_context(
+            responder, request=request, allowed_names=request.allowed_cards)
 
     def _respond_with_card(self, request):
         reason = request.context.get("reason")
@@ -771,7 +998,12 @@ class AIController(PlayerController):
                 # 自由混战 / 隐藏身份：不使用【桃】救其他角色，但仍走规则层流程。
                 self._pass(request)
                 return
-            self._play_or_pass(request, self._pick_card(responder, SELF_RESCUE_NAMES))
+            # 救援牌名要以请求为准：救别人只允许【桃】，【完杀】还会在施加者的
+            # 回合里把【桃】也禁掉。直接递 SELF_RESCUE_NAMES 会在这些情况下挑出
+            # 一张请求不接受的牌，被引擎拒收（card is not allowed）。
+            allowed = tuple(request.allowed_cards or ())
+            names = tuple(name for name in SELF_RESCUE_NAMES if name in allowed)
+            self._play_or_pass(request, self._pick_card(responder, names))
             return
 
         if reason == "wuxie_chain":
@@ -893,12 +1125,28 @@ class AIController(PlayerController):
             picked = sorted(candidates, key=self.card_value, reverse=True)[:count]
         elif reason in ("guohe", "shunshou"):
             picked = self._pick_from_opponent(request, candidates)[:count]
+        elif reason == "pindian":
+            picked = self._pindian_choice(candidates)[:count]
         else:
             picked = sorted(candidates, key=self.card_value)[:count]
 
         self.submit(
             SelectCardsAction(request.target, request.request_id, picked)
         )
+
+    def _pindian_choice(self, candidates):
+        """拼点按**点数**出牌，不按用途。
+
+        拼点比的是点数（A=1 … K=13），而且这些技能都是"赢了大赚、没赢挨罚"，
+        所以赢（或挡住对手赢）远比省一张好牌重要。以前这里走的是通用的
+        "按用途价值升序"，而基本牌的价值一律是 4 分，等于照着手牌顺序甩牌
+        ——手上明明有 K，照样能把一张 A 递出去。
+        """
+
+        from src.game.skills.mechanics import rank_value
+
+        return sorted(candidates,
+                      key=lambda card: (-rank_value(card), self.card_value(card)))
 
     def _pick_from_opponent(self, request, candidates):
         owner = request.context.get("zone_owner")

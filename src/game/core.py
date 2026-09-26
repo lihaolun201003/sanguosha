@@ -39,7 +39,12 @@ from .skills import (
     create_default_skill_registry,
 )
 from .available_actions import AvailableActions
-from .generals import create_default_general_registry
+from .generals import (
+    DRAFT_SIZE,
+    GeneralDraft,
+    create_default_general_registry,
+    resolve_pool,
+)
 from .invariants import armed_for, assert_card_ownership
 from .modes import create_default_mode_registry
 
@@ -123,6 +128,16 @@ class Game(
         self.selected_general = None
         # 选将候选（按模式决定数量）；空表示不做限制。
         self.general_candidates = ()
+        # 「我的武将池」（本机长期偏好）：**只影响本机真人的候选**。
+        # 它是客户端本地设置，不进存档、不进快照、不广播给其他玩家；
+        # 空表示"没配置过"→ 候选退回本模式全部可用武将。
+        self.favorite_general_ids = ()
+        #: 距离修正的重入闸门（见 distance_modifier：防止修正自己再算距离时递归）
+        self._distance_query_active = False
+        #: 本局候选的生成结果（一次生成、之后只读，见 generals/draft.py）。
+        self.general_draft = GeneralDraft(size=DRAFT_SIZE)
+        #: 这次候选到底是按偏好池抽的，还是回退到全部可用武将（界面提示用）。
+        self.draft_used_favorites = False
 
         # ==================================================
         # 游戏模式
@@ -741,12 +756,29 @@ class Game(
     # ==================================================
 
     def distance_modifier(self, source, target):
+        """距离修正合计（马术 / 飞影 / 陷阵一类）。
+
+        # 防递归闸门
+
+        某个修正自己的 ``value`` 里再去算距离是完全可能的（"把与某人的距离
+        视为 0"这类语义），那样就会 距离 → 修正 → 距离 → … 无限递归，把
+        整局打成 RecursionError。这里用一个重入标记：**修正过程中**再算距离
+        时，修正合计按 0 处理（也就是"那一次查询看到的是基础距离"），
+        于是任何写法都不会无界递归，语义上也正好是"先拿到基数再减掉"。
+        """
+
         if not hasattr(self, "modifiers"):
             return 0
-        return (
-            self.modifiers.total(ModifierKind.DISTANCE_OUTGOING, source=source, target=target)
-            + self.modifiers.total(ModifierKind.DISTANCE_INCOMING, source=source, target=target)
-        )
+        if self._distance_query_active:
+            return 0
+        self._distance_query_active = True
+        try:
+            return (
+                self.modifiers.total(ModifierKind.DISTANCE_OUTGOING, source=source, target=target)
+                + self.modifiers.total(ModifierKind.DISTANCE_INCOMING, source=source, target=target)
+            )
+        finally:
+            self._distance_query_active = False
 
     def attack_range_bonus(self, player):
         if not hasattr(self, "modifiers"):
@@ -1189,16 +1221,53 @@ class Game(
             if self.general_available(general_id, for_random=True)[0]
         )
 
-    def roll_general_candidates(self, count=None):
-        """为真人抽取若干候选武将（从可玩武将池中不重复地取）。"""
+    # ---- 「我的武将池」（本机偏好）----
 
-        pool = list(self.general_pool_ids())
+    def set_favorite_generals(self, general_ids):
+        """设置「我的武将池」（只影响本机真人的候选，见候选池的说明）。"""
+
+        cleaned = []
+        for value in general_ids or ():
+            text = str(value or "").strip()
+            if text and text not in cleaned:
+                cleaned.append(text)
+        self.favorite_general_ids = tuple(cleaned)
+        return self.favorite_general_ids
+
+    def has_favorite_generals(self):
+        return bool(self.favorite_general_ids)
+
+    def candidate_pool_ids(self):
+        """本机真人的候选池：偏好优先，不足 5 人时退回本模式全部可用武将。
+
+        **AI 不走这里**：``general_pool_ids()`` 才是全场共用的池子，
+        ``assign_generals`` 与随机分配读的都是它。玩家喜欢赵云，不代表
+        整桌 AI 也只能用玩家喜欢的武将。
+        """
+
+        available = tuple(self.general_pool_ids())
+        pool, used_favorites = resolve_pool(
+            self.favorite_general_ids, available, registry=self.generals)
+        self.draft_used_favorites = used_favorites
+        return pool
+
+    def roll_general_candidates(self, count=None):
+        """为真人抽取本局候选武将（一次生成，之后由 ``general_draft`` 持有）。
+
+        随机只发生在这里：重绘 / resize / 重连都不会再抽一次——候选是业务
+        状态，不是每帧算的表现。
+        """
+
+        pool = list(self.candidate_pool_ids())
         if not pool:
+            self.general_draft.reset()
             return ()
-        count = int(count if count is not None else self.mode.general_choice_count)
-        count = max(1, min(count, len(pool)))
-        self.rng.shuffle(pool)
-        return tuple(pool[:count])
+        size = int(count if count is not None
+                   else getattr(self.mode, "general_choice_count", DRAFT_SIZE)
+                   or DRAFT_SIZE)
+        self.general_draft.size = max(1, size)
+        return self.general_draft.roll(
+            pool, self.rng, used_favorites=self.draft_used_favorites)
 
     def selectable_generals(self):
         """选将界面要显示的武将：优先用候选池，没有则退回全部。"""
@@ -1682,6 +1751,10 @@ class Game(
         self.pending_card_action = None
         self.pending_view_as = None
 
+        # 本局候选（GeneralDraft）属于"一局一份"：重开必须清空，否则上一局的
+        # 5 个候选会跟到新一局（那正是"每局重新随机"的反面）。
+        self.general_draft.reset()
+        self.general_candidates = ()
         self.table_cards.clear()
         self.judge_card = None
         self.processing_zone.clear()

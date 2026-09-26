@@ -106,7 +106,14 @@ def own_identity_label(game, player):
 
 
 def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=theme.DANGER, shake=0,
-                       source_slots=(), candidate_slots=(), responding=False):
+                       source_slots=(), candidate_slots=(), responding=False,
+                       alive=None, hp=None):
+    """真人状态条。
+
+    ``alive`` / ``hp`` 是**表现值**（允许落后于权威状态，见 ui/storyboard
+    的视觉账本）：不传时按角色对象自己的字段画。
+    """
+
     metrics = table_layout.metrics
     fonts = metrics.fonts
     player = game.player
@@ -114,7 +121,8 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     if shake:
         rect = rect.move(shake, 0)
 
-    alive = player.alive
+    alive = bool(player.alive) if alive is None else bool(alive)
+    hp = int(max(0, player.hp)) if hp is None else int(max(0, hp))
     fill = theme.PANEL if alive else theme.PANEL_DEEP
     state = theme.resolve_state(
         None if alive else "dead",
@@ -204,12 +212,12 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     radius = max(3, metrics.px(7))
     draw_hp_pips(
         surface, (left + radius, pip_y),
-        max(0, player.hp), player.max_hp,
+        hp, player.max_hp,
         spacing=spacing, radius=radius,
     )
     hp_font = fonts.get("seat_meta")
     hp_x = left + radius + spacing * player.max_hp + metrics.px(6)
-    hp_text = hp_font.render(str(max(0, player.hp)) + "/" + str(player.max_hp), True, theme.TEXT_DIM)
+    hp_text = hp_font.render(str(hp) + "/" + str(player.max_hp), True, theme.TEXT_DIM)
     hp_rect = hp_text.get_rect(midleft=(hp_x, pip_y))
     surface.blit(hp_text, hp_rect)
 

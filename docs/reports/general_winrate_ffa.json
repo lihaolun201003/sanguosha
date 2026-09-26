@@ -1,0 +1,766 @@
+{
+  "games": 16800,
+  "unfinished": 13,
+  "stuck": 1,
+  "errors": {},
+  "generals": [
+    {
+      "general_id": "menghuo",
+      "name": "孟获",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 430,
+      "winrate": 0.43
+    },
+    {
+      "general_id": "sunce",
+      "name": "孙策",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 400,
+      "winrate": 0.4
+    },
+    {
+      "general_id": "jiaxu",
+      "name": "贾诩",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 399,
+      "winrate": 0.399
+    },
+    {
+      "general_id": "zhurong",
+      "name": "祝融",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 385,
+      "winrate": 0.385
+    },
+    {
+      "general_id": "shen_guanyu",
+      "name": "关羽",
+      "kingdom": "神",
+      "max_hp": 5,
+      "played": 1000,
+      "won": 378,
+      "winrate": 0.378
+    },
+    {
+      "general_id": "weiyan",
+      "name": "魏延",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 364,
+      "winrate": 0.364
+    },
+    {
+      "general_id": "sp_jiaxu",
+      "name": "贾诩",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 363,
+      "winrate": 0.363
+    },
+    {
+      "general_id": "shen_caocao",
+      "name": "曹操",
+      "kingdom": "神",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 349,
+      "winrate": 0.349
+    },
+    {
+      "general_id": "sp_yuanshu",
+      "name": "袁术",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 344,
+      "winrate": 0.344
+    },
+    {
+      "general_id": "zhangliao",
+      "name": "张辽",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 330,
+      "winrate": 0.33
+    },
+    {
+      "general_id": "caocao",
+      "name": "曹操",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 325,
+      "winrate": 0.325
+    },
+    {
+      "general_id": "xiaoqiao",
+      "name": "小乔",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 323,
+      "winrate": 0.323
+    },
+    {
+      "general_id": "shen_zhouyu",
+      "name": "周瑜",
+      "kingdom": "神",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 320,
+      "winrate": 0.32
+    },
+    {
+      "general_id": "xiahoudun",
+      "name": "夏侯惇",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 314,
+      "winrate": 0.314
+    },
+    {
+      "general_id": "yujin",
+      "name": "于禁",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 312,
+      "winrate": 0.312
+    },
+    {
+      "general_id": "zhenji",
+      "name": "甄姬",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 299,
+      "winrate": 0.299
+    },
+    {
+      "general_id": "lingtong",
+      "name": "凌统",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 294,
+      "winrate": 0.294
+    },
+    {
+      "general_id": "lvbu",
+      "name": "吕布",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 288,
+      "winrate": 0.288
+    },
+    {
+      "general_id": "caozhi",
+      "name": "曹植",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 284,
+      "winrate": 0.284
+    },
+    {
+      "general_id": "shen_lvmeng",
+      "name": "吕蒙",
+      "kingdom": "神",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 274,
+      "winrate": 0.274
+    },
+    {
+      "general_id": "sp_gongsunzan",
+      "name": "公孙瓒",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 273,
+      "winrate": 0.273
+    },
+    {
+      "general_id": "pangtong",
+      "name": "庞统",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 269,
+      "winrate": 0.269
+    },
+    {
+      "general_id": "huangzhong",
+      "name": "黄忠",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 267,
+      "winrate": 0.267
+    },
+    {
+      "general_id": "fazheng",
+      "name": "法正",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 260,
+      "winrate": 0.26
+    },
+    {
+      "general_id": "sp_guanyu",
+      "name": "关羽",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 257,
+      "winrate": 0.257
+    },
+    {
+      "general_id": "zhaoyun",
+      "name": "赵云",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 254,
+      "winrate": 0.254
+    },
+    {
+      "general_id": "machao",
+      "name": "马超",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 253,
+      "winrate": 0.253
+    },
+    {
+      "general_id": "sp_machao",
+      "name": "马超",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 245,
+      "winrate": 0.245
+    },
+    {
+      "general_id": "guanyu",
+      "name": "关羽",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 243,
+      "winrate": 0.243
+    },
+    {
+      "general_id": "yuanshao",
+      "name": "袁绍",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 235,
+      "winrate": 0.235
+    },
+    {
+      "general_id": "pangde",
+      "name": "庞德",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 234,
+      "winrate": 0.234
+    },
+    {
+      "general_id": "jiangwei",
+      "name": "姜维",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 234,
+      "winrate": 0.234
+    },
+    {
+      "general_id": "sp_pangde",
+      "name": "庞德",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 231,
+      "winrate": 0.231
+    },
+    {
+      "general_id": "shen_simayi",
+      "name": "司马懿",
+      "kingdom": "神",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 229,
+      "winrate": 0.229
+    },
+    {
+      "general_id": "sunjian",
+      "name": "孙坚",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 227,
+      "winrate": 0.227
+    },
+    {
+      "general_id": "zhouyu",
+      "name": "周瑜",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 227,
+      "winrate": 0.227
+    },
+    {
+      "general_id": "sp_diaochan",
+      "name": "貂蝉",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 225,
+      "winrate": 0.225
+    },
+    {
+      "general_id": "ganning",
+      "name": "甘宁",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 224,
+      "winrate": 0.224
+    },
+    {
+      "general_id": "liubei",
+      "name": "刘备",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 221,
+      "winrate": 0.221
+    },
+    {
+      "general_id": "xusheng",
+      "name": "徐盛",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 221,
+      "winrate": 0.221
+    },
+    {
+      "general_id": "lvmeng",
+      "name": "吕蒙",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 220,
+      "winrate": 0.22
+    },
+    {
+      "general_id": "diaochan",
+      "name": "貂蝉",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 219,
+      "winrate": 0.219
+    },
+    {
+      "general_id": "zhangchunhua",
+      "name": "张春华",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 216,
+      "winrate": 0.216
+    },
+    {
+      "general_id": "huangyueying",
+      "name": "黄月英",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 215,
+      "winrate": 0.215
+    },
+    {
+      "general_id": "guojia",
+      "name": "郭嘉",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 213,
+      "winrate": 0.213
+    },
+    {
+      "general_id": "xuhuang",
+      "name": "徐晃",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 211,
+      "winrate": 0.211
+    },
+    {
+      "general_id": "zhangfei",
+      "name": "张飞",
+      "kingdom": "蜀",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 194,
+      "winrate": 0.194
+    },
+    {
+      "general_id": "zhoutai",
+      "name": "周泰",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 193,
+      "winrate": 0.193
+    },
+    {
+      "general_id": "gaoshun",
+      "name": "高顺",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 191,
+      "winrate": 0.191
+    },
+    {
+      "general_id": "sp_sunshangxiang",
+      "name": "孙尚香",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 183,
+      "winrate": 0.183
+    },
+    {
+      "general_id": "sunquan",
+      "name": "孙权",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 182,
+      "winrate": 0.182
+    },
+    {
+      "general_id": "dengai",
+      "name": "邓艾",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 182,
+      "winrate": 0.182
+    },
+    {
+      "general_id": "sunshangxiang",
+      "name": "孙尚香",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 178,
+      "winrate": 0.178
+    },
+    {
+      "general_id": "simayi",
+      "name": "司马懿",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 168,
+      "winrate": 0.168
+    },
+    {
+      "general_id": "luxun",
+      "name": "陆逊",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 134,
+      "winrate": 0.134
+    },
+    {
+      "general_id": "caoren_2010",
+      "name": "曹仁",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 131,
+      "winrate": 0.131
+    },
+    {
+      "general_id": "taishici",
+      "name": "太史慈",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 130,
+      "winrate": 0.13
+    },
+    {
+      "general_id": "wolongzhuge",
+      "name": "诸葛亮",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 128,
+      "winrate": 0.128
+    },
+    {
+      "general_id": "zhugeliang",
+      "name": "诸葛亮",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 124,
+      "winrate": 0.124
+    },
+    {
+      "general_id": "caoren",
+      "name": "曹仁",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 117,
+      "winrate": 0.117
+    },
+    {
+      "general_id": "daqiao",
+      "name": "大乔",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 109,
+      "winrate": 0.109
+    },
+    {
+      "general_id": "zhangjiao",
+      "name": "张角",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 100,
+      "winrate": 0.1
+    },
+    {
+      "general_id": "zhangjiao_2010",
+      "name": "张角",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 99,
+      "winrate": 0.099
+    },
+    {
+      "general_id": "xuchu",
+      "name": "许褚",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 97,
+      "winrate": 0.097
+    },
+    {
+      "general_id": "caopi",
+      "name": "曹丕",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 96,
+      "winrate": 0.096
+    },
+    {
+      "general_id": "shen_zhaoyun",
+      "name": "赵云",
+      "kingdom": "神",
+      "max_hp": 2,
+      "played": 1000,
+      "won": 95,
+      "winrate": 0.095
+    },
+    {
+      "general_id": "shen_lvbu",
+      "name": "吕布",
+      "kingdom": "神",
+      "max_hp": 5,
+      "played": 1000,
+      "won": 87,
+      "winrate": 0.087
+    },
+    {
+      "general_id": "masu",
+      "name": "马谡",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 83,
+      "winrate": 0.083
+    },
+    {
+      "general_id": "xiahouyuan",
+      "name": "夏侯渊",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 83,
+      "winrate": 0.083
+    },
+    {
+      "general_id": "xushu",
+      "name": "徐庶",
+      "kingdom": "蜀",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 79,
+      "winrate": 0.079
+    },
+    {
+      "general_id": "wuguotai",
+      "name": "吴国太",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 73,
+      "winrate": 0.073
+    },
+    {
+      "general_id": "dongzhuo",
+      "name": "董卓",
+      "kingdom": "群",
+      "max_hp": 8,
+      "played": 1000,
+      "won": 68,
+      "winrate": 0.068
+    },
+    {
+      "general_id": "chengong",
+      "name": "陈宫",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 67,
+      "winrate": 0.067
+    },
+    {
+      "general_id": "zhangzhao_zhanghong",
+      "name": "张昭&张紘",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 66,
+      "winrate": 0.066
+    },
+    {
+      "general_id": "sp_yangxiu",
+      "name": "杨修",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 63,
+      "winrate": 0.063
+    },
+    {
+      "general_id": "yuji",
+      "name": "于吉",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 61,
+      "winrate": 0.061
+    },
+    {
+      "general_id": "xunyu",
+      "name": "荀彧",
+      "kingdom": "魏",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 57,
+      "winrate": 0.057
+    },
+    {
+      "general_id": "lusu",
+      "name": "鲁肃",
+      "kingdom": "吴",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 53,
+      "winrate": 0.053
+    },
+    {
+      "general_id": "yanliangwenchou",
+      "name": "颜良&文丑",
+      "kingdom": "群",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 52,
+      "winrate": 0.052
+    },
+    {
+      "general_id": "huatuo",
+      "name": "华佗",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 50,
+      "winrate": 0.05
+    },
+    {
+      "general_id": "dianwei",
+      "name": "典韦",
+      "kingdom": "魏",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 45,
+      "winrate": 0.045
+    },
+    {
+      "general_id": "caiwenji",
+      "name": "蔡文姬",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 26,
+      "winrate": 0.026
+    },
+    {
+      "general_id": "huanggai",
+      "name": "黄盖",
+      "kingdom": "吴",
+      "max_hp": 4,
+      "played": 1000,
+      "won": 25,
+      "winrate": 0.025
+    },
+    {
+      "general_id": "sp_caiwenji",
+      "name": "蔡文姬",
+      "kingdom": "群",
+      "max_hp": 3,
+      "played": 1000,
+      "won": 20,
+      "winrate": 0.02
+    }
+  ],
+  "pool_size": 84,
+  "players": 5
+}

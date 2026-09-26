@@ -107,12 +107,17 @@ def draw_seat(
     flash=None,
     flash_color=theme.DANGER,
     shake=0,
+    alive=None,
+    hp=None,
 ):
     """Draw one seat panel.
 
     高亮统一走 ``theme.resolve_state``：整个 seat 面板（武将缩略 + 名字 +
     血量 + 身份 + 手牌数 + 装备 + 判定）作为一个完整的可选目标区域一起高亮，
     描边与发光由 ``draw_state_border`` 一次画完。
+
+    ``alive`` / ``hp`` 是**表现值**（允许落后于权威状态，见
+    ``ui.storyboard`` 的视觉账本）：不传时按角色对象自己的字段画。
     """
 
     fonts = metrics.fonts
@@ -120,7 +125,8 @@ def draw_seat(
     if shake:
         rect = rect.move(shake, 0)
 
-    alive = player.alive
+    alive = bool(player.alive) if alive is None else bool(alive)
+    hp = int(max(0, player.hp)) if hp is None else int(max(0, hp))
     fill = theme.PANEL if alive else theme.PANEL_DEEP
 
     state = theme.resolve_state(
@@ -204,12 +210,12 @@ def draw_seat(
     pip_radius = max(3, metrics.px(7))
     draw_hp_pips(
         surface, (rect.x + pad + pip_radius, pip_y),
-        max(0, player.hp), player.max_hp,
+        hp, player.max_hp,
         spacing=pip_spacing, radius=pip_radius,
     )
     hp_font = fonts.get("seat_small")
     hp_x = rect.x + pad + pip_radius + pip_spacing * player.max_hp + metrics.px(6)
-    hp_text = hp_font.render(str(max(0, player.hp)) + "/" + str(player.max_hp), True, theme.TEXT_DIM)
+    hp_text = hp_font.render(str(hp) + "/" + str(player.max_hp), True, theme.TEXT_DIM)
     surface.blit(hp_text, (hp_x, pip_y - hp_text.get_height() // 2))
 
     hand_text = hp_font.render("手牌 ×" + str(len(player.hand)), True, theme.TEXT_DIM)

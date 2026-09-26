@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "ffa：420 帧真实绘制无异常",
+      "detail": "renderer=[] story=[]"
+    },
+    {
+      "ok": true,
+      "label": "ffa：演出队列没有失控积压",
+      "detail": "pending=['card_used']"
+    },
+    {
+      "ok": true,
+      "label": "identity：420 帧真实绘制无异常",
+      "detail": "renderer=[] story=[]"
+    },
+    {
+      "ok": true,
+      "label": "identity：演出队列没有失控积压",
+      "detail": "pending=[]"
+    },
+    {
+      "ok": true,
+      "label": "identity：可见身份查询可用（Renderer 走的就是它）",
+      "detail": "checked=5"
+    },
+    {
+      "ok": true,
+      "label": "duel：420 帧真实绘制无异常",
+      "detail": "renderer=[] story=[]"
+    },
+    {
+      "ok": true,
+      "label": "duel：演出队列没有失控积压",
+      "detail": "pending=['turn_start', 'card_used', 'damage']"
+    }
+  ],
+  "notes": [
+    "ffa：420 帧，演出 13 条",
+    "identity：420 帧，演出 13 条",
+    "duel：420 帧，演出 12 条"
+  ],
+  "failed": 0,
+  "total": 7
+}

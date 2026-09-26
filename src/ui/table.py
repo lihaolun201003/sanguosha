@@ -303,6 +303,59 @@ def draw_action_banner(surface, metrics, info):
     return rect
 
 
+def draw_story_banner(surface, metrics, info):
+    """结算提示条：判定结果 / 延时锦囊生效 / 阶段跳过。
+
+    与动作横幅同一层、同一种观感，但多一行"结论"（跳过出牌阶段 / 受到 3 点
+    雷电伤害），并且按语义上色（有利 / 不利 / 中性）。它是**结论必须被看到**
+    的那一条，所以由演出队列按顺序播放，不与人抢画面。
+    """
+
+    if not info:
+        return
+    alpha = info.get("alpha", 255)
+    if alpha <= 0:
+        return
+    fonts = metrics.fonts
+    title = info.get("text", "")
+    if not title:
+        return
+    detail = info.get("detail", "")
+    tone = info.get("tone", "")
+    tone_color = {
+        "positive": theme.JUDGE_POSITIVE,
+        "negative": theme.JUDGE_NEGATIVE,
+        "phase": theme.TARGET_YELLOW,
+        "turn": theme.GOLD_BRIGHT,
+    }.get(tone, theme.GOLD)
+
+    title_font = fonts.get("large")
+    rendered = title_font.render(title, True, (250, 236, 206))
+    detail_rendered = None
+    if detail:
+        detail_font = fonts.get("small")
+        detail_rendered = detail_font.render(detail, True, tone_color)
+
+    width = max(rendered.get_width(), detail_rendered.get_width() if detail_rendered else 0)
+    height = rendered.get_height() + metrics.px(16)
+    if detail_rendered is not None:
+        height += detail_rendered.get_height() + metrics.px(6)
+    plate = pygame.Surface(
+        (width + metrics.px(48), height + metrics.px(16)), pygame.SRCALPHA)
+    bounds = plate.get_rect()
+    pygame.draw.rect(plate, (*theme.INK, 205), bounds, border_radius=metrics.px(12))
+    pygame.draw.rect(plate, (*tone_color, 220), bounds, 2, border_radius=metrics.px(12))
+    plate.blit(rendered, rendered.get_rect(
+        midtop=(bounds.centerx, metrics.px(8))))
+    if detail_rendered is not None:
+        plate.blit(detail_rendered, detail_rendered.get_rect(
+            midtop=(bounds.centerx, metrics.px(8) + rendered.get_height() + metrics.px(6))))
+    plate.set_alpha(alpha)
+    rect = plate.get_rect(midtop=(metrics.screen_w // 2, metrics.central.y + metrics.px(6)))
+    surface.blit(plate, rect)
+    return rect
+
+
 def draw_deal_flights(surface, flights, metrics):
     """开局发牌：还在飞行中的牌用牌背绘制，飞到位置后由手牌区接手。"""
 

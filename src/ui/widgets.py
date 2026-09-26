@@ -197,6 +197,41 @@ def ellipsize_text(text, font, max_width, *, suffix="…"):
     return (result + suffix) if result else ""
 
 
+def wrap_text(text, font, max_width, *, max_lines=None):
+    """按真实渲染宽度折行（中文逐字、英文按词尽量不断开）。
+
+    ``max_lines`` 给定时，最后一行用省略号收尾——详情面板高度固定，
+    宁可截断也不能让文字压出面板外。
+    """
+
+    text = str(text or "")
+    if max_width <= 0:
+        return []
+    lines = []
+    current = ""
+    for raw in (text.splitlines() or [""]):
+        current = ""
+        for char in raw:
+            probe = current + char
+            if current and font.size(probe)[0] > max_width:
+                lines.append(current)
+                current = char
+                if max_lines is not None and len(lines) >= max_lines:
+                    lines = lines[:max_lines]
+                    lines[-1] = ellipsize_text(lines[-1] + current, font, max_width)
+                    return lines
+            else:
+                current = probe
+        lines.append(current)
+        if max_lines is not None and len(lines) >= max_lines:
+            lines = lines[:max_lines]
+            lines[-1] = ellipsize_text(lines[-1], font, max_width)
+            return lines
+    while lines and not lines[-1] and len(lines) > 1:
+        lines.pop()
+    return lines
+
+
 def fit_text(text, font_set, *, max_width, preferred, fallback="micro"):
     """先试首选字号，逐级降级；都放不下才省略。返回 (文本, 字体)。"""
 

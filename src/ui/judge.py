@@ -35,6 +35,20 @@ JUDGE_CARD_SIZE = (128, 180)
 # 判断"面板不会永远挂着"的兜底：真实判定流程早已结束却迟迟没有结果事件。
 MAX_HOLD = 20.0
 
+#: 每个阶段的**最短可读时间**（绝对秒数，不再按速度倍率缩小）。
+#: 这是"极速档下判定牌也不会只闪 0.05 秒"的落实点：无论本机把动画速度
+#: 调到多快，判定来源、判定牌、判定结果都要各自停留到能看清为止。
+MIN_STAGE = {
+    "open": 0.22,
+    "source_hold": 0.42,
+    "draw_animation": 0.32,
+    "revealed_hold": 0.60,
+    "replacement": 0.40,
+    "final_result": 0.30,
+    "outcome_hold": 1.05,
+    "fade_out": 0.18,
+}
+
 
 class JudgeStage(str, Enum):
     OPEN = "open"
@@ -90,7 +104,7 @@ class JudgePanel:
             return self
         self.active = True
         self.stage = JudgeStage.OPEN
-        self.timer = _timing().judge_open
+        self.timer = max(_timing().judge_open, MIN_STAGE["open"])
         self.hold_elapsed = 0.0
         self.alpha = 255
         self.draw_progress = 0.0
@@ -123,7 +137,7 @@ class JudgePanel:
         skill_id = payload.get("skill_id") or ""
         self.replacement_skill_name = self._skill_name(game, skill_id)
         self.stage = JudgeStage.REPLACEMENT
-        self.timer = _timing().judge_replacement
+        self.timer = max(_timing().judge_replacement, MIN_STAGE["replacement"])
         return self
 
     def finish(self, result):
@@ -181,7 +195,8 @@ class JudgePanel:
                 self._enter(JudgeStage.FADE_OUT, timing.judge_fade_out)
             else:
                 # 改判窗口开着：保持展示，等引擎给出最终结果。
-                self.timer = max(self.timer, timing.judge_revealed_hold)
+                self.timer = max(self.timer, timing.judge_revealed_hold,
+                                 MIN_STAGE["revealed_hold"])
         elif self.stage is JudgeStage.FINAL_RESULT:
             if self.timer <= 0:
                 self._enter(JudgeStage.OUTCOME_HOLD, timing.judge_outcome_hold)
@@ -207,7 +222,8 @@ class JudgePanel:
 
     def _enter(self, stage, duration):
         self.stage = stage
-        self.timer = duration
+        minimum = MIN_STAGE.get(getattr(stage, "value", str(stage)), 0.0)
+        self.timer = max(float(duration), minimum)
         return self
 
     # ---- 只读查询（供测试与布局）----
@@ -469,6 +485,13 @@ class JudgePanel:
         layer.blit(name, (x, cursor))
         cursor += name.get_height() + metrics.px(6)
 
+        # 花色 + 点数单独一行（"♥ 7"）：判定牌的关键信息必须一眼就能看到，
+        # 默认字体画不出 ♠♥♣♦，这里用符号字体。
+        symbol = self._suit_mark(card, metrics)
+        if symbol is not None:
+            layer.blit(symbol, (x, cursor))
+            cursor += symbol.get_height() + metrics.px(6)
+
         if self.was_replaced:
             # 面板里放不下第二张卡：用一行文字交代"原来翻出的是什么"，
             # 玩家依然能看出判定牌被换过、从什么换成了什么。
@@ -487,9 +510,16 @@ class JudgePanel:
 
         if self.shows_outcome() and self.outcome is not None:
             tone_color = theme.judge_tone_color(self.tone)
-            title = fonts.get("normal").render(self.outcome.title, True, tone_color)
+            # 结果结论是这块面板的答案：单独一条分隔线 + 更大字号，
+            # 与"判定牌是什么"分开读。
+            line_y = cursor + metrics.px(2)
+            pygame.draw.line(layer, theme.GOLD_DIM, (x, line_y), (x + width, line_y), 1)
+            cursor = line_y + metrics.px(10)
+            title = fonts.get("large").render(self.outcome.title, True, tone_color)
+            if title.get_width() > width:
+                title = fonts.get("normal").render(self.outcome.title, True, tone_color)
             layer.blit(title, (x, cursor))
-            cursor += title.get_height() + metrics.px(4)
+            cursor += title.get_height() + metrics.px(6)
             body = fonts.get("small")
             for line in self._wrap(self.outcome.text, body, width):
                 rendered = body.render(line, True, theme.TEXT)
@@ -561,6 +591,19 @@ class JudgePanel:
         rank = "" if not suit else str(getattr(card, "rank", "") or "")
         label = getattr(card, "display_name", "") or ""
         return (label + "　" + suit + rank) if suit else label
+
+    @staticmethod
+    def _suit_mark(card, metrics):
+        """花色符号 + 点数（"♥ 7"）；拿不到花色符号时返回 None。"""
+
+        symbol = getattr(card, "suit_symbol", "") or ""
+        rank = str(getattr(card, "rank", "") or "")
+        if not symbol or not rank:
+            return None
+        font = metrics.fonts.suit(max(16, int(metrics.px(30))))
+        color = (238, 122, 108) if getattr(card, "card_color", "") == "red" \
+            else (228, 234, 242)
+        return font.render("%s %s" % (symbol, rank), True, color)
 
     @staticmethod
     def _fit(metrics, size):

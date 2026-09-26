@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "火攻：使用者被问到弃牌窗口",
+      "detail": "select_cards"
+    },
+    {
+      "ok": true,
+      "label": "火攻：这条窗口问的是使用者本人",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻：界面识别出是火攻弃牌阶段",
+      "detail": "huogong_discard"
+    },
+    {
+      "ok": true,
+      "label": "火攻：界面拿到对方展示的**真实牌**",
+      "detail": "闪"
+    },
+    {
+      "ok": true,
+      "label": "火攻：合法候选只有同花色的那张",
+      "detail": "['杀']"
+    },
+    {
+      "ok": true,
+      "label": "火攻：界面拿到使用者的整手牌（合法高亮 / 非法变暗）",
+      "detail": "2 vs 2"
+    },
+    {
+      "ok": true,
+      "label": "火攻：界面知道展示牌属于谁",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻：界面知道是谁在用火攻",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻：结算后目标受到 1 点伤害",
+      "detail": "4→3"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：被火攻的真人收到展示窗口",
+      "detail": "select_cards"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：界面识别出是展示阶段",
+      "detail": "huogong_reveal"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：还没展示时左侧是空的（不显示假牌）",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：候选=自己的整手牌",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：界面知道是谁在用火攻",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻无同花色：没有弹出弃置窗口",
+      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal', 'sha']"
+    },
+    {
+      "ok": true,
+      "label": "火攻无同花色：目标没有受伤",
+      "detail": "hp=4"
+    },
+    {
+      "ok": true,
+      "label": "火攻无同花色：展示阶段照常发生",
+      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal', 'sha'] / 3"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：表现事件已发出（所有人可见）",
+      "detail": "['cards_moved', 'card_used', 'card_revealed', 'cards_moved', 'damage', 'skill', 'cards_moved', 'card_used']"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示：事件里带的是真实展示牌",
+      "detail": "{'card_id': 'card-2104', 'name': 'SHAN', 'label': '闪', 'suit': 'club', 'rank': '10', 'category': 'basic', 'subtype': None, 'nature': 'normal', 'attack_range': 1, 'description': None}"
+    }
+  ],
+  "notes": [
+    "火攻弃牌阶段：展示牌=闪，候选=1 张，手牌=2 张",
+    "火攻演出顺序：card_used / judge_result / damage / skill",
+    "火攻展示阶段：候选=2 张，caster=玩家"
+  ],
+  "failed": 0,
+  "total": 19
+}

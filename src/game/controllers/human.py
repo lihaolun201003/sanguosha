@@ -131,6 +131,12 @@ class HumanController(PlayerController):
                 number=request.min_cards,
                 prompt=request.prompt,
                 request_id=request.request_id,
+                # 有上下文的选择（火攻）：把请求原因与已公开的展示牌一起交给
+                # 界面层，让专门的面板能把"对方翻出来的是什么"画出来。
+                reason=request.context.get("reason"),
+                revealed=request.context.get("revealed_card"),
+                revealed_player=request.context.get("revealed_by"),
+                caster=request.context.get("caster") or request.source,
                 on_complete=lambda selected, request_id=request.request_id: self.submit(
                     SelectCardsAction(responder, request_id, [item[0] for item in selected])),
             )

@@ -1,0 +1,9 @@
+{
+  "games": 0,
+  "unfinished": 0,
+  "stuck": 0,
+  "errors": {},
+  "generals": [],
+  "pool_size": 84,
+  "players": 5
+}

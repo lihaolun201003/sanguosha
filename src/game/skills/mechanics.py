@@ -441,6 +441,9 @@ class PindianFlow:
 
         # stage == "target"
         if card is None or not self._owns(self.target, card):
+            # 目标是"暗出"了一张已经不在手里的牌：拼点不成立。按 cancelled 收尾，
+            # 双方都不弃牌——发起者暗出的那张必须退回。以前这里把发起者的牌照样
+            # 弃掉、还把点数比出来当"正常结果"，于是技能白付了代价却按胜/负结算。
             return self._finish(PindianResult(self.initiator, self.target, cancelled=True))
         return self._finish(PindianResult(
             self.initiator, self.target, self._initiator_card, card))

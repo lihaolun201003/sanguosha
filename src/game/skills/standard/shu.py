@@ -1,5 +1,6 @@
 """蜀势力武将技能：张飞 / 黄月英 / 关羽 / 赵云。"""
 
+from src.card import mark_card_flag
 from src.game.atoms_v2 import DrawCardsAtom
 from src.game.conversion import (
     PLAY_CONTEXT,
@@ -395,7 +396,7 @@ class Tieji(Skill):
             return
         # 此【杀】不可被响应：标记写在实体牌上，由杀的结算统一读取
         # （Game.cannot_respond_to），这里不复制响应流程。
-        card._cannot_respond = True
+        mark_card_flag(card, "_cannot_respond", True)
         self.owner.skill_state.add(self.id, "hit", 1, ResetScope.TURN)
 
 

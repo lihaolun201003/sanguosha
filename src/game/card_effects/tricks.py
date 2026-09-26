@@ -2,7 +2,7 @@
 
 from src.card import DISPLAY_NAMES
 from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, TransferEquipmentAtom, SetChainedAtom, UnequipAtom
-from src.game.engine import FlowStatus
+from src.game.engine import Event, EventType, FlowStatus
 from src.game.engine.pending import PendingRequestType
 from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.flows.response_requirement import ResponseRequirement
@@ -188,7 +188,21 @@ class _MassResponseEffect(CardEffect):
         if not target.alive or target.hp <= 0:
             flow.effect_state["index"] += 1
             return self._next(flow)
+        # 免疫类能力（【巨象】【祸首】"【南蛮入侵】对你无效"）：他仍然是这张牌的
+        # 目标，但不响应、也不受伤。这类能力以前被写成"不能成为目标"，于是
+        # 出牌时算出的目标比校验时多一个，整张牌卡在 validate_targets 上出不来。
+        if self._immune(flow, target):
+            flow.effect_state["index"] += 1
+            return self._next(flow)
         return self._request_response(flow)
+
+    def _immune(self, flow, target):
+        """这张牌对这名目标是否无效（走规则层查询，不认具体武将）。"""
+
+        checker = getattr(flow.game, "target_forbidden", None)
+        if not callable(checker):
+            return False
+        return bool(checker(target, source=flow.actor, card=flow.card))
 
     def _request_response(self, flow):
         target = flow.targets[flow.effect_state["index"]]
@@ -663,11 +677,17 @@ class HuogongEffect(CardEffect):
             revealed = resolution.cards[0]
             flow.effect_state["suit"] = revealed.suit
             flow.game.revealed_card = revealed
+            # 展示是**公开信息**：所有人都会看到这张牌（火攻专用界面也靠它
+            # 把"对方翻出来的是什么"画出来）。事件只带真实存在的实体牌。
+            flow.context.emit(Event(
+                EventType.CARD_REVEALED, source=flow.targets[0], target=flow.actor,
+                payload={"player": flow.targets[0], "card": revealed,
+                         "reason": "huogong", "caster": flow.actor}))
             candidates = [card for card in flow.actor.hand if card.suit == revealed.suit]
             if not candidates:
                 flow.game.revealed_card = None
                 return flow.finish(cancelled=False)
-            request = flow.engine.pending.create(PendingRequestType.SELECT_CARDS, source=flow.actor, target=flow.actor, prompt="弃置一张与展示牌同花色的手牌", owner_flow=flow, min_cards=1, max_cards=1, request_context={"reason": "huogong_discard", "candidates": candidates, "zone_owner": flow.actor})
+            request = flow.engine.pending.create(PendingRequestType.SELECT_CARDS, source=flow.actor, target=flow.actor, prompt="弃置一张与展示牌同花色的手牌", owner_flow=flow, min_cards=1, max_cards=1, request_context={"reason": "huogong_discard", "candidates": candidates, "zone_owner": flow.actor, "revealed_card": revealed, "revealed_by": flow.targets[0], "caster": flow.actor})
             flow.stage = "effect_waiting"; flow.wait(request); flow.engine.present_or_auto_resolve(request)
             return flow.current_result()
         flow.context.apply(MoveCardAtom(resolution.cards[0], source=flow.actor.hand, destination=flow.game.deck.discard_pile))

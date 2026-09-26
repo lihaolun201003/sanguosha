@@ -90,6 +90,9 @@ class HostMatch:
         self.setup_stage = "identity"
         #: 每个真人的候选武将：{player_id: (general_id, …)}
         self.human_candidates = {}
+        #: 每名远程真人上传的「我的武将池」（客户端本地偏好）。
+        #: 只用于**给他自己**抽候选，不参与任何规则判定，也不转发给别人。
+        self.player_favorites = {}
         #: 每个真人的选择：{player_id: general_id}
         self.general_picks = {}
         #: 房主自己的选择（流程还没到选将阶段时先记着，到了自动提交）。
@@ -169,19 +172,76 @@ class HostMatch:
             origin="src/network/match.py:HostMatch.start() → Game.begin_networked_setup()")
 
     def _roll_candidates(self):
-        """给每个真人一份**互斥**的候选：同一局不会出现两个相同的选择。"""
+        """给每个真人一份候选：**各自的武将池**优先，没有就退回本局武将池。
 
-        pool = list(self.game.general_pool_ids())
-        self.game.rng.shuffle(pool)
-        size = max(1, int(getattr(self.game.mode, "general_choice_count", 3) or 3))
+        偏好是每个客户端自己的本地设置（房主用自己的、远程玩家各自上传），
+        所以两个人的候选可以重叠——重叠由"选将时先到先得"处理（见
+        ``general_picked``）。房主仍然掌控候选的生成与最终校验。
+        """
+
+        size = max(1, int(getattr(self.game.mode, "general_choice_count", 5) or 5))
+        shared = list(self.game.general_pool_ids())
         result = {}
-        for index, player_id in enumerate(self.human_player_ids()):
-            start = index * size
-            chunk = tuple(pool[start:start + size])
-            if len(chunk) < size:                       # 池子不够就从头复用
-                chunk = tuple(pool[:size])
-            result[player_id] = chunk
+        for player_id in self.human_player_ids():
+            if str(player_id) != str(self.host_player_id):
+                # 远程真人的候选**推迟到下发时**才抽：那时才刚收到他上传的
+                # 武将池（客户端先发池子、再确认身份）。开局就抽的话，抽的是
+                # 全体武将池，他的偏好就白传了。
+                continue
+            result[player_id] = self._roll_for(player_id, shared, size)
         return result
+
+    def _favorites_of(self, player_id):
+        """这名玩家用来抽候选的偏好池：房主读本机设置，远程读他上传的那份。"""
+
+        if str(player_id) == str(self.host_player_id):
+            return tuple(getattr(self.game, "favorite_general_ids", ()) or ())
+        return tuple(self.player_favorites.get(str(player_id), ()) or ())
+
+    def _roll_for(self, player_id, shared_pool, size, *, exclude=()):
+        """从这名玩家的可用池子里抽 ``size`` 个候选（不重复、不越池）。"""
+
+        from src.game.generals import resolve_pool, roll_candidates
+
+        taken = {str(item) for item in (exclude or ())}
+        pool, used_favorites = resolve_pool(
+            self._favorites_of(player_id), shared_pool, registry=self.game.generals)
+        candidates = [item for item in pool if item not in taken]
+        if len(candidates) < size:
+            extra = [item for item in shared_pool if item not in taken
+                     and item not in candidates]
+            candidates.extend(extra)
+        if not candidates:                              # 极端兜底：全被选走了
+            candidates = list(shared_pool)
+        del used_favorites
+        return tuple(roll_candidates(candidates, self.game.rng, size))
+
+    def _taken_generals(self, *, except_player=""):
+        return {str(general_id) for player_id, general_id in self.general_picks.items()
+                if str(player_id) != str(except_player)}
+
+    def note_favorite_pool(self, player_id, general_ids):
+        """远程玩家上传「我的武将池」：只留合法 id，数量不足就当没配。"""
+
+        from src.game.generals import MIN_POOL, clean_pool
+
+        valid = clean_pool(general_ids, self.game.generals,
+                           self.game.general_pool_ids())
+        if len(valid) < MIN_POOL:
+            # 池子非法 / 太小：不写入，抽签时自然退回本局武将池。
+            self.player_favorites.pop(str(player_id), None)
+            self.session.note("已忽略一份不可用的武将池（%d 名）" % len(valid))
+            return ()
+        self.player_favorites[str(player_id)] = valid
+        # 候选可能已经发下去了（身份确认得更早）：只要他还没选，就按新池子重抽。
+        if (self.setup_stage in ("choosing", "picking")
+                and str(player_id) not in self.general_picks):
+            self.human_candidates[str(player_id)] = self._roll_for(
+                player_id, list(self.game.general_pool_ids()),
+                max(1, int(getattr(self.game.mode, "general_choice_count", 5) or 5)),
+                exclude=self._taken_generals())
+            self.send_candidates(player_id)
+        return valid
 
     def human_player_ids(self):
         """本局的真人座位（房主 + 远程真人），按座次排序。"""
@@ -254,8 +314,19 @@ class HostMatch:
     # ---- 选将 ----
 
     def send_candidates(self, player_id):
-        """把候选武将发给这名玩家（武将信息本来就是公开数据）。"""
+        """把候选武将发给这名玩家（武将信息本来就是公开数据）。
 
+        远程真人的候选在这里**首次**生成：他上传的武将池随 IDENTITY_READY
+        一起到达，所以在下发的那一刻才知道该用哪份池子。已经抽过的不重抽
+        （同一局候选必须稳定）。
+        """
+
+        player_id = str(player_id)
+        if player_id not in self.human_candidates:
+            size = max(1, int(getattr(self.game.mode, "general_choice_count", 5) or 5))
+            self.human_candidates[player_id] = self._roll_for(
+                player_id, list(self.game.general_pool_ids()), size,
+                exclude=self._taken_generals(except_player=player_id))
         general_ids = tuple(self.human_candidates.get(player_id, ()))
         entries = []
         for general_id in general_ids:
@@ -311,6 +382,16 @@ class HostMatch:
         allowed = tuple(self.human_candidates.get(player_id, ()))
         if not general_id or general_id not in allowed:
             self.session.note("已忽略一条不在候选里的选将")
+            return False
+        if general_id in self._taken_generals(except_player=player_id):
+            # 两个人各自的武将池抽到了同一个候选：先到先得，后来者重抽。
+            # 不重抽他会一直等一个永远不会被接受的回答（选将阶段卡死）。
+            self.session.note("武将 %s 已被别人选走，正在为其重抽候选" % general_id)
+            self.human_candidates[player_id] = self._roll_for(
+                player_id, list(self.game.general_pool_ids()),
+                max(1, int(getattr(self.game.mode, "general_choice_count", 5) or 5)),
+                exclude=self._taken_generals(except_player=player_id))
+            self.send_candidates(player_id)
             return False
         self.general_picks[player_id] = general_id
         self.pending_pick.discard(player_id)
@@ -753,6 +834,13 @@ class HostMatch:
             self.request_restart(player_id)
         elif kind == MessageType.IDENTITY_READY:
             self.identity_confirmed(player_id)
+        elif kind == MessageType.FAVORITE_POOL:
+            payload = message_payload(message)
+            claimed = str(payload.get("player_id") or "")
+            if claimed and claimed != str(player_id):
+                self.session.note("已拒绝一条冒充他人的武将池")
+                return
+            self.note_favorite_pool(player_id, payload.get("general_ids") or ())
         elif kind == MessageType.GENERAL_PICKED:
             payload = message_payload(message)
             # 身份以**连接**为准：消息里自称的 player_id 必须与它一致。
@@ -1129,6 +1217,8 @@ class ClientMatch:
         self.lord_name = ""
         self.candidates = []
         self.candidates_ready = False
+        #: 候选下发版本（房主重发时会变，界面据此刷新）。
+        self.candidates_version = 0
         self.identity_seen = False
         self.picked_general = ""
         #: 选将结果回来时通知 UI（由场景注册）。
@@ -1201,6 +1291,11 @@ class ClientMatch:
                 if isinstance(item, dict)
             ]
             self.candidates_ready = True
+            # 版本号每次下发 +1：房主可能因为"武将已被别人选走 / 收到你的
+            # 武将池"而重发候选，界面据此清掉已选项让玩家重选。
+            self.candidates_version = int(
+                getattr(self, "candidates_version", 0)) + 1
+            self.picked_general = ""
             self._note("请选择你的武将")
             if callable(self.on_candidates):
                 self.on_candidates(self)
@@ -1409,11 +1504,33 @@ class ClientMatch:
 
     # ---- 开局流程 ----
 
+    def send_favorite_pool(self, general_ids=None):
+        """把本机「我的武将池」发给房主（只用于抽候选，不广播给其他玩家）。
+
+        ``general_ids=None`` 时读本机偏好。房主会校验 id 合法性——客户端
+        发什么都不代表被接受。
+        """
+
+        if general_ids is None:
+            try:
+                from src.settings import shared as shared_preferences
+
+                general_ids = shared_preferences().favorite_general_ids()
+            except Exception:                             # pragma: no cover - 兜底
+                general_ids = ()
+        return self.session.send_to_host(
+            MessageType.FAVORITE_POOL,
+            match_id=self.match_id, player_id=self.my_player_id,
+            general_ids=[str(item) for item in (general_ids or ())])
+
     def confirm_identity(self):
-        """「继续」：告诉房主我看过自己的身份了（幂等）。"""
+        """「继续」：先把自己的武将池发给房主，再确认身份（幂等）。"""
 
         if self.identity_seen:
             return False
+        # 顺序有意义：房主收到身份确认时会**立刻**抽并发候选，所以偏好必须
+        # 先到（同一条连接按序处理）。
+        self.send_favorite_pool()
         sent = self.session.send_to_host(
             MessageType.IDENTITY_READY,
             match_id=self.match_id, player_id=self.my_player_id)

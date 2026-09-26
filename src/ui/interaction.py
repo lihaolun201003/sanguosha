@@ -102,6 +102,23 @@ def handle_game_click(position, game, renderer, human=None):
         # hover 之类的视觉效果保留，但这一下不产生任何 Gameplay Action。
         return False
 
+    # 关键演出（技能发动提示）还在播：操作界面整体让路（见 ui.storyboard）。
+    # 只拦界面，不拦引擎——队列自己会走完，AI 与房主完全不受影响。
+    effects = getattr(renderer, "effects", None)
+    if effects is not None and effects.interaction_hold():
+        return False
+
+    # 火攻专用界面：面板自己吞掉落在它上面的点击（点牌 = 选中，点放弃 = 取消）。
+    # 规则合法性仍由引擎给的候选集决定——面板只是把上下文画清楚。
+    panel = getattr(renderer, "huogong", None)
+    if panel is not None and panel.contains(position):
+        result = panel.hit(position, game, renderer.metrics)
+        if result and result[0] == "card":
+            human.select_card(result[1], result[2], zone="hand")
+        elif result and result[0] == "cancel":
+            human.run_action("pass_selection", renderer)
+        return True
+
     # 结算界面 / 节奏控件 / 技能选择面板 / 技能按钮 / 固定按钮
     action = renderer.hit_action(position, game)
     if action is not None:

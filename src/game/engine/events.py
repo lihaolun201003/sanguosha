@@ -65,6 +65,14 @@ class EventType(str, Enum):
     TURN_END = "turn.end"
     PHASE_START = "phase.start"
     PHASE_END = "phase.end"
+    #: 某个阶段因为规则被跳过（乐不思蜀的"跳过出牌阶段"、兵粮寸断的
+    #: "跳过摸牌阶段"、体力为 0 一类）。payload: player / phase / text /
+    #: detail / tone。**纯表现**：真正跳过还是由 phase_control 决定，
+    #: 这条事件只是让界面能把结论说清楚（见 ui.storyboard）。
+    PHASE_SKIPPED = "phase.skipped"
+    #: 有牌被公开亮出（火攻展示手牌一类）。payload: player / card /
+    #: reason / tone。信息本身是公开的（规则要求展示），不泄露隐藏信息。
+    CARD_REVEALED = "card.revealed"
     CHAIN_STATE_CHANGED = "chain.state.changed"
     # 有任何牌进入弃牌堆。payload: card / reason / owner / from。
     # 这是**唯一**的"弃牌"出口（由 MoveCardAtom 在目的地是弃牌堆时发出），

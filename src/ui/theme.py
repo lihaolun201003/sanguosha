@@ -47,6 +47,45 @@ DEAD_TINT = (62, 70, 80)
 DISABLED_FILL = (70, 80, 90)
 DISABLED_TEXT = (128, 138, 148)
 
+# ==================================================
+# 武将池 / 选将界面（Phase 19）：暖灰棕 + 暗金 + 玉绿
+#
+# 桌面牌局仍是上面的冷色调；这两屏是"翻看武将牌"的界面，用一套更接近
+# 实体卡牌的暖色：低饱和暖灰棕背景、旧纸色文字、青铜边、玉绿选中。
+# 只新增常量与状态，不改动牌局里任何既有颜色。
+# ==================================================
+
+# 背景（从深到浅的三层棕灰）
+MENU_BG_TOP = (44, 38, 33)
+MENU_BG_MID = (58, 50, 43)
+MENU_BG_BOTTOM = (33, 29, 25)
+#: 背景纹理（程序生成的细颗粒，低对比）
+MENU_TEXTURE = (86, 74, 60)
+
+# 暖色面板
+PANEL_WARM = (52, 45, 39)
+PANEL_WARM_DEEP = (37, 32, 28)
+PANEL_WARM_SUNKEN = (28, 24, 21)
+
+# 强调：暗金 / 青铜
+BRONZE = (150, 116, 66)
+BRONZE_BRIGHT = (198, 164, 104)
+BRONZE_DIM = (104, 82, 50)
+
+# 玉绿（选中）：不要荧光绿
+JADE = (108, 186, 152)
+JADE_BRIGHT = (150, 214, 182)
+JADE_DIM = (62, 112, 94)
+
+# 暖白文字 / 灰金次要文字
+TEXT_WARM = (236, 228, 212)
+TEXT_WARM_DIM = (186, 172, 150)
+TEXT_WARM_MUTED = (134, 122, 104)
+
+# 危险 / 删除（暗红）
+BLOOD = (150, 60, 52)
+BLOOD_DIM = (98, 44, 40)
+
 # 判定结果语义色（Phase 10.5）
 #
 # 颜色表达的是"这个结果对被判定角色的实际含义"，不是牌的红黑，也不是
@@ -201,6 +240,22 @@ VISUAL_STATES = {
         "border": (96, 104, 112), "width": BORDER_THIN, "glow": None,
         "glow_width": 0, "dim": 148, "label": None,
     },
+    # ---- 武将池 / 选将界面（Phase 19）----
+    # 已加入武将池 / 已选中候选：玉绿描边 + 轻微发光
+    "pool_selected": {
+        "border": JADE, "width": 5, "glow": JADE_DIM, "glow_width": 7,
+        "dim": 0, "label": "已加入",
+    },
+    # 候选里当前聚焦的那一张：暗金描边（比玉绿弱一级，表示"正在看"）
+    "draft_focus": {
+        "border": BRONZE_BRIGHT, "width": 4, "glow": BRONZE_DIM,
+        "glow_width": 6, "dim": 0, "label": None,
+    },
+    # 武将池里的悬停：更弱一档的暖色高亮
+    "pool_hover": {
+        "border": BRONZE, "width": 3, "glow": None, "glow_width": 0,
+        "dim": 0, "label": None,
+    },
     # 阵亡
     "dead": {
         "border": (78, 86, 96), "width": BORDER_THIN, "glow": None,
@@ -212,6 +267,10 @@ VISUAL_STATES = {
 STATE_PRIORITY = {
     # 阵亡最高：尸体不该被"合法目标"之类的状态盖掉。
     "dead": 100,
+    # 武将池 / 选将：选中 > 聚焦 > 悬停
+    "pool_selected": 92,
+    "draft_focus": 60,
+    "pool_hover": 42,
     "selected": 90,
     "selected_target": 90,
     "view_as_source": 88,
@@ -516,6 +575,61 @@ def table_surface(width, height):
             width=inset,
         )
     surface.blit(vignette, (0, 0))
+    _gradient_cache[key] = surface
+    return surface
+
+
+def menu_background(width, height):
+    """武将池 / 选将页面的背景（缓存）。
+
+    三层叠出来的"旧纸 + 木质"氛围，**不是一块平色矩形**：
+
+    1. 竖直渐变（深棕 → 暖灰棕 → 更深），整体偏低饱和；
+    2. 程序生成的细颗粒纹理（确定性伪随机，低对比，像纸面/木纹颗粒）；
+    3. 中心提亮 + 四角压暗（vignette），把视线收到中间。
+
+    全部程序绘制，不引入任何外部素材；同一尺寸只算一次。
+    """
+
+    key = ("menu_bg", width, height)
+    surface = _gradient_cache.get(key)
+    if surface is not None:
+        return surface
+
+    surface = vertical_gradient((width, height), MENU_BG_TOP, MENU_BG_BOTTOM)
+    # 中段提亮：渐变 + 一条柔和的横向光带
+    band = vertical_gradient(
+        (width, max(1, height // 2)), MENU_BG_MID, MENU_BG_MID)
+    band.set_alpha(120)
+    surface.blit(band, (0, height // 4))
+
+    # 纹理：每 3 像素一颗，透明度 3~10，确定性（同一个尺寸每次一样）。
+    texture = pygame.Surface((width, height), pygame.SRCALPHA)
+    seed = 0x5A17
+    for y in range(0, height, 3):
+        seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+        for x in range(0, width, 3):
+            seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+            alpha = 3 + (seed >> 16) % 8
+            texture.set_at((x, y), (*MENU_TEXTURE, alpha))
+    surface.blit(texture, (0, 0))
+
+    # vignette：四角压暗
+    vignette = pygame.Surface((width, height), pygame.SRCALPHA)
+    rings = 30
+    for step in range(rings):
+        ratio = step / rings
+        alpha = int(64 * ratio ** 2)
+        if alpha <= 0:
+            continue
+        inset = int(min(width, height) * 0.5 * ratio)
+        pygame.draw.rect(
+            vignette, (0, 0, 0, alpha),
+            pygame.Rect(-inset, -inset, width + inset * 2, height + inset * 2),
+            width=inset,
+        )
+    surface.blit(vignette, (0, 0))
+
     _gradient_cache[key] = surface
     return surface
 

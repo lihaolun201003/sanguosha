@@ -1,0 +1,2711 @@
+{
+  "games": 10500,
+  "sides": {
+    "renegade": {
+      "games": 10500,
+      "won": 455
+    },
+    "loyalist": {
+      "games": 21000,
+      "won": 4940
+    },
+    "lord": {
+      "games": 10500,
+      "won": 2470
+    },
+    "rebel": {
+      "games": 42000,
+      "won": 30136
+    }
+  },
+  "generals": [
+    {
+      "general_id": "caiwenji",
+      "name": "蔡文姬",
+      "identity": "lord",
+      "games": 133,
+      "won": 7,
+      "winrate": 0.0526
+    },
+    {
+      "general_id": "caiwenji",
+      "name": "蔡文姬",
+      "identity": "loyalist",
+      "games": 223,
+      "won": 23,
+      "winrate": 0.1031
+    },
+    {
+      "general_id": "caiwenji",
+      "name": "蔡文姬",
+      "identity": "rebel",
+      "games": 515,
+      "won": 318,
+      "winrate": 0.6175
+    },
+    {
+      "general_id": "caiwenji",
+      "name": "蔡文姬",
+      "identity": "renegade",
+      "games": 129,
+      "won": 1,
+      "winrate": 0.0078
+    },
+    {
+      "general_id": "caocao",
+      "name": "曹操",
+      "identity": "lord",
+      "games": 125,
+      "won": 39,
+      "winrate": 0.312
+    },
+    {
+      "general_id": "caocao",
+      "name": "曹操",
+      "identity": "loyalist",
+      "games": 238,
+      "won": 62,
+      "winrate": 0.2605
+    },
+    {
+      "general_id": "caocao",
+      "name": "曹操",
+      "identity": "rebel",
+      "games": 515,
+      "won": 377,
+      "winrate": 0.732
+    },
+    {
+      "general_id": "caocao",
+      "name": "曹操",
+      "identity": "renegade",
+      "games": 122,
+      "won": 9,
+      "winrate": 0.0738
+    },
+    {
+      "general_id": "caopi",
+      "name": "曹丕",
+      "identity": "lord",
+      "games": 114,
+      "won": 18,
+      "winrate": 0.1579
+    },
+    {
+      "general_id": "caopi",
+      "name": "曹丕",
+      "identity": "loyalist",
+      "games": 259,
+      "won": 49,
+      "winrate": 0.1892
+    },
+    {
+      "general_id": "caopi",
+      "name": "曹丕",
+      "identity": "rebel",
+      "games": 511,
+      "won": 349,
+      "winrate": 0.683
+    },
+    {
+      "general_id": "caopi",
+      "name": "曹丕",
+      "identity": "renegade",
+      "games": 116,
+      "won": 2,
+      "winrate": 0.0172
+    },
+    {
+      "general_id": "caoren_2010",
+      "name": "曹仁",
+      "identity": "lord",
+      "games": 123,
+      "won": 24,
+      "winrate": 0.1951
+    },
+    {
+      "general_id": "caoren_2010",
+      "name": "曹仁",
+      "identity": "loyalist",
+      "games": 245,
+      "won": 48,
+      "winrate": 0.1959
+    },
+    {
+      "general_id": "caoren_2010",
+      "name": "曹仁",
+      "identity": "rebel",
+      "games": 510,
+      "won": 357,
+      "winrate": 0.7
+    },
+    {
+      "general_id": "caoren_2010",
+      "name": "曹仁",
+      "identity": "renegade",
+      "games": 122,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "caoren",
+      "name": "曹仁",
+      "identity": "lord",
+      "games": 122,
+      "won": 56,
+      "winrate": 0.459
+    },
+    {
+      "general_id": "caoren",
+      "name": "曹仁",
+      "identity": "loyalist",
+      "games": 260,
+      "won": 68,
+      "winrate": 0.2615
+    },
+    {
+      "general_id": "caoren",
+      "name": "曹仁",
+      "identity": "rebel",
+      "games": 509,
+      "won": 402,
+      "winrate": 0.7898
+    },
+    {
+      "general_id": "caoren",
+      "name": "曹仁",
+      "identity": "renegade",
+      "games": 109,
+      "won": 16,
+      "winrate": 0.1468
+    },
+    {
+      "general_id": "caozhi",
+      "name": "曹植",
+      "identity": "lord",
+      "games": 134,
+      "won": 55,
+      "winrate": 0.4104
+    },
+    {
+      "general_id": "caozhi",
+      "name": "曹植",
+      "identity": "loyalist",
+      "games": 239,
+      "won": 107,
+      "winrate": 0.4477
+    },
+    {
+      "general_id": "caozhi",
+      "name": "曹植",
+      "identity": "rebel",
+      "games": 517,
+      "won": 420,
+      "winrate": 0.8124
+    },
+    {
+      "general_id": "caozhi",
+      "name": "曹植",
+      "identity": "renegade",
+      "games": 110,
+      "won": 13,
+      "winrate": 0.1182
+    },
+    {
+      "general_id": "chengong",
+      "name": "陈宫",
+      "identity": "lord",
+      "games": 153,
+      "won": 29,
+      "winrate": 0.1895
+    },
+    {
+      "general_id": "chengong",
+      "name": "陈宫",
+      "identity": "loyalist",
+      "games": 235,
+      "won": 59,
+      "winrate": 0.2511
+    },
+    {
+      "general_id": "chengong",
+      "name": "陈宫",
+      "identity": "rebel",
+      "games": 489,
+      "won": 353,
+      "winrate": 0.7219
+    },
+    {
+      "general_id": "chengong",
+      "name": "陈宫",
+      "identity": "renegade",
+      "games": 123,
+      "won": 3,
+      "winrate": 0.0244
+    },
+    {
+      "general_id": "daqiao",
+      "name": "大乔",
+      "identity": "lord",
+      "games": 129,
+      "won": 26,
+      "winrate": 0.2016
+    },
+    {
+      "general_id": "daqiao",
+      "name": "大乔",
+      "identity": "loyalist",
+      "games": 255,
+      "won": 48,
+      "winrate": 0.1882
+    },
+    {
+      "general_id": "daqiao",
+      "name": "大乔",
+      "identity": "rebel",
+      "games": 496,
+      "won": 348,
+      "winrate": 0.7016
+    },
+    {
+      "general_id": "daqiao",
+      "name": "大乔",
+      "identity": "renegade",
+      "games": 120,
+      "won": 5,
+      "winrate": 0.0417
+    },
+    {
+      "general_id": "dengai",
+      "name": "邓艾",
+      "identity": "lord",
+      "games": 113,
+      "won": 33,
+      "winrate": 0.292
+    },
+    {
+      "general_id": "dengai",
+      "name": "邓艾",
+      "identity": "loyalist",
+      "games": 260,
+      "won": 64,
+      "winrate": 0.2462
+    },
+    {
+      "general_id": "dengai",
+      "name": "邓艾",
+      "identity": "rebel",
+      "games": 499,
+      "won": 338,
+      "winrate": 0.6774
+    },
+    {
+      "general_id": "dengai",
+      "name": "邓艾",
+      "identity": "renegade",
+      "games": 128,
+      "won": 5,
+      "winrate": 0.0391
+    },
+    {
+      "general_id": "dianwei",
+      "name": "典韦",
+      "identity": "lord",
+      "games": 125,
+      "won": 14,
+      "winrate": 0.112
+    },
+    {
+      "general_id": "dianwei",
+      "name": "典韦",
+      "identity": "loyalist",
+      "games": 256,
+      "won": 58,
+      "winrate": 0.2266
+    },
+    {
+      "general_id": "dianwei",
+      "name": "典韦",
+      "identity": "rebel",
+      "games": 505,
+      "won": 333,
+      "winrate": 0.6594
+    },
+    {
+      "general_id": "dianwei",
+      "name": "典韦",
+      "identity": "renegade",
+      "games": 114,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "diaochan",
+      "name": "貂蝉",
+      "identity": "lord",
+      "games": 121,
+      "won": 38,
+      "winrate": 0.314
+    },
+    {
+      "general_id": "diaochan",
+      "name": "貂蝉",
+      "identity": "loyalist",
+      "games": 228,
+      "won": 50,
+      "winrate": 0.2193
+    },
+    {
+      "general_id": "diaochan",
+      "name": "貂蝉",
+      "identity": "rebel",
+      "games": 513,
+      "won": 356,
+      "winrate": 0.694
+    },
+    {
+      "general_id": "diaochan",
+      "name": "貂蝉",
+      "identity": "renegade",
+      "games": 138,
+      "won": 5,
+      "winrate": 0.0362
+    },
+    {
+      "general_id": "dongzhuo",
+      "name": "董卓",
+      "identity": "lord",
+      "games": 101,
+      "won": 14,
+      "winrate": 0.1386
+    },
+    {
+      "general_id": "dongzhuo",
+      "name": "董卓",
+      "identity": "loyalist",
+      "games": 244,
+      "won": 47,
+      "winrate": 0.1926
+    },
+    {
+      "general_id": "dongzhuo",
+      "name": "董卓",
+      "identity": "rebel",
+      "games": 526,
+      "won": 363,
+      "winrate": 0.6901
+    },
+    {
+      "general_id": "dongzhuo",
+      "name": "董卓",
+      "identity": "renegade",
+      "games": 129,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "fazheng",
+      "name": "法正",
+      "identity": "lord",
+      "games": 113,
+      "won": 46,
+      "winrate": 0.4071
+    },
+    {
+      "general_id": "fazheng",
+      "name": "法正",
+      "identity": "loyalist",
+      "games": 262,
+      "won": 56,
+      "winrate": 0.2137
+    },
+    {
+      "general_id": "fazheng",
+      "name": "法正",
+      "identity": "rebel",
+      "games": 501,
+      "won": 360,
+      "winrate": 0.7186
+    },
+    {
+      "general_id": "fazheng",
+      "name": "法正",
+      "identity": "renegade",
+      "games": 124,
+      "won": 2,
+      "winrate": 0.0161
+    },
+    {
+      "general_id": "ganning",
+      "name": "甘宁",
+      "identity": "lord",
+      "games": 136,
+      "won": 35,
+      "winrate": 0.2574
+    },
+    {
+      "general_id": "ganning",
+      "name": "甘宁",
+      "identity": "loyalist",
+      "games": 229,
+      "won": 56,
+      "winrate": 0.2445
+    },
+    {
+      "general_id": "ganning",
+      "name": "甘宁",
+      "identity": "rebel",
+      "games": 500,
+      "won": 361,
+      "winrate": 0.722
+    },
+    {
+      "general_id": "ganning",
+      "name": "甘宁",
+      "identity": "renegade",
+      "games": 135,
+      "won": 5,
+      "winrate": 0.037
+    },
+    {
+      "general_id": "gaoshun",
+      "name": "高顺",
+      "identity": "lord",
+      "games": 139,
+      "won": 5,
+      "winrate": 0.036
+    },
+    {
+      "general_id": "gaoshun",
+      "name": "高顺",
+      "identity": "loyalist",
+      "games": 228,
+      "won": 52,
+      "winrate": 0.2281
+    },
+    {
+      "general_id": "gaoshun",
+      "name": "高顺",
+      "identity": "rebel",
+      "games": 506,
+      "won": 342,
+      "winrate": 0.6759
+    },
+    {
+      "general_id": "gaoshun",
+      "name": "高顺",
+      "identity": "renegade",
+      "games": 127,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "guanyu",
+      "name": "关羽",
+      "identity": "lord",
+      "games": 114,
+      "won": 23,
+      "winrate": 0.2018
+    },
+    {
+      "general_id": "guanyu",
+      "name": "关羽",
+      "identity": "loyalist",
+      "games": 247,
+      "won": 54,
+      "winrate": 0.2186
+    },
+    {
+      "general_id": "guanyu",
+      "name": "关羽",
+      "identity": "rebel",
+      "games": 512,
+      "won": 384,
+      "winrate": 0.75
+    },
+    {
+      "general_id": "guanyu",
+      "name": "关羽",
+      "identity": "renegade",
+      "games": 127,
+      "won": 2,
+      "winrate": 0.0157
+    },
+    {
+      "general_id": "guojia",
+      "name": "郭嘉",
+      "identity": "lord",
+      "games": 135,
+      "won": 40,
+      "winrate": 0.2963
+    },
+    {
+      "general_id": "guojia",
+      "name": "郭嘉",
+      "identity": "loyalist",
+      "games": 271,
+      "won": 68,
+      "winrate": 0.2509
+    },
+    {
+      "general_id": "guojia",
+      "name": "郭嘉",
+      "identity": "rebel",
+      "games": 472,
+      "won": 348,
+      "winrate": 0.7373
+    },
+    {
+      "general_id": "guojia",
+      "name": "郭嘉",
+      "identity": "renegade",
+      "games": 122,
+      "won": 4,
+      "winrate": 0.0328
+    },
+    {
+      "general_id": "huanggai",
+      "name": "黄盖",
+      "identity": "lord",
+      "games": 126,
+      "won": 6,
+      "winrate": 0.0476
+    },
+    {
+      "general_id": "huanggai",
+      "name": "黄盖",
+      "identity": "loyalist",
+      "games": 256,
+      "won": 49,
+      "winrate": 0.1914
+    },
+    {
+      "general_id": "huanggai",
+      "name": "黄盖",
+      "identity": "rebel",
+      "games": 472,
+      "won": 316,
+      "winrate": 0.6695
+    },
+    {
+      "general_id": "huanggai",
+      "name": "黄盖",
+      "identity": "renegade",
+      "games": 146,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "huangyueying",
+      "name": "黄月英",
+      "identity": "lord",
+      "games": 113,
+      "won": 37,
+      "winrate": 0.3274
+    },
+    {
+      "general_id": "huangyueying",
+      "name": "黄月英",
+      "identity": "loyalist",
+      "games": 247,
+      "won": 73,
+      "winrate": 0.2955
+    },
+    {
+      "general_id": "huangyueying",
+      "name": "黄月英",
+      "identity": "rebel",
+      "games": 495,
+      "won": 359,
+      "winrate": 0.7253
+    },
+    {
+      "general_id": "huangyueying",
+      "name": "黄月英",
+      "identity": "renegade",
+      "games": 145,
+      "won": 7,
+      "winrate": 0.0483
+    },
+    {
+      "general_id": "huangzhong",
+      "name": "黄忠",
+      "identity": "lord",
+      "games": 121,
+      "won": 25,
+      "winrate": 0.2066
+    },
+    {
+      "general_id": "huangzhong",
+      "name": "黄忠",
+      "identity": "loyalist",
+      "games": 272,
+      "won": 69,
+      "winrate": 0.2537
+    },
+    {
+      "general_id": "huangzhong",
+      "name": "黄忠",
+      "identity": "rebel",
+      "games": 494,
+      "won": 371,
+      "winrate": 0.751
+    },
+    {
+      "general_id": "huangzhong",
+      "name": "黄忠",
+      "identity": "renegade",
+      "games": 113,
+      "won": 4,
+      "winrate": 0.0354
+    },
+    {
+      "general_id": "huatuo",
+      "name": "华佗",
+      "identity": "lord",
+      "games": 150,
+      "won": 29,
+      "winrate": 0.1933
+    },
+    {
+      "general_id": "huatuo",
+      "name": "华佗",
+      "identity": "loyalist",
+      "games": 239,
+      "won": 50,
+      "winrate": 0.2092
+    },
+    {
+      "general_id": "huatuo",
+      "name": "华佗",
+      "identity": "rebel",
+      "games": 480,
+      "won": 318,
+      "winrate": 0.6625
+    },
+    {
+      "general_id": "huatuo",
+      "name": "华佗",
+      "identity": "renegade",
+      "games": 131,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "jiangwei",
+      "name": "姜维",
+      "identity": "lord",
+      "games": 130,
+      "won": 22,
+      "winrate": 0.1692
+    },
+    {
+      "general_id": "jiangwei",
+      "name": "姜维",
+      "identity": "loyalist",
+      "games": 235,
+      "won": 58,
+      "winrate": 0.2468
+    },
+    {
+      "general_id": "jiangwei",
+      "name": "姜维",
+      "identity": "rebel",
+      "games": 530,
+      "won": 369,
+      "winrate": 0.6962
+    },
+    {
+      "general_id": "jiangwei",
+      "name": "姜维",
+      "identity": "renegade",
+      "games": 105,
+      "won": 3,
+      "winrate": 0.0286
+    },
+    {
+      "general_id": "jiaxu",
+      "name": "贾诩",
+      "identity": "lord",
+      "games": 118,
+      "won": 43,
+      "winrate": 0.3644
+    },
+    {
+      "general_id": "jiaxu",
+      "name": "贾诩",
+      "identity": "loyalist",
+      "games": 240,
+      "won": 73,
+      "winrate": 0.3042
+    },
+    {
+      "general_id": "jiaxu",
+      "name": "贾诩",
+      "identity": "rebel",
+      "games": 513,
+      "won": 402,
+      "winrate": 0.7836
+    },
+    {
+      "general_id": "jiaxu",
+      "name": "贾诩",
+      "identity": "renegade",
+      "games": 129,
+      "won": 20,
+      "winrate": 0.155
+    },
+    {
+      "general_id": "lingtong",
+      "name": "凌统",
+      "identity": "lord",
+      "games": 112,
+      "won": 22,
+      "winrate": 0.1964
+    },
+    {
+      "general_id": "lingtong",
+      "name": "凌统",
+      "identity": "loyalist",
+      "games": 256,
+      "won": 73,
+      "winrate": 0.2852
+    },
+    {
+      "general_id": "lingtong",
+      "name": "凌统",
+      "identity": "rebel",
+      "games": 499,
+      "won": 368,
+      "winrate": 0.7375
+    },
+    {
+      "general_id": "lingtong",
+      "name": "凌统",
+      "identity": "renegade",
+      "games": 133,
+      "won": 7,
+      "winrate": 0.0526
+    },
+    {
+      "general_id": "liubei",
+      "name": "刘备",
+      "identity": "lord",
+      "games": 135,
+      "won": 18,
+      "winrate": 0.1333
+    },
+    {
+      "general_id": "liubei",
+      "name": "刘备",
+      "identity": "loyalist",
+      "games": 267,
+      "won": 72,
+      "winrate": 0.2697
+    },
+    {
+      "general_id": "liubei",
+      "name": "刘备",
+      "identity": "rebel",
+      "games": 485,
+      "won": 350,
+      "winrate": 0.7216
+    },
+    {
+      "general_id": "liubei",
+      "name": "刘备",
+      "identity": "renegade",
+      "games": 113,
+      "won": 4,
+      "winrate": 0.0354
+    },
+    {
+      "general_id": "lusu",
+      "name": "鲁肃",
+      "identity": "lord",
+      "games": 126,
+      "won": 8,
+      "winrate": 0.0635
+    },
+    {
+      "general_id": "lusu",
+      "name": "鲁肃",
+      "identity": "loyalist",
+      "games": 243,
+      "won": 54,
+      "winrate": 0.2222
+    },
+    {
+      "general_id": "lusu",
+      "name": "鲁肃",
+      "identity": "rebel",
+      "games": 502,
+      "won": 306,
+      "winrate": 0.6096
+    },
+    {
+      "general_id": "lusu",
+      "name": "鲁肃",
+      "identity": "renegade",
+      "games": 129,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "luxun",
+      "name": "陆逊",
+      "identity": "lord",
+      "games": 121,
+      "won": 22,
+      "winrate": 0.1818
+    },
+    {
+      "general_id": "luxun",
+      "name": "陆逊",
+      "identity": "loyalist",
+      "games": 260,
+      "won": 63,
+      "winrate": 0.2423
+    },
+    {
+      "general_id": "luxun",
+      "name": "陆逊",
+      "identity": "rebel",
+      "games": 478,
+      "won": 335,
+      "winrate": 0.7008
+    },
+    {
+      "general_id": "luxun",
+      "name": "陆逊",
+      "identity": "renegade",
+      "games": 141,
+      "won": 4,
+      "winrate": 0.0284
+    },
+    {
+      "general_id": "lvbu",
+      "name": "吕布",
+      "identity": "lord",
+      "games": 116,
+      "won": 25,
+      "winrate": 0.2155
+    },
+    {
+      "general_id": "lvbu",
+      "name": "吕布",
+      "identity": "loyalist",
+      "games": 259,
+      "won": 67,
+      "winrate": 0.2587
+    },
+    {
+      "general_id": "lvbu",
+      "name": "吕布",
+      "identity": "rebel",
+      "games": 502,
+      "won": 368,
+      "winrate": 0.7331
+    },
+    {
+      "general_id": "lvbu",
+      "name": "吕布",
+      "identity": "renegade",
+      "games": 123,
+      "won": 3,
+      "winrate": 0.0244
+    },
+    {
+      "general_id": "lvmeng",
+      "name": "吕蒙",
+      "identity": "lord",
+      "games": 129,
+      "won": 32,
+      "winrate": 0.2481
+    },
+    {
+      "general_id": "lvmeng",
+      "name": "吕蒙",
+      "identity": "loyalist",
+      "games": 243,
+      "won": 49,
+      "winrate": 0.2016
+    },
+    {
+      "general_id": "lvmeng",
+      "name": "吕蒙",
+      "identity": "rebel",
+      "games": 502,
+      "won": 354,
+      "winrate": 0.7052
+    },
+    {
+      "general_id": "lvmeng",
+      "name": "吕蒙",
+      "identity": "renegade",
+      "games": 126,
+      "won": 3,
+      "winrate": 0.0238
+    },
+    {
+      "general_id": "machao",
+      "name": "马超",
+      "identity": "lord",
+      "games": 130,
+      "won": 27,
+      "winrate": 0.2077
+    },
+    {
+      "general_id": "machao",
+      "name": "马超",
+      "identity": "loyalist",
+      "games": 255,
+      "won": 69,
+      "winrate": 0.2706
+    },
+    {
+      "general_id": "machao",
+      "name": "马超",
+      "identity": "rebel",
+      "games": 498,
+      "won": 366,
+      "winrate": 0.7349
+    },
+    {
+      "general_id": "machao",
+      "name": "马超",
+      "identity": "renegade",
+      "games": 117,
+      "won": 8,
+      "winrate": 0.0684
+    },
+    {
+      "general_id": "masu",
+      "name": "马谡",
+      "identity": "lord",
+      "games": 126,
+      "won": 11,
+      "winrate": 0.0873
+    },
+    {
+      "general_id": "masu",
+      "name": "马谡",
+      "identity": "loyalist",
+      "games": 276,
+      "won": 65,
+      "winrate": 0.2355
+    },
+    {
+      "general_id": "masu",
+      "name": "马谡",
+      "identity": "rebel",
+      "games": 488,
+      "won": 346,
+      "winrate": 0.709
+    },
+    {
+      "general_id": "masu",
+      "name": "马谡",
+      "identity": "renegade",
+      "games": 110,
+      "won": 1,
+      "winrate": 0.0091
+    },
+    {
+      "general_id": "menghuo",
+      "name": "孟获",
+      "identity": "lord",
+      "games": 104,
+      "won": 54,
+      "winrate": 0.5192
+    },
+    {
+      "general_id": "menghuo",
+      "name": "孟获",
+      "identity": "loyalist",
+      "games": 259,
+      "won": 55,
+      "winrate": 0.2124
+    },
+    {
+      "general_id": "menghuo",
+      "name": "孟获",
+      "identity": "rebel",
+      "games": 517,
+      "won": 385,
+      "winrate": 0.7447
+    },
+    {
+      "general_id": "menghuo",
+      "name": "孟获",
+      "identity": "renegade",
+      "games": 120,
+      "won": 11,
+      "winrate": 0.0917
+    },
+    {
+      "general_id": "pangde",
+      "name": "庞德",
+      "identity": "lord",
+      "games": 113,
+      "won": 31,
+      "winrate": 0.2743
+    },
+    {
+      "general_id": "pangde",
+      "name": "庞德",
+      "identity": "loyalist",
+      "games": 245,
+      "won": 61,
+      "winrate": 0.249
+    },
+    {
+      "general_id": "pangde",
+      "name": "庞德",
+      "identity": "rebel",
+      "games": 510,
+      "won": 383,
+      "winrate": 0.751
+    },
+    {
+      "general_id": "pangde",
+      "name": "庞德",
+      "identity": "renegade",
+      "games": 132,
+      "won": 5,
+      "winrate": 0.0379
+    },
+    {
+      "general_id": "pangtong",
+      "name": "庞统",
+      "identity": "lord",
+      "games": 121,
+      "won": 41,
+      "winrate": 0.3388
+    },
+    {
+      "general_id": "pangtong",
+      "name": "庞统",
+      "identity": "loyalist",
+      "games": 259,
+      "won": 61,
+      "winrate": 0.2355
+    },
+    {
+      "general_id": "pangtong",
+      "name": "庞统",
+      "identity": "rebel",
+      "games": 481,
+      "won": 352,
+      "winrate": 0.7318
+    },
+    {
+      "general_id": "pangtong",
+      "name": "庞统",
+      "identity": "renegade",
+      "games": 139,
+      "won": 9,
+      "winrate": 0.0647
+    },
+    {
+      "general_id": "shen_caocao",
+      "name": "曹操",
+      "identity": "lord",
+      "games": 114,
+      "won": 71,
+      "winrate": 0.6228
+    },
+    {
+      "general_id": "shen_caocao",
+      "name": "曹操",
+      "identity": "loyalist",
+      "games": 252,
+      "won": 79,
+      "winrate": 0.3135
+    },
+    {
+      "general_id": "shen_caocao",
+      "name": "曹操",
+      "identity": "rebel",
+      "games": 498,
+      "won": 422,
+      "winrate": 0.8474
+    },
+    {
+      "general_id": "shen_caocao",
+      "name": "曹操",
+      "identity": "renegade",
+      "games": 136,
+      "won": 19,
+      "winrate": 0.1397
+    },
+    {
+      "general_id": "shen_guanyu",
+      "name": "关羽",
+      "identity": "lord",
+      "games": 134,
+      "won": 32,
+      "winrate": 0.2388
+    },
+    {
+      "general_id": "shen_guanyu",
+      "name": "关羽",
+      "identity": "loyalist",
+      "games": 251,
+      "won": 67,
+      "winrate": 0.2669
+    },
+    {
+      "general_id": "shen_guanyu",
+      "name": "关羽",
+      "identity": "rebel",
+      "games": 481,
+      "won": 385,
+      "winrate": 0.8004
+    },
+    {
+      "general_id": "shen_guanyu",
+      "name": "关羽",
+      "identity": "renegade",
+      "games": 134,
+      "won": 16,
+      "winrate": 0.1194
+    },
+    {
+      "general_id": "shen_lvbu",
+      "name": "吕布",
+      "identity": "lord",
+      "games": 134,
+      "won": 25,
+      "winrate": 0.1866
+    },
+    {
+      "general_id": "shen_lvbu",
+      "name": "吕布",
+      "identity": "loyalist",
+      "games": 274,
+      "won": 52,
+      "winrate": 0.1898
+    },
+    {
+      "general_id": "shen_lvbu",
+      "name": "吕布",
+      "identity": "rebel",
+      "games": 470,
+      "won": 352,
+      "winrate": 0.7489
+    },
+    {
+      "general_id": "shen_lvbu",
+      "name": "吕布",
+      "identity": "renegade",
+      "games": 122,
+      "won": 4,
+      "winrate": 0.0328
+    },
+    {
+      "general_id": "shen_lvmeng",
+      "name": "吕蒙",
+      "identity": "lord",
+      "games": 142,
+      "won": 38,
+      "winrate": 0.2676
+    },
+    {
+      "general_id": "shen_lvmeng",
+      "name": "吕蒙",
+      "identity": "loyalist",
+      "games": 225,
+      "won": 65,
+      "winrate": 0.2889
+    },
+    {
+      "general_id": "shen_lvmeng",
+      "name": "吕蒙",
+      "identity": "rebel",
+      "games": 529,
+      "won": 376,
+      "winrate": 0.7108
+    },
+    {
+      "general_id": "shen_lvmeng",
+      "name": "吕蒙",
+      "identity": "renegade",
+      "games": 104,
+      "won": 7,
+      "winrate": 0.0673
+    },
+    {
+      "general_id": "shen_simayi",
+      "name": "司马懿",
+      "identity": "lord",
+      "games": 133,
+      "won": 38,
+      "winrate": 0.2857
+    },
+    {
+      "general_id": "shen_simayi",
+      "name": "司马懿",
+      "identity": "loyalist",
+      "games": 238,
+      "won": 46,
+      "winrate": 0.1933
+    },
+    {
+      "general_id": "shen_simayi",
+      "name": "司马懿",
+      "identity": "rebel",
+      "games": 491,
+      "won": 365,
+      "winrate": 0.7434
+    },
+    {
+      "general_id": "shen_simayi",
+      "name": "司马懿",
+      "identity": "renegade",
+      "games": 138,
+      "won": 6,
+      "winrate": 0.0435
+    },
+    {
+      "general_id": "shen_zhaoyun",
+      "name": "赵云",
+      "identity": "lord",
+      "games": 124,
+      "won": 42,
+      "winrate": 0.3387
+    },
+    {
+      "general_id": "shen_zhaoyun",
+      "name": "赵云",
+      "identity": "loyalist",
+      "games": 255,
+      "won": 49,
+      "winrate": 0.1922
+    },
+    {
+      "general_id": "shen_zhaoyun",
+      "name": "赵云",
+      "identity": "rebel",
+      "games": 493,
+      "won": 356,
+      "winrate": 0.7221
+    },
+    {
+      "general_id": "shen_zhaoyun",
+      "name": "赵云",
+      "identity": "renegade",
+      "games": 128,
+      "won": 4,
+      "winrate": 0.0312
+    },
+    {
+      "general_id": "shen_zhouyu",
+      "name": "周瑜",
+      "identity": "lord",
+      "games": 115,
+      "won": 22,
+      "winrate": 0.1913
+    },
+    {
+      "general_id": "shen_zhouyu",
+      "name": "周瑜",
+      "identity": "loyalist",
+      "games": 247,
+      "won": 60,
+      "winrate": 0.2429
+    },
+    {
+      "general_id": "shen_zhouyu",
+      "name": "周瑜",
+      "identity": "rebel",
+      "games": 501,
+      "won": 348,
+      "winrate": 0.6946
+    },
+    {
+      "general_id": "shen_zhouyu",
+      "name": "周瑜",
+      "identity": "renegade",
+      "games": 137,
+      "won": 6,
+      "winrate": 0.0438
+    },
+    {
+      "general_id": "simayi",
+      "name": "司马懿",
+      "identity": "lord",
+      "games": 122,
+      "won": 39,
+      "winrate": 0.3197
+    },
+    {
+      "general_id": "simayi",
+      "name": "司马懿",
+      "identity": "loyalist",
+      "games": 275,
+      "won": 64,
+      "winrate": 0.2327
+    },
+    {
+      "general_id": "simayi",
+      "name": "司马懿",
+      "identity": "rebel",
+      "games": 488,
+      "won": 347,
+      "winrate": 0.7111
+    },
+    {
+      "general_id": "simayi",
+      "name": "司马懿",
+      "identity": "renegade",
+      "games": 115,
+      "won": 5,
+      "winrate": 0.0435
+    },
+    {
+      "general_id": "sp_caiwenji",
+      "name": "蔡文姬",
+      "identity": "lord",
+      "games": 124,
+      "won": 12,
+      "winrate": 0.0968
+    },
+    {
+      "general_id": "sp_caiwenji",
+      "name": "蔡文姬",
+      "identity": "loyalist",
+      "games": 249,
+      "won": 38,
+      "winrate": 0.1526
+    },
+    {
+      "general_id": "sp_caiwenji",
+      "name": "蔡文姬",
+      "identity": "rebel",
+      "games": 494,
+      "won": 322,
+      "winrate": 0.6518
+    },
+    {
+      "general_id": "sp_caiwenji",
+      "name": "蔡文姬",
+      "identity": "renegade",
+      "games": 133,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "sp_diaochan",
+      "name": "貂蝉",
+      "identity": "lord",
+      "games": 106,
+      "won": 28,
+      "winrate": 0.2642
+    },
+    {
+      "general_id": "sp_diaochan",
+      "name": "貂蝉",
+      "identity": "loyalist",
+      "games": 263,
+      "won": 67,
+      "winrate": 0.2548
+    },
+    {
+      "general_id": "sp_diaochan",
+      "name": "貂蝉",
+      "identity": "rebel",
+      "games": 498,
+      "won": 351,
+      "winrate": 0.7048
+    },
+    {
+      "general_id": "sp_diaochan",
+      "name": "貂蝉",
+      "identity": "renegade",
+      "games": 133,
+      "won": 5,
+      "winrate": 0.0376
+    },
+    {
+      "general_id": "sp_gongsunzan",
+      "name": "公孙瓒",
+      "identity": "lord",
+      "games": 126,
+      "won": 40,
+      "winrate": 0.3175
+    },
+    {
+      "general_id": "sp_gongsunzan",
+      "name": "公孙瓒",
+      "identity": "loyalist",
+      "games": 247,
+      "won": 52,
+      "winrate": 0.2105
+    },
+    {
+      "general_id": "sp_gongsunzan",
+      "name": "公孙瓒",
+      "identity": "rebel",
+      "games": 492,
+      "won": 373,
+      "winrate": 0.7581
+    },
+    {
+      "general_id": "sp_gongsunzan",
+      "name": "公孙瓒",
+      "identity": "renegade",
+      "games": 135,
+      "won": 8,
+      "winrate": 0.0593
+    },
+    {
+      "general_id": "sp_guanyu",
+      "name": "关羽",
+      "identity": "lord",
+      "games": 107,
+      "won": 24,
+      "winrate": 0.2243
+    },
+    {
+      "general_id": "sp_guanyu",
+      "name": "关羽",
+      "identity": "loyalist",
+      "games": 241,
+      "won": 65,
+      "winrate": 0.2697
+    },
+    {
+      "general_id": "sp_guanyu",
+      "name": "关羽",
+      "identity": "rebel",
+      "games": 517,
+      "won": 386,
+      "winrate": 0.7466
+    },
+    {
+      "general_id": "sp_guanyu",
+      "name": "关羽",
+      "identity": "renegade",
+      "games": 135,
+      "won": 5,
+      "winrate": 0.037
+    },
+    {
+      "general_id": "sp_jiaxu",
+      "name": "贾诩",
+      "identity": "lord",
+      "games": 124,
+      "won": 41,
+      "winrate": 0.3306
+    },
+    {
+      "general_id": "sp_jiaxu",
+      "name": "贾诩",
+      "identity": "loyalist",
+      "games": 246,
+      "won": 74,
+      "winrate": 0.3008
+    },
+    {
+      "general_id": "sp_jiaxu",
+      "name": "贾诩",
+      "identity": "rebel",
+      "games": 502,
+      "won": 394,
+      "winrate": 0.7849
+    },
+    {
+      "general_id": "sp_jiaxu",
+      "name": "贾诩",
+      "identity": "renegade",
+      "games": 128,
+      "won": 18,
+      "winrate": 0.1406
+    },
+    {
+      "general_id": "sp_machao",
+      "name": "马超",
+      "identity": "lord",
+      "games": 125,
+      "won": 27,
+      "winrate": 0.216
+    },
+    {
+      "general_id": "sp_machao",
+      "name": "马超",
+      "identity": "loyalist",
+      "games": 241,
+      "won": 59,
+      "winrate": 0.2448
+    },
+    {
+      "general_id": "sp_machao",
+      "name": "马超",
+      "identity": "rebel",
+      "games": 512,
+      "won": 374,
+      "winrate": 0.7305
+    },
+    {
+      "general_id": "sp_machao",
+      "name": "马超",
+      "identity": "renegade",
+      "games": 122,
+      "won": 6,
+      "winrate": 0.0492
+    },
+    {
+      "general_id": "sp_pangde",
+      "name": "庞德",
+      "identity": "lord",
+      "games": 122,
+      "won": 30,
+      "winrate": 0.2459
+    },
+    {
+      "general_id": "sp_pangde",
+      "name": "庞德",
+      "identity": "loyalist",
+      "games": 233,
+      "won": 52,
+      "winrate": 0.2232
+    },
+    {
+      "general_id": "sp_pangde",
+      "name": "庞德",
+      "identity": "rebel",
+      "games": 499,
+      "won": 368,
+      "winrate": 0.7375
+    },
+    {
+      "general_id": "sp_pangde",
+      "name": "庞德",
+      "identity": "renegade",
+      "games": 146,
+      "won": 4,
+      "winrate": 0.0274
+    },
+    {
+      "general_id": "sp_sunshangxiang",
+      "name": "孙尚香",
+      "identity": "lord",
+      "games": 125,
+      "won": 46,
+      "winrate": 0.368
+    },
+    {
+      "general_id": "sp_sunshangxiang",
+      "name": "孙尚香",
+      "identity": "loyalist",
+      "games": 248,
+      "won": 68,
+      "winrate": 0.2742
+    },
+    {
+      "general_id": "sp_sunshangxiang",
+      "name": "孙尚香",
+      "identity": "rebel",
+      "games": 497,
+      "won": 361,
+      "winrate": 0.7264
+    },
+    {
+      "general_id": "sp_sunshangxiang",
+      "name": "孙尚香",
+      "identity": "renegade",
+      "games": 130,
+      "won": 10,
+      "winrate": 0.0769
+    },
+    {
+      "general_id": "sp_yangxiu",
+      "name": "杨修",
+      "identity": "lord",
+      "games": 135,
+      "won": 19,
+      "winrate": 0.1407
+    },
+    {
+      "general_id": "sp_yangxiu",
+      "name": "杨修",
+      "identity": "loyalist",
+      "games": 220,
+      "won": 33,
+      "winrate": 0.15
+    },
+    {
+      "general_id": "sp_yangxiu",
+      "name": "杨修",
+      "identity": "rebel",
+      "games": 524,
+      "won": 356,
+      "winrate": 0.6794
+    },
+    {
+      "general_id": "sp_yangxiu",
+      "name": "杨修",
+      "identity": "renegade",
+      "games": 121,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "sp_yuanshu",
+      "name": "袁术",
+      "identity": "lord",
+      "games": 117,
+      "won": 34,
+      "winrate": 0.2906
+    },
+    {
+      "general_id": "sp_yuanshu",
+      "name": "袁术",
+      "identity": "loyalist",
+      "games": 252,
+      "won": 70,
+      "winrate": 0.2778
+    },
+    {
+      "general_id": "sp_yuanshu",
+      "name": "袁术",
+      "identity": "rebel",
+      "games": 506,
+      "won": 379,
+      "winrate": 0.749
+    },
+    {
+      "general_id": "sp_yuanshu",
+      "name": "袁术",
+      "identity": "renegade",
+      "games": 125,
+      "won": 8,
+      "winrate": 0.064
+    },
+    {
+      "general_id": "sunce",
+      "name": "孙策",
+      "identity": "lord",
+      "games": 134,
+      "won": 51,
+      "winrate": 0.3806
+    },
+    {
+      "general_id": "sunce",
+      "name": "孙策",
+      "identity": "loyalist",
+      "games": 266,
+      "won": 77,
+      "winrate": 0.2895
+    },
+    {
+      "general_id": "sunce",
+      "name": "孙策",
+      "identity": "rebel",
+      "games": 489,
+      "won": 398,
+      "winrate": 0.8139
+    },
+    {
+      "general_id": "sunce",
+      "name": "孙策",
+      "identity": "renegade",
+      "games": 111,
+      "won": 8,
+      "winrate": 0.0721
+    },
+    {
+      "general_id": "sunjian",
+      "name": "孙坚",
+      "identity": "lord",
+      "games": 118,
+      "won": 27,
+      "winrate": 0.2288
+    },
+    {
+      "general_id": "sunjian",
+      "name": "孙坚",
+      "identity": "loyalist",
+      "games": 236,
+      "won": 43,
+      "winrate": 0.1822
+    },
+    {
+      "general_id": "sunjian",
+      "name": "孙坚",
+      "identity": "rebel",
+      "games": 515,
+      "won": 361,
+      "winrate": 0.701
+    },
+    {
+      "general_id": "sunjian",
+      "name": "孙坚",
+      "identity": "renegade",
+      "games": 131,
+      "won": 8,
+      "winrate": 0.0611
+    },
+    {
+      "general_id": "sunquan",
+      "name": "孙权",
+      "identity": "lord",
+      "games": 127,
+      "won": 29,
+      "winrate": 0.2283
+    },
+    {
+      "general_id": "sunquan",
+      "name": "孙权",
+      "identity": "loyalist",
+      "games": 253,
+      "won": 66,
+      "winrate": 0.2609
+    },
+    {
+      "general_id": "sunquan",
+      "name": "孙权",
+      "identity": "rebel",
+      "games": 499,
+      "won": 354,
+      "winrate": 0.7094
+    },
+    {
+      "general_id": "sunquan",
+      "name": "孙权",
+      "identity": "renegade",
+      "games": 121,
+      "won": 4,
+      "winrate": 0.0331
+    },
+    {
+      "general_id": "sunshangxiang",
+      "name": "孙尚香",
+      "identity": "lord",
+      "games": 115,
+      "won": 48,
+      "winrate": 0.4174
+    },
+    {
+      "general_id": "sunshangxiang",
+      "name": "孙尚香",
+      "identity": "loyalist",
+      "games": 273,
+      "won": 58,
+      "winrate": 0.2125
+    },
+    {
+      "general_id": "sunshangxiang",
+      "name": "孙尚香",
+      "identity": "rebel",
+      "games": 485,
+      "won": 316,
+      "winrate": 0.6515
+    },
+    {
+      "general_id": "sunshangxiang",
+      "name": "孙尚香",
+      "identity": "renegade",
+      "games": 127,
+      "won": 7,
+      "winrate": 0.0551
+    },
+    {
+      "general_id": "taishici",
+      "name": "太史慈",
+      "identity": "lord",
+      "games": 119,
+      "won": 9,
+      "winrate": 0.0756
+    },
+    {
+      "general_id": "taishici",
+      "name": "太史慈",
+      "identity": "loyalist",
+      "games": 253,
+      "won": 42,
+      "winrate": 0.166
+    },
+    {
+      "general_id": "taishici",
+      "name": "太史慈",
+      "identity": "rebel",
+      "games": 488,
+      "won": 318,
+      "winrate": 0.6516
+    },
+    {
+      "general_id": "taishici",
+      "name": "太史慈",
+      "identity": "renegade",
+      "games": 140,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "weiyan",
+      "name": "魏延",
+      "identity": "lord",
+      "games": 134,
+      "won": 38,
+      "winrate": 0.2836
+    },
+    {
+      "general_id": "weiyan",
+      "name": "魏延",
+      "identity": "loyalist",
+      "games": 261,
+      "won": 67,
+      "winrate": 0.2567
+    },
+    {
+      "general_id": "weiyan",
+      "name": "魏延",
+      "identity": "rebel",
+      "games": 489,
+      "won": 371,
+      "winrate": 0.7587
+    },
+    {
+      "general_id": "weiyan",
+      "name": "魏延",
+      "identity": "renegade",
+      "games": 116,
+      "won": 6,
+      "winrate": 0.0517
+    },
+    {
+      "general_id": "wolongzhuge",
+      "name": "诸葛亮",
+      "identity": "lord",
+      "games": 117,
+      "won": 30,
+      "winrate": 0.2564
+    },
+    {
+      "general_id": "wolongzhuge",
+      "name": "诸葛亮",
+      "identity": "loyalist",
+      "games": 241,
+      "won": 54,
+      "winrate": 0.2241
+    },
+    {
+      "general_id": "wolongzhuge",
+      "name": "诸葛亮",
+      "identity": "rebel",
+      "games": 523,
+      "won": 353,
+      "winrate": 0.675
+    },
+    {
+      "general_id": "wolongzhuge",
+      "name": "诸葛亮",
+      "identity": "renegade",
+      "games": 119,
+      "won": 3,
+      "winrate": 0.0252
+    },
+    {
+      "general_id": "wuguotai",
+      "name": "吴国太",
+      "identity": "lord",
+      "games": 109,
+      "won": 25,
+      "winrate": 0.2294
+    },
+    {
+      "general_id": "wuguotai",
+      "name": "吴国太",
+      "identity": "loyalist",
+      "games": 254,
+      "won": 44,
+      "winrate": 0.1732
+    },
+    {
+      "general_id": "wuguotai",
+      "name": "吴国太",
+      "identity": "rebel",
+      "games": 504,
+      "won": 370,
+      "winrate": 0.7341
+    },
+    {
+      "general_id": "wuguotai",
+      "name": "吴国太",
+      "identity": "renegade",
+      "games": 133,
+      "won": 4,
+      "winrate": 0.0301
+    },
+    {
+      "general_id": "xiahoudun",
+      "name": "夏侯惇",
+      "identity": "lord",
+      "games": 141,
+      "won": 37,
+      "winrate": 0.2624
+    },
+    {
+      "general_id": "xiahoudun",
+      "name": "夏侯惇",
+      "identity": "loyalist",
+      "games": 231,
+      "won": 57,
+      "winrate": 0.2468
+    },
+    {
+      "general_id": "xiahoudun",
+      "name": "夏侯惇",
+      "identity": "rebel",
+      "games": 499,
+      "won": 380,
+      "winrate": 0.7615
+    },
+    {
+      "general_id": "xiahoudun",
+      "name": "夏侯惇",
+      "identity": "renegade",
+      "games": 129,
+      "won": 10,
+      "winrate": 0.0775
+    },
+    {
+      "general_id": "xiahouyuan",
+      "name": "夏侯渊",
+      "identity": "lord",
+      "games": 129,
+      "won": 8,
+      "winrate": 0.062
+    },
+    {
+      "general_id": "xiahouyuan",
+      "name": "夏侯渊",
+      "identity": "loyalist",
+      "games": 269,
+      "won": 45,
+      "winrate": 0.1673
+    },
+    {
+      "general_id": "xiahouyuan",
+      "name": "夏侯渊",
+      "identity": "rebel",
+      "games": 485,
+      "won": 300,
+      "winrate": 0.6186
+    },
+    {
+      "general_id": "xiahouyuan",
+      "name": "夏侯渊",
+      "identity": "renegade",
+      "games": 117,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "xiaoqiao",
+      "name": "小乔",
+      "identity": "lord",
+      "games": 121,
+      "won": 40,
+      "winrate": 0.3306
+    },
+    {
+      "general_id": "xiaoqiao",
+      "name": "小乔",
+      "identity": "loyalist",
+      "games": 241,
+      "won": 51,
+      "winrate": 0.2116
+    },
+    {
+      "general_id": "xiaoqiao",
+      "name": "小乔",
+      "identity": "rebel",
+      "games": 504,
+      "won": 375,
+      "winrate": 0.744
+    },
+    {
+      "general_id": "xiaoqiao",
+      "name": "小乔",
+      "identity": "renegade",
+      "games": 134,
+      "won": 10,
+      "winrate": 0.0746
+    },
+    {
+      "general_id": "xuchu",
+      "name": "许褚",
+      "identity": "lord",
+      "games": 109,
+      "won": 16,
+      "winrate": 0.1468
+    },
+    {
+      "general_id": "xuchu",
+      "name": "许褚",
+      "identity": "loyalist",
+      "games": 281,
+      "won": 67,
+      "winrate": 0.2384
+    },
+    {
+      "general_id": "xuchu",
+      "name": "许褚",
+      "identity": "rebel",
+      "games": 487,
+      "won": 334,
+      "winrate": 0.6858
+    },
+    {
+      "general_id": "xuchu",
+      "name": "许褚",
+      "identity": "renegade",
+      "games": 123,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "xuhuang",
+      "name": "徐晃",
+      "identity": "lord",
+      "games": 121,
+      "won": 21,
+      "winrate": 0.1736
+    },
+    {
+      "general_id": "xuhuang",
+      "name": "徐晃",
+      "identity": "loyalist",
+      "games": 255,
+      "won": 63,
+      "winrate": 0.2471
+    },
+    {
+      "general_id": "xuhuang",
+      "name": "徐晃",
+      "identity": "rebel",
+      "games": 512,
+      "won": 372,
+      "winrate": 0.7266
+    },
+    {
+      "general_id": "xuhuang",
+      "name": "徐晃",
+      "identity": "renegade",
+      "games": 112,
+      "won": 1,
+      "winrate": 0.0089
+    },
+    {
+      "general_id": "xunyu",
+      "name": "荀彧",
+      "identity": "lord",
+      "games": 141,
+      "won": 6,
+      "winrate": 0.0426
+    },
+    {
+      "general_id": "xunyu",
+      "name": "荀彧",
+      "identity": "loyalist",
+      "games": 230,
+      "won": 35,
+      "winrate": 0.1522
+    },
+    {
+      "general_id": "xunyu",
+      "name": "荀彧",
+      "identity": "rebel",
+      "games": 503,
+      "won": 303,
+      "winrate": 0.6024
+    },
+    {
+      "general_id": "xunyu",
+      "name": "荀彧",
+      "identity": "renegade",
+      "games": 126,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "xusheng",
+      "name": "徐盛",
+      "identity": "lord",
+      "games": 128,
+      "won": 26,
+      "winrate": 0.2031
+    },
+    {
+      "general_id": "xusheng",
+      "name": "徐盛",
+      "identity": "loyalist",
+      "games": 270,
+      "won": 77,
+      "winrate": 0.2852
+    },
+    {
+      "general_id": "xusheng",
+      "name": "徐盛",
+      "identity": "rebel",
+      "games": 470,
+      "won": 345,
+      "winrate": 0.734
+    },
+    {
+      "general_id": "xusheng",
+      "name": "徐盛",
+      "identity": "renegade",
+      "games": 132,
+      "won": 5,
+      "winrate": 0.0379
+    },
+    {
+      "general_id": "xushu",
+      "name": "徐庶",
+      "identity": "lord",
+      "games": 124,
+      "won": 15,
+      "winrate": 0.121
+    },
+    {
+      "general_id": "xushu",
+      "name": "徐庶",
+      "identity": "loyalist",
+      "games": 262,
+      "won": 57,
+      "winrate": 0.2176
+    },
+    {
+      "general_id": "xushu",
+      "name": "徐庶",
+      "identity": "rebel",
+      "games": 493,
+      "won": 327,
+      "winrate": 0.6633
+    },
+    {
+      "general_id": "xushu",
+      "name": "徐庶",
+      "identity": "renegade",
+      "games": 121,
+      "won": 1,
+      "winrate": 0.0083
+    },
+    {
+      "general_id": "yanliangwenchou",
+      "name": "颜良&文丑",
+      "identity": "lord",
+      "games": 125,
+      "won": 13,
+      "winrate": 0.104
+    },
+    {
+      "general_id": "yanliangwenchou",
+      "name": "颜良&文丑",
+      "identity": "loyalist",
+      "games": 259,
+      "won": 54,
+      "winrate": 0.2085
+    },
+    {
+      "general_id": "yanliangwenchou",
+      "name": "颜良&文丑",
+      "identity": "rebel",
+      "games": 503,
+      "won": 336,
+      "winrate": 0.668
+    },
+    {
+      "general_id": "yanliangwenchou",
+      "name": "颜良&文丑",
+      "identity": "renegade",
+      "games": 113,
+      "won": 0,
+      "winrate": 0.0
+    },
+    {
+      "general_id": "yuanshao",
+      "name": "袁绍",
+      "identity": "lord",
+      "games": 132,
+      "won": 23,
+      "winrate": 0.1742
+    },
+    {
+      "general_id": "yuanshao",
+      "name": "袁绍",
+      "identity": "loyalist",
+      "games": 238,
+      "won": 49,
+      "winrate": 0.2059
+    },
+    {
+      "general_id": "yuanshao",
+      "name": "袁绍",
+      "identity": "rebel",
+      "games": 494,
+      "won": 353,
+      "winrate": 0.7146
+    },
+    {
+      "general_id": "yuanshao",
+      "name": "袁绍",
+      "identity": "renegade",
+      "games": 136,
+      "won": 6,
+      "winrate": 0.0441
+    },
+    {
+      "general_id": "yujin",
+      "name": "于禁",
+      "identity": "lord",
+      "games": 138,
+      "won": 52,
+      "winrate": 0.3768
+    },
+    {
+      "general_id": "yujin",
+      "name": "于禁",
+      "identity": "loyalist",
+      "games": 269,
+      "won": 64,
+      "winrate": 0.2379
+    },
+    {
+      "general_id": "yujin",
+      "name": "于禁",
+      "identity": "rebel",
+      "games": 492,
+      "won": 369,
+      "winrate": 0.75
+    },
+    {
+      "general_id": "yujin",
+      "name": "于禁",
+      "identity": "renegade",
+      "games": 101,
+      "won": 7,
+      "winrate": 0.0693
+    },
+    {
+      "general_id": "yuji",
+      "name": "于吉",
+      "identity": "lord",
+      "games": 108,
+      "won": 11,
+      "winrate": 0.1019
+    },
+    {
+      "general_id": "yuji",
+      "name": "于吉",
+      "identity": "loyalist",
+      "games": 235,
+      "won": 56,
+      "winrate": 0.2383
+    },
+    {
+      "general_id": "yuji",
+      "name": "于吉",
+      "identity": "rebel",
+      "games": 530,
+      "won": 356,
+      "winrate": 0.6717
+    },
+    {
+      "general_id": "yuji",
+      "name": "于吉",
+      "identity": "renegade",
+      "games": 127,
+      "won": 4,
+      "winrate": 0.0315
+    },
+    {
+      "general_id": "zhangchunhua",
+      "name": "张春华",
+      "identity": "lord",
+      "games": 115,
+      "won": 42,
+      "winrate": 0.3652
+    },
+    {
+      "general_id": "zhangchunhua",
+      "name": "张春华",
+      "identity": "loyalist",
+      "games": 239,
+      "won": 61,
+      "winrate": 0.2552
+    },
+    {
+      "general_id": "zhangchunhua",
+      "name": "张春华",
+      "identity": "rebel",
+      "games": 525,
+      "won": 382,
+      "winrate": 0.7276
+    },
+    {
+      "general_id": "zhangchunhua",
+      "name": "张春华",
+      "identity": "renegade",
+      "games": 121,
+      "won": 9,
+      "winrate": 0.0744
+    },
+    {
+      "general_id": "zhangfei",
+      "name": "张飞",
+      "identity": "lord",
+      "games": 150,
+      "won": 23,
+      "winrate": 0.1533
+    },
+    {
+      "general_id": "zhangfei",
+      "name": "张飞",
+      "identity": "loyalist",
+      "games": 247,
+      "won": 56,
+      "winrate": 0.2267
+    },
+    {
+      "general_id": "zhangfei",
+      "name": "张飞",
+      "identity": "rebel",
+      "games": 478,
+      "won": 363,
+      "winrate": 0.7594
+    },
+    {
+      "general_id": "zhangfei",
+      "name": "张飞",
+      "identity": "renegade",
+      "games": 125,
+      "won": 6,
+      "winrate": 0.048
+    },
+    {
+      "general_id": "zhangjiao_2010",
+      "name": "张角",
+      "identity": "lord",
+      "games": 136,
+      "won": 19,
+      "winrate": 0.1397
+    },
+    {
+      "general_id": "zhangjiao_2010",
+      "name": "张角",
+      "identity": "loyalist",
+      "games": 270,
+      "won": 61,
+      "winrate": 0.2259
+    },
+    {
+      "general_id": "zhangjiao_2010",
+      "name": "张角",
+      "identity": "rebel",
+      "games": 485,
+      "won": 321,
+      "winrate": 0.6619
+    },
+    {
+      "general_id": "zhangjiao_2010",
+      "name": "张角",
+      "identity": "renegade",
+      "games": 109,
+      "won": 2,
+      "winrate": 0.0183
+    },
+    {
+      "general_id": "zhangjiao",
+      "name": "张角",
+      "identity": "lord",
+      "games": 127,
+      "won": 15,
+      "winrate": 0.1181
+    },
+    {
+      "general_id": "zhangjiao",
+      "name": "张角",
+      "identity": "loyalist",
+      "games": 257,
+      "won": 53,
+      "winrate": 0.2062
+    },
+    {
+      "general_id": "zhangjiao",
+      "name": "张角",
+      "identity": "rebel",
+      "games": 485,
+      "won": 354,
+      "winrate": 0.7299
+    },
+    {
+      "general_id": "zhangjiao",
+      "name": "张角",
+      "identity": "renegade",
+      "games": 131,
+      "won": 5,
+      "winrate": 0.0382
+    },
+    {
+      "general_id": "zhangliao",
+      "name": "张辽",
+      "identity": "lord",
+      "games": 119,
+      "won": 53,
+      "winrate": 0.4454
+    },
+    {
+      "general_id": "zhangliao",
+      "name": "张辽",
+      "identity": "loyalist",
+      "games": 263,
+      "won": 79,
+      "winrate": 0.3004
+    },
+    {
+      "general_id": "zhangliao",
+      "name": "张辽",
+      "identity": "rebel",
+      "games": 513,
+      "won": 377,
+      "winrate": 0.7349
+    },
+    {
+      "general_id": "zhangliao",
+      "name": "张辽",
+      "identity": "renegade",
+      "games": 105,
+      "won": 6,
+      "winrate": 0.0571
+    },
+    {
+      "general_id": "zhangzhao_zhanghong",
+      "name": "张昭&张紘",
+      "identity": "lord",
+      "games": 130,
+      "won": 18,
+      "winrate": 0.1385
+    },
+    {
+      "general_id": "zhangzhao_zhanghong",
+      "name": "张昭&张紘",
+      "identity": "loyalist",
+      "games": 248,
+      "won": 50,
+      "winrate": 0.2016
+    },
+    {
+      "general_id": "zhangzhao_zhanghong",
+      "name": "张昭&张紘",
+      "identity": "rebel",
+      "games": 515,
+      "won": 344,
+      "winrate": 0.668
+    },
+    {
+      "general_id": "zhangzhao_zhanghong",
+      "name": "张昭&张紘",
+      "identity": "renegade",
+      "games": 107,
+      "won": 1,
+      "winrate": 0.0093
+    },
+    {
+      "general_id": "zhaoyun",
+      "name": "赵云",
+      "identity": "lord",
+      "games": 153,
+      "won": 35,
+      "winrate": 0.2288
+    },
+    {
+      "general_id": "zhaoyun",
+      "name": "赵云",
+      "identity": "loyalist",
+      "games": 237,
+      "won": 67,
+      "winrate": 0.2827
+    },
+    {
+      "general_id": "zhaoyun",
+      "name": "赵云",
+      "identity": "rebel",
+      "games": 495,
+      "won": 370,
+      "winrate": 0.7475
+    },
+    {
+      "general_id": "zhaoyun",
+      "name": "赵云",
+      "identity": "renegade",
+      "games": 115,
+      "won": 3,
+      "winrate": 0.0261
+    },
+    {
+      "general_id": "zhenji",
+      "name": "甄姬",
+      "identity": "lord",
+      "games": 126,
+      "won": 48,
+      "winrate": 0.381
+    },
+    {
+      "general_id": "zhenji",
+      "name": "甄姬",
+      "identity": "loyalist",
+      "games": 236,
+      "won": 51,
+      "winrate": 0.2161
+    },
+    {
+      "general_id": "zhenji",
+      "name": "甄姬",
+      "identity": "rebel",
+      "games": 504,
+      "won": 378,
+      "winrate": 0.75
+    },
+    {
+      "general_id": "zhenji",
+      "name": "甄姬",
+      "identity": "renegade",
+      "games": 134,
+      "won": 7,
+      "winrate": 0.0522
+    },
+    {
+      "general_id": "zhoutai",
+      "name": "周泰",
+      "identity": "lord",
+      "games": 127,
+      "won": 17,
+      "winrate": 0.1339
+    },
+    {
+      "general_id": "zhoutai",
+      "name": "周泰",
+      "identity": "loyalist",
+      "games": 238,
+      "won": 62,
+      "winrate": 0.2605
+    },
+    {
+      "general_id": "zhoutai",
+      "name": "周泰",
+      "identity": "rebel",
+      "games": 514,
+      "won": 361,
+      "winrate": 0.7023
+    },
+    {
+      "general_id": "zhoutai",
+      "name": "周泰",
+      "identity": "renegade",
+      "games": 121,
+      "won": 5,
+      "winrate": 0.0413
+    },
+    {
+      "general_id": "zhouyu",
+      "name": "周瑜",
+      "identity": "lord",
+      "games": 128,
+      "won": 27,
+      "winrate": 0.2109
+    },
+    {
+      "general_id": "zhouyu",
+      "name": "周瑜",
+      "identity": "loyalist",
+      "games": 235,
+      "won": 54,
+      "winrate": 0.2298
+    },
+    {
+      "general_id": "zhouyu",
+      "name": "周瑜",
+      "identity": "rebel",
+      "games": 499,
+      "won": 358,
+      "winrate": 0.7174
+    },
+    {
+      "general_id": "zhouyu",
+      "name": "周瑜",
+      "identity": "renegade",
+      "games": 138,
+      "won": 11,
+      "winrate": 0.0797
+    },
+    {
+      "general_id": "zhugeliang",
+      "name": "诸葛亮",
+      "identity": "lord",
+      "games": 125,
+      "won": 30,
+      "winrate": 0.24
+    },
+    {
+      "general_id": "zhugeliang",
+      "name": "诸葛亮",
+      "identity": "loyalist",
+      "games": 249,
+      "won": 56,
+      "winrate": 0.2249
+    },
+    {
+      "general_id": "zhugeliang",
+      "name": "诸葛亮",
+      "identity": "rebel",
+      "games": 495,
+      "won": 362,
+      "winrate": 0.7313
+    },
+    {
+      "general_id": "zhugeliang",
+      "name": "诸葛亮",
+      "identity": "renegade",
+      "games": 131,
+      "won": 4,
+      "winrate": 0.0305
+    },
+    {
+      "general_id": "zhurong",
+      "name": "祝融",
+      "identity": "lord",
+      "games": 124,
+      "won": 55,
+      "winrate": 0.4435
+    },
+    {
+      "general_id": "zhurong",
+      "name": "祝融",
+      "identity": "loyalist",
+      "games": 257,
+      "won": 74,
+      "winrate": 0.2879
+    },
+    {
+      "general_id": "zhurong",
+      "name": "祝融",
+      "identity": "rebel",
+      "games": 494,
+      "won": 403,
+      "winrate": 0.8158
+    },
+    {
+      "general_id": "zhurong",
+      "name": "祝融",
+      "identity": "renegade",
+      "games": 125,
+      "won": 20,
+      "winrate": 0.16
+    }
+  ]
+}

@@ -15,6 +15,7 @@ from src.game.identity import identity_name, visible_identity
 from src.ui import layout, player, prompt, seats, table, theme, tooltip
 from src.ui.overlay import GameOverOverlay
 from src.ui.action_picker import CardActionPicker
+from src.ui.huogong import HuogongPanel
 from src.ui.skill_bar import SkillBar, SkillPicker
 from src.ui.speed import SpeedControl
 from src.ui.widgets import Button, place_tooltip
@@ -49,6 +50,8 @@ class Renderer:
         self.skill_bar = SkillBar()
         self.skill_picker = SkillPicker()
         self.action_picker = CardActionPicker()
+        # 火攻专用界面（展示牌 + 可弃牌）：规则合法性仍由引擎给的候选集决定。
+        self.huogong = HuogongPanel()
 
         self.metrics = layout.LayoutMetrics(*screen.get_size())
         self.table_layout = None
@@ -141,7 +144,10 @@ class Renderer:
             selected_card_ids=player.selected_hand_card_ids(game),
         )
         self.effects.set_layout(self.table_layout)
-        self.playable = player.playable_hand_indices(game)
+        # 关键演出（技能提示一类）还在播时，手牌的可出牌高亮先收起来：
+        # 界面层让路，避免"提示还没看完就已经能点牌了"。
+        self.playable = ([] if self.effects.interaction_hold()
+                         else player.playable_hand_indices(game))
 
         # 引擎动画落点跟随当前布局（不再依赖固定的 1000×700 坐标）。
         game.ui_rects = self.table_layout.animation_rects()
@@ -358,6 +364,14 @@ class Renderer:
         if gate is not None and not gate.allows_local_input():
             return None
 
+        # 技能发动提示还在播：操作界面先让路（只拦界面，不拦引擎）。
+        # 节奏控件不拦——玩家随时可以调整自己的动画速度。
+        speed_hit = self.speed_control.hit(position, game)
+        if speed_hit is not None:
+            return speed_hit
+        if self.effects.interaction_hold():
+            return None
+
         # 用牌方式选择面板（Card Action Picker）与技能选择面板都是模态的。
         if game.card_action_picker():
             return self.action_picker.hit(position, game)
@@ -380,9 +394,6 @@ class Renderer:
             return "surrender"
         # 动画速度是**这台机器自己的**表现设置（见 ui/speed.py）：座主改的是
         # Game.speed，客户端改的是它自己视图上的 ViewSpeed，两边不通信。
-        speed_hit = self.speed_control.hit(position, game)
-        if speed_hit is not None:
-            return speed_hit
         return None
 
     def set_pressed(self, action):
@@ -736,6 +747,10 @@ class Renderer:
                 flash=flash if flash > 0 else None,
                 flash_color=flash_color,
                 shake=self.effects.seat_shake(player_obj),
+                # 体力 / 存活走表现层的"未播增量"：快照可以立刻把血量改成 0，
+                # 但画面要等这一次伤害真正演完才变（见 ui/storyboard 的账本）。
+                alive=self.effects.display_alive(player_obj),
+                hp=self.effects.display_hp(player_obj),
             )
 
         # 中央
@@ -779,6 +794,8 @@ class Renderer:
             source_slots=source_slots,
             candidate_slots=candidate_slots,
             responding=game.player is responding,
+            alive=self.effects.display_alive(game.player),
+            hp=self.effects.display_hp(game.player),
         )
         player.draw_hand(
             self.screen,
@@ -792,7 +809,10 @@ class Renderer:
 
         # Prompt + 按钮。文案与可用性都来自引擎自己的查询，所以单机与联网
         # 客户端画出来的是同一个界面（客户端的交互槽位由房主的决策请求填）。
-        if self.interaction_layers(game):
+        # 技能提示这类关键演出还在播时，操作层整体让路（见 Effects.interaction_hold）。
+        show_interaction = (self.interaction_layers(game)
+                            and not self.effects.interaction_hold())
+        if show_interaction:
             info = prompt.describe(game)
             prompt.draw(self.screen, info, metrics)
             actions = self.actions_for(game)
@@ -815,9 +835,14 @@ class Renderer:
         table.draw_log(self.screen, game, metrics)
         self.skill_bar.draw(self.screen, game, self.mouse_pos)
         self.speed_control.draw(self.screen, game, self.mouse_pos)
-        if self.interaction_layers(game):
+        if show_interaction:
             self.skill_picker.draw(self.screen, game, self.mouse_pos)
             self.action_picker.draw(self.screen, game, self.mouse_pos)
+
+        # 火攻专用界面：只有当前在选择的那一方看得到（其余人看到的是提示条）。
+        # 与提示条 / 按钮同层：技能提示还在播时一起让路（避免两个窗口叠在一起）。
+        if show_interaction:
+            self.huogong.draw(self.screen, game, metrics, self.mouse_pos)
 
         # ---- FX overlay ----
         # 指向箭头与动作横幅单独成层：高于所有常规面板（座位 / 卡牌 / 按钮 /
@@ -828,6 +853,11 @@ class Renderer:
             self.screen, self.effects.arrows, table_layout, metrics)
         table.draw_action_banner(
             self.screen, metrics, self.effects.action_display())
+        # 结算结论（判定结果 / 阶段跳过）与技能发动提示排在这里：它们在
+        # 动作横幅之上，判定面板之下——判定面板永远是最高层级。
+        table.draw_story_banner(
+            self.screen, metrics, self.effects.story_display())
+        self.effects.skill_banner.draw(self.screen, game, metrics)
 
         # 悬停提示最后画，保证盖在其他面板之上。
         self._draw_general_tooltip(game, metrics)

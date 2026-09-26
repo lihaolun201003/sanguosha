@@ -691,9 +691,13 @@ class TuntianFlow(Flow):
         game = self.game
         card = getattr(result, "card", None)
         if card is not None and _is_not_heart(card):
-            # 判定牌若已被技能取走就跳过；仍在弃牌堆的取回来放到「田」上。
-            if any(item is card for item in game.deck.discard_pile):
-                game.deck.discard_pile.remove(card)
+            # 判定牌可能已经被别的技能取走（【天妒】【巨象】……）。那种情况下
+            # 必须**整个跳过**：牌已经名花有主，再放一次会让同一张牌同时挂在
+            # 两个牌区（归属不变量会直接报重复）。以前的注释写的就是"取走就跳过"，
+            # 但代码只跳过了 remove、照样 place_card——注释和实现不一致。
+            if not any(item is card for item in game.deck.discard_pile):
+                return self.complete({"applied": True})
+            game.deck.discard_pile.remove(card)
             self.owner.place_card(TIAN_ZONE, card)
             game.add_log("%s 的【屯田】将 %s 置于武将牌上（共 %d 张「田」）"
                          % (self.owner.name,
@@ -847,7 +851,7 @@ MOUNTAIN_SKILLS = (
             cost_prompt="【直谏】：请选择一张装备牌置入目标的装备区",
             cost_candidates=_is_zhijian_source,
         ),
-        tags=("active",),
+        tags=("active", "card_transfer"),
     ),
     triggered(
         "guzheng",

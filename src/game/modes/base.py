@@ -40,7 +40,8 @@ class GameMode:
     allowed_player_counts: Tuple[int, ...] = ()
     uses_identities = False
     # 真人武将选择的候选数量（从可玩武将池中抽取）。
-    general_choice_count = 3
+    #: 每局给真人的候选武将数量（本阶段：5 个）。
+    general_choice_count = 5
     # True 表示本模式会让**多名角色都由本机鼠标操作**，因此界面要把视角
     # （``game.player``）跟着"当前正在决策的人"切换。默认 False：单机永远
     # 是本机真人一个操作者，视角不跟随。

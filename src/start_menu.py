@@ -11,11 +11,13 @@ from src.ui.speed import SpeedControl
 from src.ui.widgets import Button, draw_panel
 
 # 设计坐标（相对菜单面板）
-PANEL_DESIGN = (620, 800)
+PANEL_DESIGN = (620, 878)
 BUTTON_WIDTH = 380
 BUTTON_HEIGHT = 74
 # 多人对战（局域网）入口：与「开始游戏」「退出游戏」同级，夹在两者之间。
 MULTIPLAYER_HEIGHT = 62
+# 「我的武将池」：本机长期偏好（不属于任何一局），放在联机入口下面。
+POOL_HEIGHT = 62
 EXIT_HEIGHT = 62
 
 
@@ -43,6 +45,8 @@ class StartMenu:
         self.multiplayer_button = Button(
             pygame.Rect(0, 0, 10, 10), "多人对战（局域网）",
             kind="secondary", font="normal")
+        self.pool_button = Button(
+            pygame.Rect(0, 0, 10, 10), "我的武将池", kind="secondary", font="normal")
         self.exit_button = Button(pygame.Rect(0, 0, 10, 10), "退出游戏", kind="ghost", font="normal")
         # 模式按钮：id → Button（文案由模式自己提供，菜单不认识模式业务）。
         self.mode_buttons = {}
@@ -137,10 +141,14 @@ class StartMenu:
         self.multiplayer_button.rect = pygame.Rect(
             center_x - button_w // 2, multiplayer_y, button_w, multiplayer_h
         )
+        pool_y = self.multiplayer_button.rect.bottom + metrics.px(14)
+        self.pool_button.rect = pygame.Rect(
+            center_x - button_w // 2, pool_y, button_w, metrics.px(POOL_HEIGHT)
+        )
         exit_h = metrics.px(EXIT_HEIGHT)
         self.exit_button.rect = pygame.Rect(
             center_x - button_w // 2,
-            self.multiplayer_button.rect.bottom + metrics.px(14),
+            self.pool_button.rect.bottom + metrics.px(12),
             button_w,
             exit_h,
         )
@@ -181,6 +189,9 @@ class StartMenu:
         if self.multiplayer_button.contains(position):
             return "multiplayer"
 
+        if self.pool_button.contains(position):
+            return "general_pool"
+
         if self.exit_button.contains(position):
             return "exit"
 
@@ -188,7 +199,7 @@ class StartMenu:
 
     def buttons(self):
         return (self.start_button, self.minus_button, self.plus_button,
-                self.multiplayer_button, self.exit_button)
+                self.multiplayer_button, self.pool_button, self.exit_button)
 
     # ==================================================
     # 绘制
@@ -275,12 +286,27 @@ class StartMenu:
 
         self.start_button.draw(self.screen, fonts, mouse)
         self.multiplayer_button.draw(self.screen, fonts, mouse)
+        self.pool_button.draw(self.screen, fonts, mouse)
         self.exit_button.draw(self.screen, fonts, mouse)
         self.speed_control.draw(self.screen, game, mouse)
 
         notice = fonts.get("small").render(game.menu_message, True, theme.TEXT_DIM)
         self.screen.blit(notice, notice.get_rect(
-            center=(center_x, self.exit_button.rect.bottom + metrics.px(26))))
+            center=(center_x, self.exit_button.rect.bottom + metrics.px(24))))
+
+        # 武将池状态一行：进了设置页才知道自己有没有配过，体验很差。
+        pool_text = self.pool_summary(game)
+        pool = fonts.get("micro").render(pool_text, True, theme.TEXT_DIM)
+        self.screen.blit(pool, pool.get_rect(
+            center=(center_x, self.exit_button.rect.bottom + metrics.px(46))))
+
+    def pool_summary(self, game):
+        """武将池的一行摘要（未配置时不写"0 名武将"，那会让人以为坏了）。"""
+
+        pool = getattr(game, "favorite_general_ids", ())
+        if not pool:
+            return "武将池：未配置（默认使用全部武将）"
+        return "武将池：%d 名武将" % len(pool)
 
     def mode_name(self, game):
         mode = game.modes.get(game.mode_id)

@@ -1,0 +1,84 @@
+{
+  "records": [
+    {
+      "label": "判定面板：结果语义已经显示",
+      "ok": true,
+      "detail": "判定成功 · 跳过出牌阶段"
+    },
+    {
+      "label": "判定面板：面板在屏幕内",
+      "ok": true,
+      "detail": "(263, 175, 499, 202)"
+    },
+    {
+      "label": "judge：四种分辨率下都完整在屏幕内",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "技能提示面板：真的画出来了（active）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "技能提示面板：面板在屏幕内",
+      "ok": true,
+      "detail": "(224, 122, 576, 197)"
+    },
+    {
+      "label": "技能提示面板：文字区域够宽（描述不会被裁）",
+      "ok": true,
+      "detail": "width=576"
+    },
+    {
+      "label": "skill_banner：四种分辨率下都完整在屏幕内（技能说明按最长的一条算）",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "火攻面板：识别出火攻弃牌阶段",
+      "ok": true,
+      "detail": "huogong_discard"
+    },
+    {
+      "label": "火攻面板：拿到展示牌",
+      "ok": true,
+      "detail": "闪"
+    },
+    {
+      "label": "火攻面板：面板在屏幕内",
+      "ok": true,
+      "detail": "(205, 161, 614, 289)"
+    },
+    {
+      "label": "火攻面板：点合法牌被识别为选中",
+      "ok": true,
+      "detail": "card"
+    },
+    {
+      "label": "火攻面板：面板外的点击不被面板吞掉",
+      "ok": true,
+      "detail": "None"
+    },
+    {
+      "label": "火攻面板：牌位都在面板内",
+      "ok": true,
+      "detail": "[(322, 108, 61, 86), (388, 108, 61, 86), (454, 108, 61, 86)]"
+    },
+    {
+      "label": "火攻面板：展示牌的花色点数在底部说明带之上",
+      "ok": true,
+      "detail": "说明带顶边 y=413"
+    },
+    {
+      "label": "huogong：四种分辨率下都完整在屏幕内",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "notes": [
+    "火攻场景：pending_selection=huogong_discard data={'reason': 'huogong_discard', 'reveal': False, 'owner': <src.player.Player object at 0x000002553274B9A0>, 'hand': [Card(id='card-396', name='SHA', category='basic', color=(210, 200, 175), nature='normal', card_color='red', subtype=None, attack_range=1, suit='heart', rank='7', description=None), Card(id='card-397', name='SHAN', category='basic', color=(210, 200, 175), nature='normal', card_color='red', subtype=None, attack_range=1, suit='heart', rank='3', description=None), Card(id='card-398', name='TAO', category='basic', color=(210, 200, 175), nature='normal', card_color='red', subtype=None, attack_range=1, suit='diamond', rank='9', description=None)], 'candidates': [Card(id='card-396', name='SHA', category='basic', color=(210, 200, 175), nature='normal', card_color='red', subtype=None, attack_range=1, suit='heart', rank='7', description=None)], 'candidate_ids': {2564921660880}, 'selected_ids': set(), 'revealed': Card(id='card-399', name='SHAN', category='basic', color=(210, 200, 175), nature='normal', card_color='red', subtype=None, attack_range=1, suit='heart', rank='7', description=None), 'revealed_player': <src.player.Player object at 0x000002553274BA60>, 'caster': <src.player.Player object at 0x000002553274B9A0>, 'cancellable': False, 'prompt': '弃置一张与展示牌同花色的手牌'}"
+  ],
+  "failed": 0,
+  "total": 15
+}

@@ -11,10 +11,12 @@ from src.constants import (
 
 from src.game import Game
 from src.renderer import Renderer
+from src.settings import shared as shared_preferences
 from src.game.skills.standard.fanjian import FanjianFlow  # noqa: F401  (技能流程随包加载)
 from src.start_menu import StartMenu
 from src.ui.duel_hud import DuelHud
 from src.ui.duel_setup import DuelSetupScreen
+from src.ui.favorite_generals import FavoriteGeneralsScreen
 from src.ui.general_select import GeneralSelectScreen
 from src.ui.identity_reveal import IdentityRevealScreen
 from src.ui.interaction import handle_game_click
@@ -62,6 +64,11 @@ clock = pygame.time.Clock()
 
 game = Game()
 
+# 本机长期偏好（我的武将池）：启动时读一次，之后由「我的武将池」页面维护。
+# 它只影响**本机真人的候选**，不进存档、不进联机快照（见 src/settings）。
+preferences = shared_preferences()
+game.set_favorite_generals(preferences.favorite_general_ids())
+
 
 renderer = Renderer(screen)
 
@@ -73,6 +80,9 @@ start_menu = StartMenu(screen)
 
 
 general_select = GeneralSelectScreen(screen)
+
+# 「我的武将池」：一个独立页面（不是弹窗），维护本机偏好。
+favorite_generals = FavoriteGeneralsScreen(screen, preferences)
 
 
 identity_reveal = IdentityRevealScreen(screen)
@@ -117,6 +127,8 @@ def resync_screens(surface):
     start_menu.sync_layout(renderer.metrics)
     general_select.screen = surface
     general_select.sync_layout(renderer.metrics, game.selectable_generals())
+    favorite_generals.screen = surface
+    favorite_generals.sync_layout(renderer.metrics, favorite_generals.generals)
     identity_reveal.screen = surface
     identity_reveal.sync_layout(renderer.metrics)
     duel_setup.screen = surface
@@ -147,6 +159,8 @@ if runtime_hook is not None:
         screen=screen,
         game=game,
         renderer=renderer,
+        preferences=preferences,
+        favorite_generals=favorite_generals,
         start_menu=start_menu,
         general_select=general_select,
         identity_reveal=identity_reveal,
@@ -369,6 +383,27 @@ while running:
 
 
         # ==================================================
+        # 我的武将池
+        #
+        # 它是一个正式页面（不是弹窗），所以在这里整屏接管事件：滚轮滚动、
+        # 悬停详情、点击选中、ESC 返回。返回的 None 表示"这个事件与本页无关"，
+        # 继续走下面的通用处理（F11 / 窗口缩放等）。
+        # ==================================================
+
+        if game.scene == "general_pool":
+
+            pool_action = favorite_generals.handle_event(event, game)
+
+            if pool_action == "saved":
+                game.set_favorite_generals(favorite_generals.draft_ids())
+            elif pool_action == "back":
+                game.scene = "menu"
+                start_menu.sync_layout(renderer.metrics)
+
+            if pool_action:
+                continue
+
+        # ==================================================
         # 开始界面
         # ==================================================
 
@@ -388,6 +423,11 @@ while running:
             elif menu_action == "multiplayer":
                 # 进入联机流程：先清掉可能残留的旧会话再进多人菜单。
                 lan_scene.enter(game)
+
+            elif menu_action == "general_pool":
+                # 「我的武将池」：独立页面，只读写本机偏好。
+                favorite_generals.on_enter(game, preferences)
+                game.scene = "general_pool"
 
             elif menu_action == "select_general":
                 # 开局流程已经由菜单推进（身份模式先看身份，1v1 测试先设置武将）。
@@ -539,6 +579,10 @@ while running:
         general_select.notice = (
             lan_scene.setup_notice(game.scene) if lan_scene.is_host_setup() else "")
         general_select.draw(game, renderer.metrics)
+
+    elif game.scene == "general_pool":
+
+        favorite_generals.draw(game, renderer.metrics)
 
     elif game.scene == "duel_setup":
 

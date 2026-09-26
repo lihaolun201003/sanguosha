@@ -1,55 +1,66 @@
-"""General selection screen: pick a general before the battle starts.
+"""选将界面：本局候选（默认 5 个）+ 中央大卡详情。
 
-武将牌直接用 ``assets/generals/cards`` 里的真实卡面（按比例 fit，不拉伸）；
-没有素材的武将自动退回原来的程序绘制头像，因此新增第二批武将时即使图还没到
-也能正常开局。
+布局参考"卡牌游戏选将"的常见做法：
 
-整屏数据驱动：只读 ``GeneralDef`` / ``SkillDef``，不认识任何具体武将。所有
-rect 都来自 LayoutMetrics，候选数量 3～11 都能自动排版。
+    顶部   模式 / 一句说明（还差什么、怎么确认）
+    中央   当前聚焦武将的大卡：立绘 + 姓名 + 势力 + 体力 + 全部技能
+    底部   本局候选（横向 5 张）：点一下 = 聚焦并选中，双击 = 直接确认
+
+**只显示本局候选**：候选来自 ``game.selectable_generals()``（单机走
+``GeneralDraft``，联机走房主下发的候选），不再是整张武将表。随机发生在
+业务层（``game.generals.draft``），这一屏一次都不抽——resize / hover /
+重绘都不会让候选变化。
+
+进入界面时默认聚焦第一张，但**不会**替你提交选择：必须自己点一张卡片
+再按「确认出战」（或双击卡片）。这一屏不认识任何具体武将。
 """
 
 import pygame
 
-from . import assets as assets_module
-from . import layout, theme
-from .widgets import Button, draw_panel, ellipsize_text
+from . import general_cards, layout, theme
+from .widgets import (
+    Button,
+    draw_panel,
+    draw_state_border,
+    ellipsize_text,
+    wrap_text,
+)
 
-KINGDOM_COLORS = {
-    "wei": (86, 116, 178),
-    "shu": (176, 84, 72),
-    "wu": (72, 152, 118),
-    "qun": (140, 132, 108),
-}
+#: 底部候选卡的设计尺寸。
+PICK_WIDTH = 168
+PICK_HEIGHT = 226
+PICK_FOCUS_LIFT = 10
+PICK_HOVER_LIFT = 6
 
-CARD_COLUMNS = 4
-CARD_GAP = 22
-# 武将牌素材比例（420:572）；卡片高度按它反推，保证卡面不被压扁。
-CARD_ASPECT = 420.0 / 572.0
-TEXT_AREA = 88
-HOVER_LIFT = 10
+HEADER_H = 132
+FOOTER_H = 116
+DETAIL_GAP = 22
 
 
 class GeneralSelectScreen:
-    """一屏展示可选武将卡，支持选择 / 随机 / 确认 / 返回。
+    """一屏选择本局武将：候选横排 + 中央大卡。
 
-    ``allow_random`` / ``allow_back`` 默认开启（单机开局的两条退路）；联机的
-    候选由房主给定，"随机"会选出候选之外的武将、"返回"也没有可回的地方，
-    所以那两个按钮在联机里关掉，只留「确认出战」。
+    ``allow_random`` / ``allow_back`` 与之前一致：单机保留「随机」与「返回」
+    两条退路；联机的候选由房主给定，两个按钮都关掉，只留「确认出战」。
     """
 
     def __init__(self, screen, *, allow_random=True, allow_back=True):
         self.screen = screen
         self.metrics = None
-        self.card_rects = []
-        self.card_hit_rects = []
+        self.generals = ()
+        self.focus_index = 0
         self.hover_index = None
         self.allow_random = bool(allow_random)
         self.allow_back = bool(allow_back)
-        #: 可选的一行提示（联机开局用它显示"等待其他玩家选将"）。为空时不画。
+        #: 可选的一行提示（联机开局用它显示"等待其他玩家选将"）。
         self.notice = ""
+        self.card_rects = []
+        self.card_hit_rects = []
+        self.detail_rect = pygame.Rect(0, 0, 10, 10)
         self.confirm_button = Button(pygame.Rect(0, 0, 10, 10), "确认出战", kind="primary", font="large")
-        self.random_button = Button(pygame.Rect(0, 0, 10, 10), "随机", kind="secondary", font="normal")
+        self.random_button = Button(pygame.Rect(0, 0, 10, 10), "随机选一个", kind="secondary", font="normal")
         self.back_button = Button(pygame.Rect(0, 0, 10, 10), "返回", kind="ghost", font="normal")
+        self._last_click = (None, 0.0)
         self.sync_layout(None, ())
 
     # ==================================================
@@ -57,91 +68,57 @@ class GeneralSelectScreen:
     # ==================================================
 
     def sync_layout(self, metrics=None, generals=()):
-        metrics = metrics or layout.LayoutMetrics(layout.DESIGN_WIDTH, layout.DESIGN_HEIGHT)
+        metrics = metrics or layout.LayoutMetrics(
+            layout.DESIGN_WIDTH, layout.DESIGN_HEIGHT)
         self.metrics = metrics
-        self.generals = list(generals)
-        #: 当前这一屏放不下、因此没有画出卡片的武将数量（见 sync_layout）。
+        self.generals = tuple(generals)
+        #: 放不下、因此没有画出来的候选数量（真实开局只有 5 个，恒为 0）。
         self.hidden_count = 0
 
+        pad = metrics.px(30)
+        header = metrics.px(HEADER_H)
+        footer = metrics.px(FOOTER_H)
         count = max(1, len(self.generals))
-        # 候选少时大字排开；展示全量武将池（25 名）时自动增加列数，
-        # 保证网格始终落在可用区域内，不会压到按钮。
-        if count <= 8:
-            columns = min(CARD_COLUMNS, count)
-        elif count <= 16:
-            columns = 5
-        else:
-            columns = 6
-        columns = min(columns, count)
-        gap = metrics.px(CARD_GAP)
 
-        header = metrics.px(150)
-        footer = metrics.px(126)
-        available_h = max(metrics.px(160), metrics.screen_h - header - footer)
-        available_w = max(metrics.px(320), metrics.screen_w - metrics.px(72))
-
-        # 单张卡片的最小可用高度（武将牌 + 文字区）。任何情况下都不能为了
-        # "把所有人塞进一屏"而把卡片压到看不见——扩展包全部加载后注册表有
-        # 91 名武将，硬塞只会让网格冲出屏幕、并且压到确认按钮上。
-        min_card_h = metrics.px(TEXT_AREA) + metrics.px(72)
-        max_rows = max(1, (available_h + gap) // (min_card_h + gap))
-        visible = min(count, columns * max_rows)
-        rows = max(1, (visible + columns - 1) // columns)
-        #: 这一屏放不下的武将数量。真实开局只传候选（3 名），不会溢出；
-        #: 展示全量注册表（工具 / 测试 / 图鉴）时它会大于 0。
-        self.hidden_count = count - visible
-
-        width_limit = max(metrics.px(64), (available_w - gap * (columns - 1)) // columns)
-        height_limit = max(min_card_h, (available_h - gap * (rows - 1)) // rows)
-
-        # 卡片 = 武将牌（按素材比例）+ 下方文字区。空间紧张时先压缩文字区，
-        # 保证武将牌本身完整、网格不越出可用区域——否则确认按钮会被压住。
-        text_area = metrics.px(TEXT_AREA)
-        min_art = metrics.px(72)
-        if height_limit - text_area < min_art:
-            text_area = max(metrics.px(14), height_limit - min_art)
-
-        width = min(width_limit, int(max(1, height_limit - text_area) * CARD_ASPECT))
-        width = max(min(metrics.px(52), width_limit), width)
-        art_height = int(round(width / CARD_ASPECT))
-        # 兜底：最小宽度可能让卡片略高，这里再压一次高度上限。
-        if art_height + text_area > height_limit:
-            art_height = max(1, height_limit - text_area)
-        height = art_height + text_area
-
-        grid_height = rows * height + max(0, rows - 1) * gap
-        top = header + max(0, (available_h - grid_height) // 2)
-        start_x = (metrics.screen_w - (columns * width + (columns - 1) * gap)) // 2
+        # 底部候选：先按设计宽度排，排不下就等分（5 个在 4:3 屏上也放得下）。
+        gap = metrics.px(18)
+        available_w = metrics.screen_w - pad * 2
+        card_w = min(metrics.px(PICK_WIDTH),
+                     (available_w - gap * (count - 1)) // count)
+        card_w = max(metrics.px(72), card_w)
+        card_h = max(metrics.px(96), int(card_w * (PICK_HEIGHT / float(PICK_WIDTH))))
+        card_h = min(card_h, metrics.px(PICK_HEIGHT + 16))
+        strip_h = card_h + metrics.px(PICK_FOCUS_LIFT + 12)
+        strip_y = metrics.screen_h - footer - strip_h
+        total_w = card_w * count + gap * (count - 1)
+        start_x = (metrics.screen_w - total_w) // 2
+        top = max(header + metrics.px(8), strip_y)
 
         self.card_rects = []
         self.card_hit_rects = []
-        lift = metrics.px(HOVER_LIFT)
-        for index in range(min(len(self.generals), visible)):
-            column, row = index % columns, index // columns
-            rect = pygame.Rect(
-                start_x + column * (width + gap),
-                top + row * (height + gap),
-                width,
-                height,
-            )
+        lift = metrics.px(PICK_FOCUS_LIFT + PICK_HOVER_LIFT)
+        for index in range(count):
+            rect = pygame.Rect(start_x + index * (card_w + gap), top, card_w, card_h)
             self.card_rects.append(rect)
-            # 悬停时卡片上浮，点击区域必须跟着一起抬高，否则"看得见点不到"。
+            # 聚焦 / 悬停时卡片上浮，点击区域必须跟着一起抬，否则"看得见点不到"。
             self.card_hit_rects.append(rect.union(rect.move(0, -lift)))
 
-        button_y = min(
-            metrics.screen_h - metrics.px(62) - metrics.px(20),
-            max(top + grid_height + metrics.px(18), metrics.screen_h - footer + metrics.px(6)),
-        )
-        button_h = metrics.px(62)
+        # 中央大卡：顶部到候选条之间的全部空间。
+        detail_top = metrics.px(HEADER_H)
+        detail_h = max(metrics.px(180), top - detail_top - metrics.px(DETAIL_GAP))
+        self.detail_rect = pygame.Rect(
+            pad * 2, detail_top, metrics.screen_w - pad * 4, detail_h)
+
+        button_h = metrics.px(58)
+        button_y = metrics.screen_h - metrics.px(FOOTER_H) + metrics.px(34)
         self.confirm_button.rect = pygame.Rect(
-            metrics.screen_w // 2 - metrics.px(120), button_y, metrics.px(240), button_h
-        )
+            metrics.screen_w // 2 - metrics.px(150), button_y, metrics.px(300), button_h)
         self.random_button.rect = pygame.Rect(
-            self.confirm_button.rect.left - metrics.px(210), button_y, metrics.px(190), button_h
-        )
+            self.confirm_button.rect.left - metrics.px(230), button_y,
+            metrics.px(210), button_h)
         self.back_button.rect = pygame.Rect(
-            self.confirm_button.rect.right + metrics.px(20), button_y, metrics.px(190), button_h
-        )
+            self.confirm_button.rect.right + metrics.px(20), button_y,
+            metrics.px(210), button_h)
         return self
 
     # ==================================================
@@ -160,24 +137,49 @@ class GeneralSelectScreen:
             return None
         return self.generals[index]
 
-    def set_hover(self, position):
-        """只更新悬停高亮；不影响 game.selected_general。"""
+    def focused_general(self):
+        if not self.generals:
+            return None
+        index = max(0, min(self.focus_index, len(self.generals) - 1))
+        return self.generals[index]
 
+    def selected_general(self, game):
+        return game.generals.get(getattr(game, "selected_general", None))
+
+    def set_hover(self, position):
         self.hover_index = self.card_index_at(position)
         return self.hover_index
 
-    def handle_click(self, position, game):
-        """返回 "select" / "random" / "confirm" / "back" / None。"""
+    def handle_event(self, event, game):
+        """返回 ``handle_click`` 的结果；只认左键与鼠标移动。"""
 
-        general = self.general_at(position)
-        if general is not None:
+        if event.type == pygame.MOUSEMOTION:
+            self.set_hover(event.pos)
+            return "handled"
+        if event.type != pygame.MOUSEBUTTONDOWN or getattr(event, "button", 1) != 1:
+            return None
+        return self.handle_click(event.pos, game)
+
+    def handle_click(self, position, game):
+        """返回 "select" / "confirm" / "random" / "back" / None。"""
+
+        index = self.card_index_at(position)
+        if index is not None and index < len(self.generals):
+            general = self.generals[index]
+            self.focus_index = index
             game.selected_general = general.id
+            # 双击直接确认（第一次点已经把它选中了，第二次就是"就是它了"）。
+            if self._is_double_click(index):
+                self._last_click = (None, 0.0)
+                return "confirm"
             return "select"
 
         if self.allow_random and self.random_button.contains(position):
-            pool = list(game.generals.ids())
+            # 随机**只在候选里**抽——不会选出候选之外的武将。
+            pool = [general.id for general in self.generals]
             if pool:
                 game.selected_general = game.rng.choice(pool)
+                self.focus_index = pool.index(game.selected_general)
             return "random"
 
         if self.confirm_button.contains(position) and game.selected_general:
@@ -188,177 +190,223 @@ class GeneralSelectScreen:
 
         return None
 
+    def _is_double_click(self, index):
+        import time
+
+        now = time.monotonic()
+        last_index, last_time = self._last_click
+        self._last_click = (index, now)
+        return last_index == index and (now - last_time) < 0.45
+
     # ==================================================
     # 绘制
     # ==================================================
 
     def draw(self, game, metrics=None):
         metrics = metrics or self.metrics
-        # metrics 变了（全屏启动 / 缩放窗口）就重算布局，否则第一帧会沿用
-        # 旧尺寸，卡片挤在一起。武将列表沿用当前显示的那批；从未设置过时
-        # 退回全量，避免出现空白界面。
+        # metrics 变了（全屏启动 / 缩放窗口）就重算布局；武将列表沿用当前这批，
+        # 从未设置过时退回全量（只有工具 / 旧路径会走到）。
         if metrics is None or self.metrics is not metrics or not self.card_rects:
-            self.sync_layout(metrics, self.generals or game.generals.list_generals())
+            self.sync_layout(metrics, self.generals or game.selectable_generals())
             metrics = self.metrics
 
-        fonts = metrics.fonts
         mouse = pygame.mouse.get_pos()
         self.set_hover(mouse)
 
-        self.screen.blit(theme.table_surface(metrics.screen_w, metrics.screen_h), (0, 0))
-
-        title = fonts.get("title").render("选择你的武将", True, theme.GOLD_BRIGHT)
-        self.screen.blit(title, title.get_rect(center=(metrics.screen_w // 2, metrics.px(64))))
-
-        selected = game.generals.get(game.selected_general)
-        hint_text = (
-            "已选择：%s    ·    确认后其余角色会自动分配不同武将" % selected.name
-            if selected is not None
-            else "点击武将牌选择你的武将，确认后其余角色会自动分配不同武将"
-        )
-        hint_color = theme.GOLD_BRIGHT if selected is not None else theme.TEXT_DIM
-        hint = fonts.get("small").render(hint_text, True, hint_color)
-        self.screen.blit(hint, hint.get_rect(center=(metrics.screen_w // 2, metrics.px(108))))
-
-        for index, (general, rect) in enumerate(zip(self.generals, self.card_rects)):
-            self._draw_general_card(
-                game, general, rect, metrics,
-                chosen=game.selected_general == general.id,
-                hovered=index == self.hover_index,
-            )
-
-        self.confirm_button.enabled = bool(game.selected_general)
-        if self.allow_random:
-            self.random_button.draw(self.screen, fonts, mouse)
-        self.confirm_button.draw(self.screen, fonts, mouse)
-        if self.allow_back:
-            self.back_button.draw(self.screen, fonts, mouse)
+        self.screen.blit(theme.menu_background(metrics.screen_w, metrics.screen_h), (0, 0))
+        self._draw_header(game, metrics)
+        self._draw_detail(self.focused_general(), game, metrics)
+        self._draw_candidates(game, metrics, mouse)
+        self._draw_buttons(game, metrics, mouse)
 
         if self.notice:
-            note_font = fonts.get("small")
-            note = note_font.render(self.notice, True, theme.TEXT_DIM)
+            font = metrics.fonts.get("small")
+            note = font.render(self.notice, True, theme.TEXT_WARM_DIM)
             self.screen.blit(note, note.get_rect(
-                center=(metrics.screen_w // 2, metrics.screen_h - metrics.px(28))))
+                center=(metrics.screen_w // 2, metrics.screen_h - metrics.px(16))))
+        return self
 
-    def _draw_general_card(self, game, general, rect, metrics, *, chosen, hovered):
+    # ---- 顶部 ----
+
+    def _draw_header(self, game, metrics):
         fonts = metrics.fonts
-        kingdom_color = KINGDOM_COLORS.get(general.kingdom, theme.GOLD_DIM)
+        mode = getattr(getattr(game, "mode", None), "name", "")
+        title_text = "请选择武将" if not mode else "%s · 请选择武将" % mode
+        title = fonts.get("title").render(title_text, True, theme.GOLD_BRIGHT)
+        self.screen.blit(title, title.get_rect(
+            center=(metrics.screen_w // 2, metrics.px(46))))
 
-        lift = metrics.px(HOVER_LIFT) if hovered and not chosen else 0
-        card = rect.move(0, -lift)
+        selected = self.selected_general(game)
+        if selected is not None:
+            hint = "已选择：%s    ·    点「确认出战」开始对局（双击卡片也可以）" % selected.name
+            color = theme.JADE_BRIGHT
+        else:
+            hint = "本局候选由你的武将池随机抽选 · 点一张卡片查看详情，再确认出战"
+            color = theme.TEXT_WARM_DIM
+        rendered = fonts.get("small").render(hint, True, color)
+        self.screen.blit(rendered, rendered.get_rect(
+            center=(metrics.screen_w // 2, metrics.px(92))))
+        pygame.draw.line(
+            self.screen, theme.BRONZE_DIM,
+            (metrics.px(40), metrics.px(HEADER_H) - metrics.px(8)),
+            (metrics.screen_w - metrics.px(40), metrics.px(HEADER_H) - metrics.px(8)), 2)
 
-        # 悬停时先画一层阴影，制造"抬起来"的层次。
+    # ---- 中央大卡 ----
+
+    def _draw_detail(self, general, game, metrics):
+        rect = self.detail_rect
+        draw_panel(self.screen, rect, fill=theme.PANEL_WARM_DEEP,
+                   border=theme.BRONZE, border_width=2,
+                   radius=metrics.px(18), shadow=False)
+        if general is None:
+            hint = metrics.fonts.get("large").render(
+                "没有可选的武将", True, theme.TEXT_WARM_DIM)
+            self.screen.blit(hint, hint.get_rect(center=rect.center))
+            return
+
+        pad = metrics.px(22)
+        # 立绘占左半，右侧放资料与技能：横屏下文字有足够宽度，不会被压缩。
+        art_w = min(int(rect.width * 0.36), metrics.px(420))
+        art_rect = pygame.Rect(rect.x + pad, rect.y + pad,
+                               art_w, rect.height - pad * 2)
+        general_cards.draw_portrait(self.screen, general, art_rect, metrics)
+
+        info_x = art_rect.right + pad
+        info_w = rect.right - pad - info_x
+        fonts = metrics.fonts
+        cursor = rect.y + pad
+
+        name_font = fonts.get("hero")
+        name = name_font.render(general.name, True, theme.TEXT_WARM)
+        if name.get_width() > info_w:
+            name_font = fonts.get("title")
+            name = name_font.render(general.name, True, theme.TEXT_WARM)
+        self.screen.blit(name, (info_x, cursor))
+        cursor += name.get_height() + metrics.px(4)
+
+        meta = fonts.get("small").render(
+            "势力 %s · %s · 体力 %d" % (
+                general_cards.kingdom_label(general),
+                "男" if general.gender == "male" else "女",
+                int(general.max_hp or 0)),
+            True, theme.TEXT_WARM_DIM)
+        self.screen.blit(meta, (info_x, cursor))
+        cursor += meta.get_height() + metrics.px(10)
+
+        general_cards.draw_hp_pips(
+            self.screen, general, (info_x, cursor + metrics.px(6)), metrics)
+        cursor += metrics.px(24)
+
+        pygame.draw.line(self.screen, theme.BRONZE_DIM,
+                         (info_x, cursor), (info_x + info_w, cursor), 1)
+        cursor += metrics.px(10)
+
+        skill_area = pygame.Rect(info_x, cursor, info_w,
+                                 rect.bottom - pad - cursor)
+        general_cards.draw_skill_list(self.screen, general, game, skill_area, metrics)
+
+    # ---- 底部候选 ----
+
+    def _draw_candidates(self, game, metrics, mouse):
+        selected = getattr(game, "selected_general", None)
+        for index, (general, rect) in enumerate(zip(self.generals, self.card_rects)):
+            chosen = general.id == selected
+            focused = index == self.focus_index
+            hovered = index == self.hover_index
+            self._draw_candidate_card(
+                general, rect, metrics,
+                chosen=chosen, focused=focused, hovered=hovered)
+        del mouse
+
+    def _draw_candidate_card(self, general, rect, metrics, *, chosen, focused, hovered):
+        lift = 0
+        if focused or chosen:
+            lift = metrics.px(PICK_FOCUS_LIFT)
+        elif hovered:
+            lift = metrics.px(PICK_HOVER_LIFT)
+        card = rect.move(0, -lift) if lift else pygame.Rect(rect)
+
         if lift:
             shadow = pygame.Surface((card.width, card.height), pygame.SRCALPHA)
-            pygame.draw.rect(shadow, (0, 0, 0, 120), shadow.get_rect(),
+            pygame.draw.rect(shadow, (0, 0, 0, 130), shadow.get_rect(),
                              border_radius=metrics.px(14))
-            self.screen.blit(shadow, (card.x, card.y + metrics.px(8)))
+            self.screen.blit(shadow, (card.x + metrics.px(3), card.y + metrics.px(9)))
 
-        fill = theme.PANEL_ALT if chosen else theme.PANEL
-        if chosen:
-            border, border_width = theme.TARGET_YELLOW, theme.BORDER_THICK
-        elif hovered:
-            border, border_width = theme.GOLD_BRIGHT, theme.BORDER
-        else:
-            border, border_width = theme.GOLD_DIM, theme.BORDER
-        draw_panel(
-            surface=self.screen, rect=card, fill=fill, border=border,
-            border_width=border_width, radius=metrics.px(14), shadow=False,
-        )
-
-        # 势力色条
-        stripe = pygame.Rect(card.x, card.y, metrics.px(7), card.height)
-        pygame.draw.rect(self.screen, kingdom_color, stripe,
+        fill = theme.PANEL_WARM if (chosen or focused) else theme.PANEL_WARM_DEEP
+        draw_panel(self.screen, card, fill=fill, border=theme.BRONZE_DIM,
+                   border_width=2, radius=metrics.px(14), shadow=False)
+        tone = general_cards.kingdom_tone(general)
+        stripe = pygame.Rect(card.x, card.y, metrics.px(6), card.height)
+        pygame.draw.rect(self.screen, tone, stripe,
                          border_top_left_radius=metrics.px(14),
                          border_bottom_left_radius=metrics.px(14))
 
-        pad = metrics.px(12)
-        art_rect = pygame.Rect(
-            card.x + pad, card.y + pad,
-            max(1, card.width - pad * 2),
-            max(1, card.height - pad - metrics.px(TEXT_AREA)),
+        pad = metrics.px(8)
+        name_font = metrics.fonts.get("seat_name")
+        meta_font = metrics.fonts.get("micro")
+        name_h = name_font.get_height()
+        meta_h = meta_font.get_height()
+        portrait = pygame.Rect(
+            card.x + pad + metrics.px(4), card.y + pad,
+            card.width - pad * 2 - metrics.px(4),
+            max(metrics.px(30), card.height - pad * 2 - name_h - meta_h - metrics.px(8)))
+        general_cards.draw_portrait(self.screen, general, portrait, metrics, framed=False)
+
+        text_y = portrait.bottom + metrics.px(2)
+        name = ellipsize_text(general.name, name_font, card.width - pad * 2)
+        rendered = name_font.render(name, True, theme.TEXT_WARM)
+        self.screen.blit(rendered, rendered.get_rect(midtop=(card.centerx, text_y)))
+        meta = meta_font.render(
+            "%s · 体力 %d" % (general_cards.kingdom_label(general),
+                             int(general.max_hp or 0)),
+            True, theme.TEXT_WARM_MUTED)
+        self.screen.blit(meta, meta.get_rect(
+            midtop=(card.centerx, text_y + rendered.get_height())))
+
+        state = theme.resolve_state(
+            "pool_selected" if chosen else None,
+            "draft_focus" if (focused and not chosen) else None,
+            "pool_hover" if hovered else None,
         )
-        self._draw_general_art(general, art_rect, metrics, kingdom_color)
+        draw_state_border(self.screen, card, state, radius=metrics.px(14))
 
-        # 选中角标
-        if chosen:
-            badge_font = fonts.get("micro")
-            label = badge_font.render("已选择", True, theme.INK)
-            badge = pygame.Rect(0, 0, label.get_width() + metrics.px(14), label.get_height() + metrics.px(8))
-            badge.topright = (card.right - pad, card.y + pad)
-            pygame.draw.rect(self.screen, theme.TARGET_YELLOW, badge, border_radius=metrics.px(8))
-            self.screen.blit(label, label.get_rect(center=badge.center))
+    # ---- 按钮 ----
 
-        self._draw_general_text(game, general, card, art_rect, metrics, kingdom_color)
-
-    def _draw_general_art(self, general, art_rect, metrics, kingdom_color):
-        """卡面优先用真实武将牌；没有素材时退回程序绘制的头像圆。"""
-
-        art = None
-        asset_id = assets_module.general_asset_id(general.id)
-        registry = assets_module.get_registry()
-        source = registry.surface(asset_id)
-        if source is not None:
-            target = assets_module.fit_contain(art_rect, source.get_size(), align="midtop")
-            scaled = registry.scaled(asset_id, target.size)
-            if scaled is not None:
-                art = (scaled, target)
-
-        if art is not None:
-            scaled, target = art
-            frame = target.inflate(metrics.px(6), metrics.px(6))
-            pygame.draw.rect(self.screen, theme.PANEL_SUNKEN, frame, border_radius=metrics.px(8))
-            pygame.draw.rect(self.screen, theme.GOLD_DIM, frame, 1, border_radius=metrics.px(8))
-            self.screen.blit(scaled, target.topleft)
-            return
-
-        # Fallback：头像圆 + 姓氏首字
+    def _draw_buttons(self, game, metrics, mouse):
         fonts = metrics.fonts
-        size = max(metrics.px(34), min(art_rect.width, art_rect.height) - metrics.px(20))
-        center = (art_rect.centerx, art_rect.y + size // 2 + metrics.px(10))
-        pygame.draw.circle(self.screen, (30, 42, 54), center, size // 2)
-        pygame.draw.circle(self.screen, kingdom_color, center, size // 2, max(2, metrics.px(3)))
-        initial = fonts.get("large").render(general.name[:1], True, theme.TEXT)
-        self.screen.blit(initial, initial.get_rect(center=center))
+        self.confirm_button.enabled = bool(getattr(game, "selected_general", None))
+        self.confirm_button.draw(self.screen, fonts, mouse)
+        if self.allow_random:
+            self.random_button.draw(self.screen, fonts, mouse)
+        if self.allow_back:
+            self.back_button.draw(self.screen, fonts, mouse)
 
-    def _draw_general_text(self, game, general, card, art_rect, metrics, kingdom_color):
-        """武将名 / 势力 / 体力 / 技能，作为卡面之外的程序化补充信息。"""
+    # ---- 兼容旧调用点 ----
 
-        fonts = metrics.fonts
-        pad = metrics.px(12)
-        top = art_rect.bottom + metrics.px(6)
-        bottom_limit = card.bottom - metrics.px(6)
-        available = card.width - pad * 2
+    def set_generals(self, generals):
+        """外部（联机）显式指定候选列表。"""
 
-        name_font = fonts.get("seat_name")
-        name = ellipsize_text(general.name, name_font, available)
-        rendered = name_font.render(name, True, theme.TEXT)
-        self.screen.blit(rendered, rendered.get_rect(midtop=(card.centerx, top)))
-        top += rendered.get_height() + metrics.px(1)
+        self.sync_layout(self.metrics, generals)
+        return self
 
-        meta_font = fonts.get("micro")
-        meta_text = "%s · %s · %d/%d" % (
-            general.kingdom_name,
-            "男" if general.gender == "male" else "女",
-            general.max_hp,
-            general.max_hp,
-        )
-        meta = meta_font.render(ellipsize_text(meta_text, meta_font, available), True, theme.TEXT_DIM)
-        self.screen.blit(meta, meta.get_rect(midtop=(card.centerx, top)))
-        top += meta.get_height() + metrics.px(2)
-
-        line_font = fonts.get("micro")
-        line_height = line_font.get_linesize()
+    def describe_selection(self, game):
+        general = self.selected_general(game)
+        if general is None:
+            return ""
+        kinds = []
+        registry = getattr(game, "skill_registry", None)
         for skill_id in general.skill_ids:
-            definition = game.skill_registry.get(skill_id)
+            definition = registry.get(skill_id) if registry is not None else None
             if definition is None:
                 continue
-            if top + line_height > bottom_limit:
-                break
-            label = "【%s】" % definition.name
-            if definition.description:
-                label += definition.description
-            text = ellipsize_text(label, line_font, available)
-            color = theme.GOLD_BRIGHT if "】" in text else theme.TEXT_DIM
-            self.screen.blit(line_font.render(text, True, color), (card.x + pad, top))
-            top += line_height
+            kinds.append("【%s】%s" % (getattr(definition, "name", skill_id),
+                                      general_cards.skill_kind_label(definition)))
+        return "%s（%s %d 体力）：%s" % (
+            general.name, general_cards.kingdom_label(general),
+            int(general.max_hp or 0), " ".join(kinds))
+
+
+def wrap(text, font, width):
+    """兼容旧调用（历史上有模块从这里取折行辅助）。"""
+
+    return wrap_text(text, font, width)

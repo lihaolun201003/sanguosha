@@ -96,16 +96,24 @@ def _outcome_lebu(result, _subject=None):
     if result is None:
         return _missing(result)
     if result.suit == "heart":
-        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "正常进行出牌阶段", "红桃判定通过，本回合照常行动。")
-    return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "跳过出牌阶段", "非红桃判定，本回合不能使用牌。")
+        return JudgeOutcome(
+            JudgeOutcomeTone.POSITIVE, "判定失败 · 乐不思蜀无效",
+            "红桃判定通过，正常进入出牌阶段。")
+    return JudgeOutcome(
+        JudgeOutcomeTone.NEGATIVE, "判定成功 · 跳过出牌阶段",
+        "非红桃判定，本回合不能使用牌。")
 
 
 def _outcome_bingliang(result, _subject=None):
     if result is None:
         return _missing(result)
     if result.suit == "club":
-        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "正常进行摸牌阶段", "梅花判定通过，照常摸牌。")
-    return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "跳过摸牌阶段", "非梅花判定，本回合不能摸牌。")
+        return JudgeOutcome(
+            JudgeOutcomeTone.POSITIVE, "判定失败 · 兵粮寸断无效",
+            "梅花判定通过，正常进入摸牌阶段。")
+    return JudgeOutcome(
+        JudgeOutcomeTone.NEGATIVE, "判定成功 · 跳过摸牌阶段",
+        "非梅花判定，本回合不能摸牌。")
 
 
 def _outcome_shandian(result, _subject=None):
@@ -113,9 +121,11 @@ def _outcome_shandian(result, _subject=None):
         return _missing(result)
     hit = result.suit == "spade" and 2 <= _rank_value(result.rank) <= 9
     if hit:
-        return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "闪电命中", "黑桃 2～9 判定命中，受到 3 点雷电伤害。")
+        return JudgeOutcome(
+            JudgeOutcomeTone.NEGATIVE, "判定成功 · 闪电命中",
+            "黑桃 2～9 判定命中，受到 3 点雷电伤害。")
     return JudgeOutcome(
-        JudgeOutcomeTone.POSITIVE, "闪电未命中",
+        JudgeOutcomeTone.POSITIVE, "判定失败 · 闪电未命中",
         "判定未命中，闪电移到下家的判定区。")
 
 
@@ -153,6 +163,87 @@ def _outcome_tieji(card, _subject=None):
     if card.card_color == "red":
         return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "铁骑命中", "红色判定，目标不能使用【闪】。")
     return JudgeOutcome(JudgeOutcomeTone.NEUTRAL, "铁骑未命中", "非红判定，目标可以正常响应。")
+
+
+def _outcome_beige(result, _subject=None):
+    """悲歌：判定的是**受伤的那名角色**，结果影响伤害来源。"""
+
+    if result is None:
+        return _missing(result)
+    suit = getattr(result, "suit", None)
+    table = {
+        "heart": ("悲歌 · 红桃：受伤者回复 1 点体力", "令伤害来源回复 1 点体力。"),
+        "diamond": ("悲歌 · 方块：受伤者摸两张牌", "令伤害来源弃置两张牌。"),
+        "club": ("悲歌 · 梅花：伤害来源弃两张牌", "受伤者摸两张牌。"),
+        "spade": ("悲歌 · 黑桃：伤害来源翻面", "伤害来源的武将牌翻面。"),
+    }
+    title, text = table.get(suit, ("悲歌 · 判定完成", ""))
+    return JudgeOutcome(JudgeOutcomeTone.POSITIVE, title, text)
+
+
+def _outcome_wuhun(result, _subject=None):
+    """武魂：判定【桃】/【桃园结义】则免于死亡。"""
+
+    if result is None:
+        return _missing(result)
+    card = getattr(result, "card", None)
+    name = getattr(card, "name", None) if card is not None else None
+    if name in ("TAO", "TAOYUAN"):
+        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "武魂 · 免于死亡",
+                            "判定为【%s】，本次死亡被免除。"
+                            % (getattr(card, "display_name", "桃")))
+    return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "武魂 · 立即死亡",
+                        "判定不是【桃】，目标立即死亡。")
+
+
+def _outcome_tuntian(result, _subject=None):
+    """屯田：判定不为红桃则把判定牌置于武将牌上（「田」）。"""
+
+    if result is None:
+        return _missing(result)
+    card = getattr(result, "card", None)
+    if getattr(card, "suit", None) != "heart":
+        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "屯田 · 获得判定牌",
+                            "非红桃判定，此牌置于武将牌上作为「田」。")
+    return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "屯田 · 红桃无效",
+                        "红桃判定，本次不获得「田」。")
+
+
+def _outcome_shuangxiong(result, _subject=None):
+    """双雄：获得判定牌，本回合可将**异色**手牌当【决斗】。"""
+
+    if result is None:
+        return _missing(result)
+    card = getattr(result, "card", None)
+    color = "红色" if getattr(card, "card_color", None) == "red" else "黑色"
+    return JudgeOutcome(
+        JudgeOutcomeTone.POSITIVE, "双雄 · 获得判定牌",
+        "判定为%s，本回合可将一张%s手牌当【决斗】使用。"
+        % (color, "黑色" if color == "红色" else "红色"))
+
+
+def _outcome_baonue(result, _subject=None):
+    """暴虐：黑色判定回复 1 点体力。"""
+
+    if result is None:
+        return _missing(result)
+    if getattr(result, "color", None) == "black":
+        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "暴虐 · 回复 1 点体力",
+                            "黑色判定，回复 1 点体力。")
+    return JudgeOutcome(JudgeOutcomeTone.NEUTRAL, "暴虐 · 判定未生效",
+                        "非黑色判定，不回复体力。")
+
+
+def _outcome_leiji(result, _subject=None):
+    """雷击：黑桃判定则对目标造成 2 点雷电伤害（或失去 2 点体力）。"""
+
+    if result is None:
+        return _missing(result)
+    if getattr(result, "suit", None) == "spade":
+        return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "雷击 · 命中",
+                            "黑桃判定，目标受到 2 点雷电伤害。")
+    return JudgeOutcome(JudgeOutcomeTone.NEGATIVE, "雷击 · 未命中",
+                        "非黑桃判定，本次雷击无效。")
 
 
 # ==================================================
@@ -201,6 +292,47 @@ JUDGE_SOURCES = {
         display_name="铁骑", skill_id="tieji",
         rule_text="使用【杀】时判定，红色则目标不能使用【闪】。",
         outcome_of=_outcome_tieji,
+    ),
+    # ---- 扩展包武将的判定 ----
+    #
+    # 每一种判定都必须有"结果结算画面"（只显示判定牌、不说结论，玩家看不出
+    # 刚才发生了什么）。新增判定在这里加一条即可，UI 一行都不用改。
+    "beige": JudgeSourceSpec(
+        reason="beige", kind=JudgeSourceKind.SKILL,
+        display_name="悲歌", skill_id="beige",
+        rule_text="受伤角色判定：红桃回复 1 点体力，方块摸两张牌，"
+                  "黑桃令伤害来源翻面，梅花令伤害来源弃两张牌。",
+        outcome_of=_outcome_beige,
+    ),
+    "wuhun": JudgeSourceSpec(
+        reason="wuhun", kind=JudgeSourceKind.SKILL,
+        display_name="武魂", skill_id="wuhun",
+        rule_text="判定为【桃】或【桃园结义】则免于死亡，否则立即死亡。",
+        outcome_of=_outcome_wuhun,
+    ),
+    "tuntian": JudgeSourceSpec(
+        reason="tuntian", kind=JudgeSourceKind.SKILL,
+        display_name="屯田", skill_id="tuntian",
+        rule_text="于回合外失去牌后判定：非红桃则获得此判定牌作为「田」。",
+        outcome_of=_outcome_tuntian,
+    ),
+    "shuangxiong": JudgeSourceSpec(
+        reason="shuangxiong", kind=JudgeSourceKind.SKILL,
+        display_name="双雄", skill_id="shuangxiong",
+        rule_text="摸牌阶段改为判定：获得此判定牌，本回合可将异色手牌当【决斗】。",
+        outcome_of=_outcome_shuangxiong,
+    ),
+    "baonue": JudgeSourceSpec(
+        reason="baonue", kind=JudgeSourceKind.SKILL,
+        display_name="暴虐", skill_id="baonue",
+        rule_text="受到伤害后判定：黑色则回复 1 点体力。",
+        outcome_of=_outcome_baonue,
+    ),
+    "leiji": JudgeSourceSpec(
+        reason="leiji", kind=JudgeSourceKind.SKILL,
+        display_name="雷击", skill_id="leiji",
+        rule_text="使用或打出【闪】时判定：黑桃则对一名角色造成 2 点雷电伤害。",
+        outcome_of=_outcome_leiji,
     ),
 }
 

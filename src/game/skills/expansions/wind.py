@@ -10,6 +10,7 @@
 * 【据守】2008 初版 = 跳过你下个回合；2010 修订版 = 将你的武将牌翻面。
 """
 
+from src.card import mark_card_flag
 from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom
 from src.game.engine import EventType, Flow, FlowResult, FlowStatus
 from src.game.engine.skills import Skill, SkillBinding
@@ -893,7 +894,7 @@ class Liegong(Skill):
             targets = getattr(card, "_cannot_respond_targets", None)
             if targets is None:
                 targets = set()
-                card._cannot_respond_targets = targets
+                mark_card_flag(card, "_cannot_respond_targets", targets)
             targets.add(id(target))
             marked.append(target.name)
         if marked:

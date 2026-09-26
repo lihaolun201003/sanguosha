@@ -3,7 +3,7 @@
 from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom
 from src.game.engine import Event, EventType, Flow, FlowStatus
 from src.game.engine.pending import PendingRequestType
-from src.game.rules import PhaseControl, TURN_PHASE_ORDER, TurnPhase
+from src.game.rules import PHASE_NAMES, PhaseControl, TURN_PHASE_ORDER, TurnPhase
 from src.game.skills.state import ResetScope
 
 from .damage import DamageContext, DamageFlow
@@ -427,10 +427,12 @@ class TurnFlow(Flow):
         if delayed.name == "LEBU":
             if result is None or result.suit != "heart":
                 self.phase_control.skip(TurnPhase.PLAY)
+                self._announce_phase_skip(TurnPhase.PLAY, delayed, result)
             self.engine.discard_zone_card(delayed, self.player.judgement_zone)
         elif delayed.name == "BINGLIANG":
             if result is None or result.suit != "club":
                 self.phase_control.skip(TurnPhase.DRAW)
+                self._announce_phase_skip(TurnPhase.DRAW, delayed, result)
             self.engine.discard_zone_card(delayed, self.player.judgement_zone)
         elif delayed.name == "SHANDIAN":
             rank_value = {"A": 1, "J": 11, "Q": 12, "K": 13}.get(result.rank, int(result.rank) if result and str(result.rank).isdigit() else 0) if result else 0
@@ -454,6 +456,33 @@ class TurnFlow(Flow):
                 else:
                     self.context.apply(MoveCardAtom(delayed, source=self.player.judgement_zone, destination=destination))
         return False
+
+    def _announce_phase_skip(self, phase, delayed, result):
+        """延时锦囊让某个阶段不能进行：发一条**纯表现**的结论事件。
+
+        规则上"跳过"已经由 ``phase_control`` 决定，这条事件只负责让界面把
+        "判定成功了，所以跳过出牌阶段"说清楚——它不参与任何判定，也不改变
+        阶段推进（见 ui.storyboard 的演出队列）。
+        """
+
+        name = getattr(delayed, "display_name", "") or "延时锦囊"
+        detail = ""
+        if result is not None:
+            mark = (getattr(result, "suit_name", "") or "") + str(
+                getattr(result, "rank", "") or "")
+            detail = "判定牌：%s" % mark if mark else ""
+        self.context.emit(Event(
+            EventType.PHASE_SKIPPED,
+            source=self.player,
+            target=self.player,
+            payload={
+                "player": self.player,
+                "phase": TurnPhase(phase).value,
+                "text": "%s 判定成功 · 跳过%s阶段" % (name, PHASE_NAMES[TurnPhase(phase)]),
+                "detail": detail,
+                "tone": "phase",
+            },
+        ))
 
     def _next_alive_player(self, player):
         candidate = self.game.seats.next_alive_player(player)

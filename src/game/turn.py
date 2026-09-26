@@ -3,6 +3,7 @@ from src.actions import (
     WaitAction,
 )
 from src.game.engine.flows import FlowStatus
+from .rules import TurnPhase
 
 
 class TurnMixin:
@@ -248,6 +249,20 @@ class TurnMixin:
             return
         self.start_turn(next_player)
 
+    def _consume_skip_turn(self, player):
+        """有「跳过下一个回合」标记就消耗一枚并返回 True。
+
+        标记记在 ``marks[skill_id]["skip_turn"]`` 下，这里不认技能 id——
+        「跳过回合」是通用规则，谁挂的标记都走同一条消费路径。
+        """
+
+        for skill_id, bucket in list(getattr(player, "marks", {}).items()):
+            if int((bucket or {}).get("skip_turn", 0) or 0) <= 0:
+                continue
+            player.add_mark(skill_id, "skip_turn", -1)
+            return True
+        return False
+
     def start_turn(self, player):
 
         from .engine import FlowStatus
@@ -262,6 +277,16 @@ class TurnMixin:
             player.face_up = True
             self.add_log("%s 的武将牌翻回正面，跳过本回合。" % player.name)
             self.message = player.name + " 处于翻面状态，跳过本回合。"
+            self.actions.add(CallbackAction(lambda p=player: self.start_next_turn(p)))
+            return
+
+        # 跳过回合：和翻面一样是通用规则，任何角色都可能被跳过一整个回合，
+        # 所以按标记（而不是按技能 id）判定。旧版【据守】把"跳过你的下个
+        # 回合"记成 marks[skill]["skip_turn"]——标记以前只写不读，代价等于
+        # 没付（摸三张成了白拿），这里补上消费点。
+        if self._consume_skip_turn(player):
+            self.add_log("%s 跳过了本回合。" % player.name)
+            self.message = player.name + " 跳过了本回合。"
             self.actions.add(CallbackAction(lambda p=player: self.start_next_turn(p)))
             return
 
@@ -311,6 +336,14 @@ class TurnMixin:
         if self.engine.pending.active:
             self.engine.defer_turn_resume(lambda p=player: self._finish_ai_turn(p))
             return
+        # 弃牌阶段：**先把阶段切过去再弃牌**。弃到上限这一步在 AI / 远程
+        # 座位上就发生在结束阶段之前，而忍戒（弃牌阶段弃牌 → 忍标记）与琴音
+        # （弃牌阶段弃两张 → 全体回血/掉血）都是按"现在是不是弃牌阶段"来判断
+        # 的：阶段没切，它们的计数永远是 0（神司马懿因此少攒标记、神周瑜的
+        # 琴音一次都发不动）。
+        if self.current_turn_player is player:
+            self.turn_phase = TurnPhase.DISCARD
+            self.phase = "discard"
         self.get_controller(player).discard_to_hand_limit()
         phase_flow = self.active_turn_flow
         if phase_flow is not None:

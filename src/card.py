@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from itertools import count
+from dataclasses import FrozenInstanceError
 from typing import Optional, Tuple
 
 
@@ -58,6 +59,24 @@ DISPLAY_NAMES = {}
 DISPLAY_NAMES.update(BASIC_NAMES)
 DISPLAY_NAMES.update(TRICK_NAMES)
 DISPLAY_NAMES.update(EQUIPMENT_NAMES)
+
+
+def mark_card_flag(card, name, value=True):
+    """给一张牌打上"本次结算用"的标记（铁骑的不可响应 / 烈弓的逐目标标记）。
+
+    真实 ``Card`` 是普通 dataclass，直接赋值即可；而**转换出来的**虚拟牌
+    （``VirtualCard``）是 frozen dataclass，普通赋值会抛 FrozenInstanceError
+    —— 丈八蛇矛 / 武圣 / 龙魂 打出的【杀】都是虚拟牌，铁骑命中它们时整个
+    结算会直接崩。这里统一绕过冻结限制，只影响这类临时标记。
+    """
+
+    if card is None:
+        return None
+    try:
+        setattr(card, name, value)
+    except (AttributeError, FrozenInstanceError):
+        object.__setattr__(card, name, value)
+    return card
 
 
 def display_name_for(name, nature="normal"):

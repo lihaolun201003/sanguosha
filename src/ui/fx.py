@@ -14,6 +14,24 @@ from src.game.engine import EventType
 from . import layout as layout_module
 from . import theme
 from .judge import JudgePanel
+from .skill_banner import SkillBanner
+from .storyboard import (
+    CardStep,
+    ChainStep,
+    DamageStep,
+    DeathStep,
+    DyingStep,
+    JudgeStep,
+    LoseHpStep,
+    PresentationQueue,
+    RecoverStep,
+    ResultStep,
+    SkillStep,
+    STEP_LOSE_HP,
+    STEP_PHASE_SKIP,
+    STEP_RESULT,
+    TurnStep,
+)
 
 # ==================================================
 # 动画节奏（集中配置）
@@ -195,6 +213,67 @@ class FXTiming:
         """两次动作之间的基础间隔。"""
 
         return self._t(0.35)
+
+    # ---- 统一结算演出（Presentation Queue，Phase 18）----
+    #
+    # 这些时长是"某一项演出占住画面多久"，全部由演出队列按顺序消费：
+    # 判定 → 技能 → 伤害 → 濒死 → 阵亡 → 下一回合。
+    # 判定面板自己那几个阶段仍用上面的 judge_*（面板是队列里的一个长项目）。
+
+    @property
+    def story_card(self):
+        """出牌横幅（"X 对 Y 使用【牌】"）占住顺序的时间。"""
+
+        return self._t(0.55)
+
+    @property
+    def story_result(self):
+        """判定结果 / 延时锦囊结算的提示条（"跳过出牌阶段"）。"""
+
+        return self._t(1.35)
+
+    @property
+    def story_skill(self):
+        """技能发动提示（武将卡 + 技能名 + 说明）的基准停留时间。
+
+        默认档大约 2 秒；慢档更长、快档更短（由演出队列按本机速度缩放）。
+        """
+
+        return self._t(1.55)
+
+    @property
+    def story_damage(self):
+        return self._t(0.55)
+
+    @property
+    def story_lose_hp(self):
+        return self._t(0.50)
+
+    @property
+    def story_recover(self):
+        return self._t(0.45)
+
+    @property
+    def story_dying(self):
+        return self._t(0.95)
+
+    @property
+    def story_death(self):
+        return self._t(1.15)
+
+    @property
+    def story_chain(self):
+        return self._t(0.55)
+
+    @property
+    def story_phase_skip(self):
+        return self._t(1.25)
+
+    @property
+    def story_turn(self):
+        """回合切换横幅。"""
+
+        return self.turn_banner
 
     # ---- 开局发牌 ----
 
@@ -508,6 +587,19 @@ class Effects:
         self.arrows = []
         # 统一判定展示面板：延时锦囊 / 装备技能 / 武将技能共用。
         self.judge_panel = JudgePanel()
+        # 统一结算演出队列（Phase 18）：判定 → 技能 → 伤害 → 濒死 → 阵亡。
+        # 规则与网络可以继续推进，画面按这个顺序一条一条演。
+        self.storyboard = PresentationQueue(self)
+        # 技能发动提示（武将与技能名 / 类型 / 说明）。
+        self.skill_banner = SkillBanner()
+        # 结算提示条（判定结果 / 阶段跳过）的当前内容。
+        self.story_banner = None
+        self.story_timer = 0.0
+        self.story_total = 0.0
+        #: 演出层自身出错时的记录（**绝不能**让表现影响规则）。
+        self.story_errors = []
+        #: 已经结束的出牌（CARD_USE_FINISHED）：迟到的出牌演出不再长期挂箭头。
+        self._finished_cards = set()
         #: 判定展示期间压住动作队列的开关（绑定方法只取一次，便于身份比较）。
         self._action_gate = self._holds_actions
         self.turn_banner = None
@@ -555,7 +647,26 @@ class Effects:
         gate = getattr(game, "judge_gate", None)
         if gate is None:
             return
-        gate.mark_presentation(self.judge_panel, self.judge_panel.active)
+        # 队列里还排着判定（前一条演出还没演完）同样算"判定在演"：否则那几帧
+        # 里玩家可以抢在判定面板出现之前操作。
+        active = bool(self.judge_panel.active
+                      or self.storyboard.has_pending_judge())
+        gate.mark_presentation(self.judge_panel, active)
+
+    # ---- 本机操作界面要不要让路 ----
+
+    def interaction_hold(self):
+        """关键演出（技能发动提示）还在播：操作界面先不出现。
+
+        玩家反馈的"两个窗口叠在一起"就出在这里：技能提示还没播完，选目标 /
+        选牌的界面已经弹出来了。让路只是**延后界面**，不阻塞引擎——队列自己
+        会走完，AI 与房主完全不受影响。
+
+        判定期间的输入压制不在这里：那是 ``JudgeGate`` 的职责（改判窗口开着
+        的时候必须放行，不能在这里一刀切）。
+        """
+
+        return bool(self.storyboard.holds_interaction())
 
     # ---- 指向箭头 ----
 
@@ -734,6 +845,8 @@ class Effects:
             (EventType.CARD_USE_FINISHED, self._on_card_use_finished),
             (EventType.PENDING_CREATED, self._on_pending_created),
             (EventType.PENDING_RESOLVED, self._on_pending_resolved),
+            (EventType.PHASE_SKIPPED, self._on_phase_skip),
+            (EventType.CARD_REVEALED, self._on_card_revealed),
         )
         for event_name, handler in subscriptions:
             self._tokens.append(
@@ -764,6 +877,13 @@ class Effects:
         self.floats.clear()
         self.arrows = []
         self.judge_panel.cancel()
+        self.storyboard.reset()
+        self.skill_banner.cancel()
+        self.story_banner = None
+        self.story_timer = 0.0
+        self.story_total = 0.0
+        self.story_errors = []
+        self._finished_cards.clear()
         self.turn_banner = None
         self.turn_timer = 0.0
         self.action_banner = None
@@ -778,7 +898,72 @@ class Effects:
     # 引擎事件回调与联网客户端**共用**这些方法：房主侧由 event 回调调用，
     # 客户端侧由网络表现事件适配层调用。表现逻辑只有一份实现，客户端不会
     # 长出第二套动画代码。
+    #
+    # 两种入口：
+    #
+    #   ``present_*``  把一条演出**排进队列**（规则层 / 网络事件走这里）
+    #   ``show_*``     立刻执行（由队列在自己轮到时调用；旧调用点也仍可用）
     # ==================================================
+
+    # ---- 排队入口（推荐）----
+
+    def present_card_used(self, actor, targets, card, *, sequential=False):
+        return self.storyboard.submit(
+            CardStep(actor, targets, card, sequential=sequential))
+
+    def present_damage(self, player, amount):
+        return self.storyboard.submit(DamageStep(player, int(amount or 0)))
+
+    def present_lose_hp(self, player, amount):
+        return self.storyboard.submit(LoseHpStep(player, int(amount or 0)))
+
+    def present_recover(self, player, amount):
+        return self.storyboard.submit(RecoverStep(player, int(amount or 0)))
+
+    def present_dying(self, player):
+        return self.storyboard.submit(DyingStep(player))
+
+    def present_death(self, player):
+        return self.storyboard.submit(DeathStep(player))
+
+    def present_chain(self, player, chained):
+        return self.storyboard.submit(ChainStep(player, chained))
+
+    def present_turn_start(self, player):
+        return self.storyboard.submit(TurnStep(player))
+
+    def present_skill(self, player, skill_name, targets=(), *, skill_id="",
+                      kind_label="", text=""):
+        """技能提示：武将卡 + 技能名 + 类型 + 说明（同一个技能连续触发会合并）。"""
+
+        if player is None or not skill_name:
+            return None
+        return self.storyboard.submit(SkillStep(
+            player, skill_id, skill_name, targets,
+            text=text, kind_label=kind_label))
+
+    def present_result(self, text, *, detail="", tone="", kind=STEP_RESULT,
+                       min_duration=1.20):
+        """结算结论提示条（"跳过出牌阶段" / "受到 3 点雷电伤害"）。"""
+
+        if not text:
+            return None
+        return self.storyboard.submit(ResultStep(
+            text, detail=detail, tone=tone, kind=kind, min_duration=min_duration))
+
+    def present_judge(self, result):
+        """把一次判定排进队列（面板是队列里的一个长项目）。"""
+
+        if result is None:
+            return None
+        return self.storyboard.submit(JudgeStep(result))
+
+    def judge_note(self, name, payload):
+        """改判 / 最终判定结果交给对应的那次判定演出。"""
+
+        return self.storyboard.judge_note(name, payload)
+
+    # ---- 立即执行（由队列轮到时调用）----
 
     def show_damage(self, player, amount):
         """受到伤害：闪红 + 抖动 + 飘出 -N。"""
@@ -825,18 +1010,84 @@ class Effects:
         color = theme.CHAIN if chained else (168, 220, 180)
         self.floats.append(FloatText("横置" if chained else "重置", (x, y), color))
 
-    def show_skill(self, player, skill_name, targets=()):
-        """技能发动：技能名飘字（+ 有目标时补箭头）。"""
+    def show_skill(self, player, skill_name, targets=(), *, float_text=True):
+        """技能发动：技能名飘字（+ 有目标时补箭头）。
+
+        ``float_text=False`` 时不飘字（技能提示面板已经把名字说清楚了），
+        只保留指向箭头。
+        """
 
         if player is None or not skill_name:
             return
-        x, y = self._anchor(player)
-        self.floats.append(FloatText("【" + str(skill_name) + "】", (x, y),
-                                     (250, 220, 150), life=timing().skill_float))
+        if float_text:
+            x, y = self._anchor(player)
+            self.floats.append(FloatText("【" + str(skill_name) + "】", (x, y),
+                                         (250, 220, 150), life=timing().skill_float))
         targets = [item for item in (targets or ()) if item is not None]
         if targets:
             self.add_arrow(player, targets, color=(250, 214, 130),
                            label=str(skill_name))
+
+    def show_skill_banner(self, player, skill_name, targets=(), *, skill_id="",
+                          kind_label="", text="", duration=None):
+        """技能发动提示面板：武将卡 + 玩家名 + 技能名 / 类型 / 说明。
+
+        名称、类型、说明都由本地技能表（``SkillDef``）给出——房主只需要
+        下发 ``skill_id``，联网客户端不会因此多收一份说明文本。
+
+        ``duration`` 是**真实秒数**（演出队列按本机速度缩放过的那一份），
+        面板自己只负责淡入 / 停留 / 淡出。
+        """
+
+        if player is None or not skill_name:
+            return None
+        definition = self._skill_definition(skill_id)
+        name = getattr(definition, "name", "") or skill_name
+        body = text or (getattr(definition, "description", "") or "")
+        kind = kind_label or self._skill_kind_label(definition)
+        if duration is None:
+            duration = timing().story_skill / self._speed_factor()
+        self.skill_banner.show(player, name, skill_id=skill_id, kind_label=kind,
+                               text=body, targets=targets, duration=duration)
+        # 面板已经写明"谁发动了什么"，抖动感更强的浮字就不重复了。
+        self.show_skill(player, name, targets, float_text=False)
+        return self.skill_banner
+
+    def _speed_factor(self):
+        """本机表现速度倍率（判定 / 提示时长都要跟它一致）。"""
+
+        return max(0.2, float(getattr(self.storyboard, "speed_factor", 1.0) or 1.0))
+
+    def _skill_definition(self, skill_id):
+        game = self.game
+        registry = getattr(game, "skill_registry", None)
+        if registry is None or not skill_id:
+            return None
+        return registry.get(skill_id)
+
+    @staticmethod
+    def _skill_kind_label(definition):
+        if definition is None:
+            return ""
+        from .skill_bar import KIND_LABELS
+
+        kind = getattr(getattr(definition, "kind", None), "value", "")
+        return KIND_LABELS.get(kind, "")
+
+    def show_story_banner(self, text, detail="", tone="", kind=STEP_RESULT):
+        """结算提示条：结论必须停留到玩家看清（时长由演出队列决定）。"""
+
+        self.story_banner = {
+            "text": str(text or ""),
+            "detail": str(detail or ""),
+            "tone": str(tone or ""),
+            "kind": str(kind or ""),
+        }
+        step = self.storyboard.current
+        self.story_total = max(0.2, float(getattr(step, "duration",
+                                                  timing().story_result))) / self._speed_factor()
+        self.story_timer = self.story_total
+        return self.story_banner
 
     def show_turn_start(self, player):
         if player is None:
@@ -858,12 +1109,17 @@ class Effects:
             # 逐目标响应型锦囊（南蛮 / 万箭）：一次只结算一个目标，
             # 箭头由每个目标的响应请求单独点亮（见 focus_arrow）。
             return 0
-        return self.add_arrow(
+        added = self.add_arrow(
             actor, targets,
             color=arrow_color_for_card(card),
             hold=True, key=card,
             base_delay=timing().card_reveal_hold,
         )
+        if id(card) in self._finished_cards:
+            # 这次结算早就结束了（演出排在一段更长的演出后面）：箭头只做
+            # 一次短促的指向，不长期挂着。
+            self.release_arrows(key=card)
+        return added
 
     def focus_arrow(self, source, target, card):
         """逐目标结算：把箭头切到当前正在结算的那一个目标。"""
@@ -906,11 +1162,32 @@ class Effects:
 
     def finish_card_use(self, card):
         if card is not None:
+            # 出牌演出可能还排在队列里（先判定、后结算之类）。记下这张牌
+            # 已经结束，等它的演出真正开始时只做一次短促的箭头，不再长期挂着。
+            self._finished_cards.add(id(card))
+            if len(self._finished_cards) > 128:
+                self._finished_cards.clear()
             self.release_arrows(key=card)
 
     def finish_response(self, card):
         if card is not None:
             self.release_arrows(key=card)
+
+    # ---- 视觉状态：权威值 − 还没轮到播的增量 ----
+    #
+    # 快照可以立刻把体力改成 0、把 alive 改成 False，但画面必须等判定 /
+    # 伤害演完再变。三个查询是 UI 读"该显示什么"的唯一入口。
+
+    def display_hp(self, player, base=None):
+        if player is None:
+            return 0
+        value = getattr(player, "hp", 0) if base is None else base
+        return self.storyboard.ledger.hp(player, value)
+
+    def display_alive(self, player):
+        if player is None:
+            return False
+        return self.storyboard.ledger.alive(player, bool(getattr(player, "alive", False)))
 
     # ==================================================
     # 事件处理（房主侧：直接订阅引擎事件）
@@ -939,14 +1216,24 @@ class Effects:
         damage = event.payload.get("damage")
         amount = event.payload.get("amount", 0)
         target = getattr(damage, "target", None) or event.target
-        self.show_damage(target, int(amount or 0))
+        amount = int(amount or 0)
+        # 伤害在引擎里先是一条"失去体力"（LoseHpAtom）：一次结算只播一次，
+        # 把队列里那条还没开始播的失去体力吃掉（与客户端事件层同一判据）。
+        self.storyboard.absorb(STEP_LOSE_HP, target, amount)
+        # 排进演出队列：判定 / 技能提示还在播时，这一次伤害不会抢先出现在
+        # 屏幕上（玩家反馈："判定没播完，人已经死了"）。
+        self.present_damage(target, amount)
 
     def _on_atom(self, _context, event):
         atom = event.payload.get("atom")
         result = event.payload.get("result")
         if isinstance(atom, RecoverHpAtom):
             amount = getattr(result, "data", {}).get("amount", 0)
-            self.show_recover(atom.target, int(amount or 0))
+            self.present_recover(atom.target, int(amount or 0))
+        elif atom.__class__.__name__ == "LoseHpAtom":
+            amount = getattr(result, "data", {}).get("amount", 0)
+            if int(amount or 0) > 0:
+                self.present_lose_hp(atom.target, int(amount))
         elif atom.__class__.__name__ == "DrawCardsAtom":
             data = getattr(result, "data", None) or {}
             self.note_draw(
@@ -1065,32 +1352,34 @@ class Effects:
             return
         # 统一判定展示：所有判定都走同一个面板，来源 / 规则 / 结果语义
         # 全部来自规则层的判定声明（judge_presentation）。
-        self.judge_panel.begin(result)
+        # 判定排进演出队列：它前面的演出（技能提示 / 上一次结算）先演完，
+        # 它后面的（伤害 / 濒死 / 阵亡 / 下一个回合）一定排在它后面。
+        self.present_judge(result)
 
     def _on_judge_replaced(self, _context, event):
-        """鬼才一类改判：面板保留，判定牌换成新的。"""
+        """鬼才一类改判：面板保留，判定牌换成新的（即使面板还没开始演）。"""
 
-        self.judge_panel.note_replacement(event.payload, self.game)
+        self.judge_note("replaced", event.payload)
 
     def _on_judge_result(self, _context, event):
         """最终判定牌锁定：面板开始展示结果语义。"""
 
-        self.judge_panel.finish(event.payload.get("result"))
+        self.judge_note("result", event.payload.get("result"))
 
     def _on_turn_start(self, _context, event):
-        self.show_turn_start(event.source)
+        self.present_turn_start(event.source)
 
     def _on_death(self, _context, event):
-        self.show_death(event.target)
+        self.present_death(event.target)
 
     def _on_chain(self, _context, event):
-        self.show_chain(event.target, event.payload.get("chained"))
+        self.present_chain(event.target, event.payload.get("chained"))
 
     def _on_dying(self, _context, event):
-        self.show_dying(event.target)
+        self.present_dying(event.target)
 
     def _on_card_used(self, _context, event):
-        self.show_card_used(
+        self.present_card_used(
             event.source, event.payload.get("targets"),
             event.payload.get("card"),
             sequential=bool(event.payload.get("sequential_targets")),
@@ -1132,8 +1421,45 @@ class Effects:
         self.action_timer = timing().banner_hold
 
     def _on_skill(self, _context, event):
-        self.show_skill(event.source, event.payload.get("skill_name"),
-                        event.payload.get("targets"))
+        payload = event.payload or {}
+        if payload.get("marks"):
+            # 标记变化（暴怒 / 忍一类）不是"技能发动"：它们会随每一次伤害
+            # 反复变化，弹提示面板就是刷屏。界面上有标记计数，不需要弹窗。
+            return
+        self.present_skill(
+            event.source, payload.get("skill_name"),
+            event.payload.get("targets"),
+            skill_id=payload.get("skill_id", ""),
+            # 装备一类的锁定技没有 SkillDef：类型与说明由规则层随事件给出。
+            kind_label=str(payload.get("kind_label") or ""),
+            text=str(payload.get("text") or ""),
+        )
+
+    def _on_phase_skip(self, _context, event):
+        """阶段被跳过（乐不思蜀 / 兵粮寸断 / 闪电之外的规则跳过）。"""
+
+        self.present_result(
+            str(event.payload.get("text") or ""),
+            detail=str(event.payload.get("detail") or ""),
+            tone=str(event.payload.get("tone") or "phase"),
+            kind=STEP_PHASE_SKIP,
+        )
+
+    def _on_card_revealed(self, _context, event):
+        """公开亮出的牌（火攻展示）：一条提示条 + 飘字。"""
+
+        payload = event.payload or {}
+        card = payload.get("card")
+        player = payload.get("player")
+        if card is None or player is None:
+            return
+        self.present_result(
+            "%s 展示了一张手牌" % getattr(player, "name", ""),
+            detail="【%s】%s" % (card.display_name,
+                                (getattr(card, "suit_name", "") or "")
+                                + str(getattr(card, "rank", "") or "")),
+            tone=str(payload.get("tone") or ""),
+        )
 
     # ==================================================
     # 每帧推进
@@ -1170,7 +1496,18 @@ class Effects:
         # 仁德的亮牌动画）已经把该接管的牌登记好了，能准确判断谁该播。
         self._flush_arrivals()
 
-        self.judge_panel.update(dt, self.game)
+        # 统一结算演出队列：它推进自己、推进正在播的判定面板（面板是队列里的
+        # 一个项目），并且**按本机速度**消费。
+        self.storyboard.update(dt, self.game)
+        step_dt = dt * self.storyboard.speed_factor
+        if not self.storyboard.driving_judge():
+            # 面板不在队列里（直接调用 judge_begin 的旧调用点 / 测试）时仍要推进它。
+            self.judge_panel.update(step_dt, self.game)
+        self.skill_banner.update(step_dt)
+        if self.story_timer > 0:
+            self.story_timer -= step_dt
+            if self.story_timer <= 0:
+                self.story_banner = None
         # 判定面板还在演 → 后面的行动先别开始（本轮玩家反馈：判定之后的行动
         # 必须等判定结束）。没有动作队列（无头演算）时这一步什么都不做。
         self.sync_action_gate()
@@ -1235,6 +1572,16 @@ class Effects:
         info = dict(self.action_banner)
         ratio = self.action_timer / max(0.001, timing().banner_hold)
         info["alpha"] = int(255 * min(1.0, ratio * 2.2))
+        return info
+
+    def story_display(self):
+        """结算提示条（判定结果 / 阶段跳过）：由演出队列按顺序播放。"""
+
+        if self.story_banner is None or self.story_timer <= 0:
+            return None
+        info = dict(self.story_banner)
+        ratio = self.story_timer / max(0.001, self.story_total)
+        info["alpha"] = int(255 * min(1.0, ratio * 2.6))
         return info
 
     def turn_display(self):

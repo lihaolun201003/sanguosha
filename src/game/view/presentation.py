@@ -55,6 +55,8 @@ EV_DYING = "dying"
 EV_CHAIN = "chain"
 EV_TURN_START = "turn_start"
 EV_PHASE = "phase"
+EV_PHASE_SKIPPED = "phase_skipped"
+EV_CARD_REVEALED = "card_revealed"
 EV_EQUIPMENT = "equipment"
 EV_PUBLIC_POOL = "public_pool"
 EV_TABLE_CARDS = "table_cards"
@@ -152,6 +154,8 @@ class PresentationBridge:
             (EventType.SKILL_TRIGGERED, self._on_skill),
             (EventType.TURN_START, self._on_turn_start),
             (EventType.PHASE_START, self._on_phase_start),
+            (EventType.PHASE_SKIPPED, self._on_phase_skipped),
+            (EventType.CARD_REVEALED, self._on_card_revealed),
             (EventType.DEATH, self._on_death),
             (EventType.DYING_ENTERED, self._on_dying),
             (EventType.CHAIN_STATE_CHANGED, self._on_chain),
@@ -531,13 +535,53 @@ class PresentationBridge:
 
     def _on_skill(self, _context, event):
         player = event.source
+        payload = event.payload or {}
+        if payload.get("marks"):
+            # 标记变化不是"技能发动"（会随每次伤害反复变化），不下发提示事件——
+            # 客户端不需要为此弹面板（与本地表现层同一条判据）。
+            return
         self._fact(EV_SKILL, {
             "player_id": self._player_id(player),
-            "skill_id": str(event.payload.get("skill_id") or ""),
-            "skill_name": str(event.payload.get("skill_name") or ""),
+            "skill_id": str(payload.get("skill_id") or ""),
+            "skill_name": str(payload.get("skill_name") or ""),
+            # 装备一类的锁定技没有 SkillDef：类型与说明由规则层给出，
+            # 客户端不需要为了显示它而多拿一份技能表。
+            "kind_label": str(payload.get("kind_label") or ""),
+            "text": str(payload.get("text") or ""),
             "target_ids": [
-                self._player_id(item) for item in event.payload.get("targets") or ()
+                self._player_id(item) for item in payload.get("targets") or ()
             ],
+        })
+
+    def _on_phase_skipped(self, _context, event):
+        """某个阶段因为规则被跳过（乐不思蜀 / 兵粮寸断）：结论要发给所有人。"""
+
+        payload = event.payload or {}
+        player = payload.get("player") or event.source
+        text = str(payload.get("text") or "")
+        if not text:
+            return
+        self._fact(EV_PHASE_SKIPPED, {
+            "player_id": self._player_id(player),
+            "phase": str(payload.get("phase") or ""),
+            "text": text,
+            "detail": str(payload.get("detail") or ""),
+            "tone": str(payload.get("tone") or "phase"),
+        })
+
+    def _on_card_revealed(self, _context, event):
+        """有牌被公开亮出（火攻展示）：牌面本身已是公开信息。"""
+
+        payload = event.payload or {}
+        card = payload.get("card")
+        player = payload.get("player") or event.source
+        if card is None or player is None:
+            return
+        self._fact(EV_CARD_REVEALED, {
+            "player_id": self._player_id(player),
+            "caster_id": self._player_id(payload.get("caster")),
+            "reason": str(payload.get("reason") or ""),
+            "card": card_to_payload(card),
         })
 
     def _on_turn_start(self, _context, event):

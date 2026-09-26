@@ -1,0 +1,275 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "A：主菜单「我的武将池」被点击后返回 general_pool",
+      "detail": "general_pool"
+    },
+    {
+      "ok": true,
+      "label": "A：入口按钮在菜单面板内（不会画到面板外）",
+      "detail": "button=(610, 720, 380, 62) panel=(490, 36, 620, 828)"
+    },
+    {
+      "ok": true,
+      "label": "B：页面列出全部可用武将（动态来自注册表）",
+      "detail": "84"
+    },
+    {
+      "ok": true,
+      "label": "B：第一次进入默认全选（兼容旧用户升级）",
+      "detail": "84"
+    },
+    {
+      "ok": true,
+      "label": "B：刚进入时没有未保存改动",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "B：取消后计数实时变化",
+      "detail": "79"
+    },
+    {
+      "ok": true,
+      "label": "B：改动后标记为未保存",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "B：再点一次可以重新加入",
+      "detail": "80"
+    },
+    {
+      "ok": true,
+      "label": "B：点「保存」写入配置",
+      "detail": "saved"
+    },
+    {
+      "ok": true,
+      "label": "B：保存后不再有未保存改动",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "B：磁盘上是 20 名武将",
+      "detail": "20"
+    },
+    {
+      "ok": true,
+      "label": "B：有未保存改动时「返回」先弹确认框",
+      "detail": "{'kind': 'back', 'title': '有未保存的修改', 'body': '离开会丢弃这些改动，确定要返回吗？'}"
+    },
+    {
+      "ok": true,
+      "label": "B：确认框可以取消（留在页面）",
+      "detail": "None"
+    },
+    {
+      "ok": true,
+      "label": "B：没有未保存改动时「返回」直接返回",
+      "detail": "back"
+    },
+    {
+      "ok": true,
+      "label": "B：再次进入读回已保存的 20 名",
+      "detail": "20"
+    },
+    {
+      "ok": true,
+      "label": "C：不足 5 人时保存被拦下",
+      "detail": "blocked"
+    },
+    {
+      "ok": true,
+      "label": "C：最少人数是 5",
+      "detail": "5"
+    },
+    {
+      "ok": true,
+      "label": "C：页面明确提示「武将池至少需要 5 名武将」",
+      "detail": "至少选择 5 名武将才能保存。"
+    },
+    {
+      "ok": true,
+      "label": "C：被拦下时磁盘配置没有被改坏",
+      "detail": "20"
+    },
+    {
+      "ok": true,
+      "label": "C：保存按钮在人数不足时不可用",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "C：恢复默认需要二次确认",
+      "detail": "{'kind': 'reset', 'title': '恢复默认武将池？', 'body': '将把你池子里的武将重置为当前全部可用武将（84 名）。'}"
+    },
+    {
+      "ok": true,
+      "label": "C：恢复默认 = 全部可用武将",
+      "detail": "84"
+    },
+    {
+      "ok": true,
+      "label": "B：清空生效",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "B：全选生效",
+      "detail": "84"
+    },
+    {
+      "ok": true,
+      "label": "B：滚动被夹在内容范围内",
+      "detail": "scroll=1190.0 max=1190.0"
+    },
+    {
+      "ok": true,
+      "label": "D：新进程（新 Preferences 实例）读回同一份配置",
+      "detail": "20"
+    },
+    {
+      "ok": true,
+      "label": "D：无效 id 被安静过滤（不崩、不污染候选池）",
+      "detail": "('zhaoyun', 'guanyu', 'guojia', 'caocao', 'zhouyu')"
+    },
+    {
+      "ok": true,
+      "label": "D：过滤后仍有 5 人 → 用偏好池",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "D：合法人数 < 5 → 回退全部可用武将（仍可开局）",
+      "detail": "84 人"
+    },
+    {
+      "ok": true,
+      "label": "E：候选池 = 我的 20 名武将",
+      "detail": "20"
+    },
+    {
+      "ok": true,
+      "label": "E：本局候选恰好 5 人",
+      "detail": "('caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng')"
+    },
+    {
+      "ok": true,
+      "label": "E：同一局候选不重复",
+      "detail": "('caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng')"
+    },
+    {
+      "ok": true,
+      "label": "E：候选全部来自我的武将池",
+      "detail": "('caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng')"
+    },
+    {
+      "ok": true,
+      "label": "G：多次 re-layout + 重绘之后候选不变",
+      "detail": "('caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng')"
+    },
+    {
+      "ok": true,
+      "label": "G：选将屏显示的正是这 5 个候选（不是整张武将表）",
+      "detail": "['caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng']"
+    },
+    {
+      "ok": true,
+      "label": "E：选将屏只有 5 个候选",
+      "detail": "5"
+    },
+    {
+      "ok": true,
+      "label": "E：进入选将界面时没有替你选中任何武将",
+      "detail": "None"
+    },
+    {
+      "ok": true,
+      "label": "E：默认聚焦第一张（只是预览）",
+      "detail": "caocao"
+    },
+    {
+      "ok": true,
+      "label": "H：点击候选把它选为当前武将",
+      "detail": "sunquan"
+    },
+    {
+      "ok": true,
+      "label": "H：详情跟着聚焦",
+      "detail": "sunquan"
+    },
+    {
+      "ok": true,
+      "label": "H：详情里有武将名与技能",
+      "detail": "孙权（吴 4 体力）：【制衡】主动技 【救援】触发技"
+    },
+    {
+      "ok": true,
+      "label": "H：「确认出战」返回 confirm",
+      "detail": "confirm"
+    },
+    {
+      "ok": true,
+      "label": "H：开局后真人的武将就是所选",
+      "detail": "sunquan"
+    },
+    {
+      "ok": true,
+      "label": "H：体力正确",
+      "detail": "4 vs 4"
+    },
+    {
+      "ok": true,
+      "label": "H：角色已建好",
+      "detail": "玩家"
+    },
+    {
+      "ok": true,
+      "label": "H：武将的技能都注册到这名角色身上（主公技除外）",
+      "detail": "['zhiheng', 'jiuyuan'] → 已绑定 ['zhiheng'] / 应有 ['zhiheng']"
+    },
+    {
+      "ok": true,
+      "label": "H：注册表里查得到",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "H：势力正确",
+      "detail": "wu"
+    },
+    {
+      "ok": true,
+      "label": "F：重新开局会重新随机（不同种子得到不同候选）",
+      "detail": "不同组合 13 组"
+    },
+    {
+      "ok": true,
+      "label": "F：每一局都只从我的武将池里抽",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "AI：每个座位都分配了武将",
+      "detail": "['xiahoudun', 'yuanshao', 'sp_pangde', 'sp_diaochan', 'zhouyu', 'caoren_2010']"
+    },
+    {
+      "ok": true,
+      "label": "AI：同一局不出现重复武将",
+      "detail": "['xiahoudun', 'yuanshao', 'sp_pangde', 'sp_diaochan', 'zhouyu', 'caoren_2010']"
+    },
+    {
+      "ok": true,
+      "label": "AI：全场武将池没有被玩家偏好缩小",
+      "detail": "84 人"
+    }
+  ],
+  "notes": [
+    "A：主菜单按钮顺序 = ['开始游戏', '−', '＋', '多人对战（局域网）', '我的武将池', '退出游戏']",
+    "E：第一局候选 = ('caocao', 'liubei', 'sunquan', 'huangyueying', 'lvmeng')"
+  ],
+  "failed": 0,
+  "total": 53
+}

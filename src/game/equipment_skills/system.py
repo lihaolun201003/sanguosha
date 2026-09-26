@@ -10,6 +10,17 @@ from src.game.flows.judge import JudgeFlow
 from src.game.rules import ArmorRule
 
 
+#: 锁定技装备的中文名（卡面拿不到时兜底，用于技能提示的标题）。
+EQUIPMENT_RULE_NAMES = {
+    "RENWANG": "仁王盾",
+    "TENGJIA": "藤甲",
+    "BAIYIN": "白银狮子",
+    "GUDING": "古锭刀",
+    "QINGGANG": "青釭剑",
+    "BAGUA": "八卦阵",
+}
+
+
 def _equipment(player, slot, name):
     card = player.get_equipment(slot)
     return card is not None and card.name == name
@@ -31,6 +42,9 @@ class EquipmentEventSkill(Skill):
 
     skill_id = "equipment.locked_rules"
     name = "装备锁定技"
+    #: 这不是一个武将技能（绑的是每次伤害计算 / 每次杀），不发"技能发动"通知；
+    #: 真正改变结果的锁定效果由本类自己发一条**带牌名**的通知。
+    announces = False
 
     def bindings(self):
         return (
@@ -50,6 +64,8 @@ class EquipmentEventSkill(Skill):
             if card is not None and card.name == "BAIYIN" and event.target.hp < event.target.max_hp:
                 result = context.apply(RecoverHpAtom(event.target, 1))
                 event.payload["healed"] = result.data["amount"] > 0
+                if event.payload["healed"]:
+                    self._emit_skill(context, event.target, card, "BAIYIN")
         elif event.name is EventType.CARD_RESPONDED:
             self._yinyueqiang(context, event)
 
@@ -100,10 +116,43 @@ class EquipmentEventSkill(Skill):
         game = context.state
         if _armor(game, event.target, "RENWANG") and card.nature == "normal" and card.card_color == "black":
             event.payload["blocked_by"] = "仁王盾"
+            self._announce(context, event.target, "RENWANG")
             event.cancel()
         elif _armor(game, event.target, "TENGJIA") and card.nature == "normal":
             event.payload["blocked_by"] = "藤甲"
+            self._announce(context, event.target, "TENGJIA")
             event.cancel()
+
+    def _announce(self, context, player, card_name):
+        """锁定技**真的改变了这次结算**：发一条只读通知，界面据此弹出技能提示。
+
+        与 ``Skill._handle_event`` 里那条通知同源：payload 只带技能标识与展示
+        文本，不驱动任何规则。没有 SkillDef 的装备锁定技靠卡面自己的说明文本
+        （``card.description``）来说明规则，UI 不需要认识具体装备。
+        """
+
+        if player is None or not card_name:
+            return
+        card = player.get_equipment("armor") if card_name in ("RENWANG", "TENGJIA", "BAIYIN")             else player.get_equipment("weapon")
+        if card is None or getattr(card, "name", "") != card_name:
+            card = None
+        self._emit_skill(context, player, card, card_name)
+
+    def _emit_skill(self, context, player, card, fallback_name):
+        from src.game.engine.events import Event, EventType
+
+        name = getattr(card, "display_name", "") or EQUIPMENT_RULE_NAMES.get(
+            fallback_name, fallback_name)
+        context.emit(Event(
+            EventType.SKILL_TRIGGERED, source=player, target=player,
+            payload={
+                "skill_id": "equipment.%s" % str(fallback_name).lower(),
+                "skill_name": name,
+                "kind_label": "锁定技",
+                "text": getattr(card, "description", "") or "",
+                "targets": [],
+            },
+        ))
 
     def _modify_damage(self, context, event):
         damage = event.payload.get("damage")
@@ -114,6 +163,7 @@ class EquipmentEventSkill(Skill):
         if damage.card is not None and damage.card.name == "SHA" and _equipment(source, "weapon", "GUDING") and not target.hand:
             damage.amount += 1
             damage.effects.append("【古锭刀】使伤害 +1")
+            self._announce(context, source, "GUDING")
         if getattr(damage, "ignore_armor", False) or not ArmorRule.is_effective(
                 source, target, damage.card):
             if game.armor_card(target) is not None or game.virtual_armor(target):
@@ -123,9 +173,11 @@ class EquipmentEventSkill(Skill):
         if _armor(game, target, "TENGJIA") and damage.nature == "fire":
             damage.amount += 1
             damage.effects.append("【藤甲】使火焰伤害 +1")
+            self._announce(context, target, "TENGJIA")
         if _armor(game, target, "BAIYIN") and damage.amount > 1:
             damage.amount = 1
             damage.effects.append("【白银狮子】将伤害改为 1")
+            self._announce(context, target, "BAIYIN")
 
 
 class EquipmentSkillController:

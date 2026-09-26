@@ -390,23 +390,27 @@ class SongweiFlow(Flow):
 
 
 class Juxiang(Skill):
-    """锁定技：【南蛮入侵】对你无效；其他角色的【南蛮入侵】进弃牌堆时你立即获得它。"""
+    """锁定技：【南蛮入侵】对你无效；**其他角色使用**的【南蛮入侵】结算完毕
+    进入弃牌堆时你立即获得它。"""
 
     id = "juxiang"
     name = "巨象"
 
     def bindings(self):
-        return (SkillBinding(EventType.CARD_DISCARDED, priority=10),)
+        # 时机必须是"这张牌作为锦囊结算完毕"，不能用通用的「进弃牌堆」：
+        # 那条通知对**一切**弃牌途径都发（自己用的南蛮结算、别人弃牌阶段
+        # 把南蛮弃掉、被拆顺拆掉……），挂上去就等于南蛮全归祝融，白送一大截强度。
+        return (SkillBinding(EventType.CARD_USE_FINISHED, priority=10),)
 
     def can_trigger(self, context, event):
         if not self.owner.alive:
             return False
         card = event.payload.get("card")
-        owner = event.payload.get("owner")
         if card is None or getattr(card, "name", None) != "NANMAN":
             return False
-        if owner is self.owner:
+        if event.source is self.owner:
             return False
+        # 牌可能已经不在弃牌堆（被【奸雄】一类技能取走），那就不再拿。
         return any(item is card for item in context.state.deck.discard_pile)
 
     def resolve(self, context, event):

@@ -83,10 +83,21 @@ def _is_non_delay_trick(card):
 
 
 def _wushen_ignores_distance(game, query):
-    """武神：用红桃手牌转化出来的【杀】无距离限制。"""
+    """武神：用**红桃**【杀】无距离限制。
+
+    官方是"你使用红桃【杀】无距离限制"——所以判据是"这张杀是不是红桃"，
+    而不是"它是不是武神转化出来的"：牌堆里真实存在的红桃【杀】（一副牌 6 张）
+    走普通出牌路径时同样该享受，之前它们被距离卡住。
+    """
 
     card = query.get("card")
-    return bool(getattr(card, "skill_id", "") == "wushen")
+    if card is None:
+        return False
+    if getattr(card, "skill_id", "") == "wushen":
+        return True
+    if str(getattr(card, "name", "") or "") != "SHA":
+        return False
+    return getattr(card, "suit", None) == "heart"
 
 
 class Wuhun(Skill):
@@ -358,8 +369,12 @@ class Lianpo(Skill):
             self.owner.skill_state.set(self.id, "killed", 1, ResetScope.ROUND)
             return
         self.owner.skill_state.set(self.id, "killed", 0, ResetScope.ROUND)
-        if event.source is self.owner:
-            return                      # 自己的回合结束时不再连破自己
+        # 官方：「一名角色的回合结束时，若你本回合杀死过角色，你可以执行一个
+        # 额外回合」——**自己的回合结束时同样成立**（FAQ：本回合内击杀 → 该回合
+        # 结束后立刻再来一个）。这里曾经把"自己回合内击杀"整条 return 掉，
+        # 等于把连破的滚雪球核心砍掉，只剩回合外击杀能用。
+        if not self.owner.alive or game.game_over:
+            return
         game.queue_extra_turn(self.owner)
         game.add_log("%s 的【连破】获得一个额外回合" % self.owner.name)
 
@@ -372,7 +387,7 @@ RAGE = "rage"
 
 
 class Kuangbao(Skill):
-    """锁定技：游戏开始时获得 2 个暴怒标记，每受到 1 点伤害获得 1 个。"""
+    """锁定技：游戏开始时获得 2 个暴怒标记；**造成或受到** 1 点伤害各得 1 个。"""
 
     id = "kuangbao"
     name = "狂暴"
@@ -381,6 +396,8 @@ class Kuangbao(Skill):
         return (
             SkillBinding(EventType.PHASE_START, priority=65),
             SkillBinding(EventType.DAMAGE_TARGET_AFTER, priority=5),
+            # 官方是"造成**或**受到 1 点伤害后"：造成伤害那条挂在来源侧。
+            SkillBinding(EventType.DAMAGE_SOURCE_AFTER, priority=5),
         )
 
     def can_trigger(self, context, event):
@@ -391,7 +408,12 @@ class Kuangbao(Skill):
                 return False
             return not self.owner.skill_state.get(self.id, "started", 0)
         damage = event.payload.get("damage")
-        if damage is None or damage.target is not self.owner:
+        if damage is None or not self.owner.alive:
+            return False
+        if event.name is EventType.DAMAGE_SOURCE_AFTER:
+            if damage.source is not self.owner:
+                return False
+        elif damage.target is not self.owner:
             return False
         return int(event.payload.get("amount", 0) or 0) > 0
 
@@ -439,9 +461,10 @@ class WumouFlow(Flow):
         options = []
         if mark_count(self.owner, "kuangbao", RAGE) >= 1:
             options.append(("mark", "弃 1 个暴怒标记"))
-        if int(self.owner.hp) > 1:
-            options.append(("hp", "失去 1 点体力"))
-        if not options:
+        # 官方是"弃 1 个暴怒标记，**或**失去 1 点体力"：没有标记时必须失去
+        # 体力（1 体力也要失去，会进濒死），不能因为"会死"就整个跳过。
+        options.append(("hp", "失去 1 点体力"))
+        if not options:                                   # 理论上到不了
             return self.complete({"applied": False})
         ask_option(self.engine, self, source=self.owner, target=self.owner,
                    prompt="【无谋】：请选择支付方式", reason="wumou",
@@ -544,28 +567,60 @@ def _activate_shenfen(game, player, target=None, cards=None):
 
     remove_mark(game, player, "kuangbao", 6, RAGE)
     player.skill_state.set("shenfen", "used", 1, ResetScope.TURN)
-    from src.game.flows.chain_damage import ChainDamageFlow
-
     targets = [other for other in game.seats.alive_players_in_order(start_after=player)
                if other is not player]
-    for other in targets:
-        for slot in list(other.equipment):
-            if other.get_equipment(slot) is not None:
-                game.engine.context.apply(UnequipAtom(
-                    other, slot, game.deck.discard_pile))
-        for _ in range(4):
-            hand = list(getattr(other, "hand", ()) or ())
-            if not hand:
-                break
-            game.engine.context.apply(MoveCardAtom(
-                hand[-1], source=other.hand, destination=game.deck.discard_pile))
-    if targets:
-        ChainDamageFlow(game.engine, source=player, card=None, nature="normal",
-                        amount=1, targets=targets).start()
-    flip_player(game, player, reason="神愤")
-    game.add_log("%s 发动【神愤】：对 %d 名角色造成 1 点伤害并翻面"
-                 % (player.name, len(targets)))
+    ShenfenFlow(game.engine, player, targets).start()
     return True
+
+
+class ShenfenFlow(Flow):
+    """神愤的结算：伤害（连同一切受伤触发技）走完 → 弃装备 → 弃四张手牌 → 翻面。
+
+    伤害是**异步**的：受伤方可能触发【遗计】【刚烈】【反馈】，这些技能自己
+    也会摸牌、造成伤害。以前是"发起伤害之后立刻弃牌翻面"，那些技能刚拿到
+    的牌转眼就被弃掉，连结算顺序都乱了。这里用子流程守卫，等伤害彻底结束
+    （含它引发的全部技能）再往下走。
+    """
+
+    def __init__(self, engine, player, targets):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.player = player
+        self.targets = list(targets)
+
+    def begin(self):
+        from src.game.flows.chain_damage import ChainDamageFlow
+
+        if self.targets:
+            ChainDamageFlow(
+                self.engine, source=self.player, card=None, nature="normal",
+                amount=1, targets=self.targets).start()
+        return self.advance()
+
+    def advance(self, response=None):
+        guard = self.guard_child_flows()
+        if guard is not None:
+            return guard
+        return self._discard_and_flip()
+
+    def _discard_and_flip(self):
+        game = self.game
+        for other in self.targets:
+            for slot in list(other.equipment):
+                if other.get_equipment(slot) is not None:
+                    self.context.apply(UnequipAtom(
+                        other, slot, game.deck.discard_pile))
+            for _ in range(4):
+                hand = list(getattr(other, "hand", ()) or ())
+                if not hand:
+                    break
+                self.context.apply(MoveCardAtom(
+                    hand[-1], source=other.hand, destination=game.deck.discard_pile))
+        flip_player(game, self.player, reason="神愤")
+        game.add_log("%s 的【神愤】结算完毕：对 %d 名角色造成伤害、弃牌后翻面"
+                     % (self.player.name, len(self.targets)))
+        return self.complete({"applied": True})
 
 
 # ==================================================
@@ -613,6 +668,8 @@ def _can_gongxin(game, player):
         return False, "无法发动"
     if game.current_turn_player is not player or game.phase != "play":
         return False, "只能在你的出牌阶段发动"
+    if player.skill_state.get("gongxin", "used", 0):
+        return False, "本阶段已经发动过"        # 官方：出牌阶段限一次
     if not [other for other in other_alive_players(game, player)
             if getattr(other, "hand", ())]:
         return False, "没有手牌不为空的其他角色"
@@ -622,6 +679,7 @@ def _can_gongxin(game, player):
 def _activate_gongxin(game, player, target=None, cards=None):
     if target is None or not target.hand:
         return False
+    player.skill_state.set("gongxin", "used", 1, ResetScope.PHASE)
     GongxinFlow(game.engine, player, target).start()
     return True
 
@@ -799,7 +857,16 @@ class YeyanFlow(Flow):
                     prompt="【业炎】：还可以分配 %d 点火焰伤害，请选择目标"
                            % self.remaining,
                     reason="yeyan", candidates=candidates,
-                    min_targets=1, max_targets=1)
+                    min_targets=1, max_targets=1,
+                    # 已经分配出去的点数：AI 靠它把伤害摊到不同角色身上
+                    # （全压在一个人身上要弃四张不同花色的手牌并失去 3 点体力）。
+                    context={
+                        "remaining": self.remaining,
+                        "allocation": {
+                            str(player.player_id): self.allocation.get(id(player), 0)
+                            for player in other_alive_players(self.game, self.owner)
+                        },
+                    })
         return self.current_result()
 
     def advance(self, response=None):
@@ -820,8 +887,10 @@ class YeyanFlow(Flow):
         if heavy:
             hearts = {getattr(card, "suit", None) for card in hand_cards(self.owner)}
             needed = 4
-            if len(hearts) < needed or int(self.owner.hp) <= 3:
-                game.message = "【业炎】：无法支付重额分配的代价（四张不同花色手牌 / 3 点体力）。"
+            # 官方只要求"弃四张不同花色的手牌并失去 3 点体力"，**没有**"必须
+            # 有 4 点以上体力"这一条：1 体力时也可以烧到濒死。
+            if len(hearts) < needed:
+                game.message = "【业炎】：无法支付重额分配的代价（需要四张不同花色的手牌）。"
                 return self.complete({"applied": False})
             paid = []
             used_suits = set()
@@ -875,8 +944,24 @@ class Guixin(Skill):
             return False
         return any(_cards_of(other) for other in other_alive_players(context.state, self.owner))
 
+    def repeat_times(self, context, event):
+        """官方：每受到 **1 点**伤害就可以发动一次（2 点伤害 = 发动 2 次）。
+
+        引擎的技能回调一次事件只调用一次 resolve，所以这里把"点数"换算成
+        需要重复的次数，由 resolve 自己循环——否则 2 点伤害只能拿一半的牌，
+        而且必然翻面（跳过自己的下个回合），两个方向都吃亏。
+        """
+
+        return max(1, int(event.payload.get("amount", 0) or 0))
+
     def resolve(self, context, event):
-        GuixinFlow(context.services["engine"], self.owner).start()
+        engine = context.services["engine"]
+        game = context.state
+        # 每 1 点伤害各发动一次（2 点 = 拿两轮牌、翻两次面 = 回到正面）。
+        for _ in range(self.repeat_times(context, event)):
+            if not self.owner.alive or game.game_over:
+                break
+            GuixinFlow(engine, self.owner).start()
 
 
 class GuixinFlow(Flow):
@@ -1049,7 +1134,9 @@ GOD_SKILLS = (
         can_activate=_can_shenfen,
         activate=_activate_shenfen,
         spec=ActiveSkillSpec(),
-        tags=("active",),
+        # big_play：一次性消耗大、收益面的主动技。AI 会优先考虑它——否则
+        # 神吕布会把标记零散花在无前上，永远攒不到 6 枚放神愤。
+        tags=("active", "big_play"),
     ),
     SkillDef(
         id="shelie",
@@ -1078,8 +1165,10 @@ GOD_SKILLS = (
                 if getattr(other, "hand", ())],
             target_prompt="【攻心】：请选择观看手牌的角色",
         ),
+        # 攻心的交互（选一张红桃牌 → 二选一处理）全部走 PendingRequest
+        # （ask_cards / ask_option），单机真人、远程真人与 AI 都能回答，
+        # 因此**不**标 needs_local_ui——标了会让后两者直接发不动。
         tags=("active",),
-        needs_local_ui=True,
     ),
     triggered(
         "qinyin",

@@ -1,0 +1,179 @@
+{
+  "jushou_old": {
+    "general_id": "caoren",
+    "cards_after_jushou": 3,
+    "skip_mark_before": 1,
+    "face_up_before": true,
+    "cards_at_next_turn_entry": 3,
+    "skip_mark_after": 0,
+    "entered_turn_flow": false
+  },
+  "jushou_2010_control": {
+    "general_id": "caoren_2010",
+    "cards_after_jushou": 3,
+    "skip_mark_before": 0,
+    "face_up_before": false,
+    "cards_at_next_turn_entry": 3,
+    "skip_mark_after": 0,
+    "entered_turn_flow": false
+  },
+  "juxiang_own_use": {
+    "user_is_zhurong": true,
+    "status": "completed",
+    "card_returned_to_zhurong": false,
+    "card_in_discard": true,
+    "hp_before": [
+      4,
+      4,
+      4
+    ],
+    "hp_after": [
+      4,
+      3,
+      3
+    ]
+  },
+  "juxiang_other_use_control": {
+    "user_is_zhurong": false,
+    "status": "completed",
+    "card_returned_to_zhurong": true,
+    "card_in_discard": false,
+    "hp_before": [
+      4,
+      4,
+      4
+    ],
+    "hp_after": [
+      4,
+      4,
+      3
+    ]
+  },
+  "juxiang_unused_discard": {
+    "unused_discarded_nanman_acquired": false
+  },
+  "nanman_targets_zhurong": {
+    "immune_general": "zhurong",
+    "generated_targets": [
+      "guanyu",
+      "zhurong"
+    ],
+    "rule_targets": [
+      "guanyu",
+      "zhurong"
+    ],
+    "generated_action_valid": true,
+    "rejection_reason": "",
+    "ai_builds_action": true,
+    "rule_target_action_valid": true
+  },
+  "nanman_targets_menghuo": {
+    "immune_general": "menghuo",
+    "generated_targets": [
+      "guanyu",
+      "menghuo"
+    ],
+    "rule_targets": [
+      "guanyu",
+      "menghuo"
+    ],
+    "generated_action_valid": true,
+    "rejection_reason": "",
+    "ai_builds_action": true,
+    "rule_target_action_valid": true
+  },
+  "ai_pindian": {
+    "available_ranks": [
+      "A",
+      "K",
+      "9"
+    ],
+    "ai_selected_rank": "K",
+    "opponent_rank": "7",
+    "initiator_won": true
+  },
+  "ai_tianyi": {
+    "general_id": "taishici",
+    "activated": true,
+    "won": true,
+    "lost": false,
+    "remaining_ranks": [
+      "A",
+      "9"
+    ],
+    "initiator_cards_spent": 1,
+    "can_exploit_win_with_remaining_sha": true
+  },
+  "ai_xianzhen": {
+    "general_id": "gaoshun",
+    "activated": true,
+    "won": true,
+    "lost": false,
+    "remaining_ranks": [
+      "A",
+      "9"
+    ],
+    "initiator_cards_spent": 1,
+    "can_exploit_win_with_remaining_sha": true
+  },
+  "ai_quhu": {
+    "general_id": "xunyu",
+    "activated": true,
+    "won": false,
+    "lost": false,
+    "remaining_ranks": [
+      "A",
+      "9"
+    ],
+    "initiator_cards_spent": 1,
+    "can_exploit_win_with_remaining_sha": true
+  },
+  "single_card_tianyi": {
+    "general_id": "taishici",
+    "activation_accepted": true,
+    "message": "",
+    "owner_hand": 0,
+    "opponent_hand": 0,
+    "won": true,
+    "lost": false,
+    "used": true
+  },
+  "single_card_xianzhen": {
+    "general_id": "gaoshun",
+    "activation_accepted": true,
+    "message": "",
+    "owner_hand": 0,
+    "opponent_hand": 0,
+    "won": true,
+    "lost": false,
+    "used": true
+  },
+  "single_card_quhu": {
+    "general_id": "xunyu",
+    "activation_accepted": true,
+    "message": "",
+    "owner_hand": 0,
+    "opponent_hand": 0,
+    "won": false,
+    "lost": false,
+    "used": true
+  },
+  "ai_jieming": {
+    "xunyu_seat": 1,
+    "enemy_seat": 0,
+    "xunyu_cards_after": 3,
+    "enemy_cards_after": 0
+  },
+  "jieming_two_damage": {
+    "damage": 2,
+    "jieming_target_windows": 2,
+    "first_recipient_cards": 4,
+    "second_recipient_cards": 4
+  },
+  "shenfen_damage_pending": {
+    "pending_reason": "jieming",
+    "victim_hp": 2,
+    "victim_hand_while_damage_skill_pending": 4,
+    "lvbu_face_up_while_damage_skill_pending": true
+  }
+}

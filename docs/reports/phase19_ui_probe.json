@@ -1,0 +1,157 @@
+{
+  "records": [
+    {
+      "ok": true,
+      "label": "A：主菜单出现「我的武将池」入口",
+      "detail": "['开始游戏', '−', '＋', '多人对战（局域网）', '我的武将池', '退出游戏']"
+    },
+    {
+      "ok": true,
+      "label": "A：入口按钮在菜单面板内",
+      "detail": "(391, 541, 243, 40)"
+    },
+    {
+      "ok": true,
+      "label": "A：点击返回 general_pool 动作",
+      "detail": "general_pool"
+    },
+    {
+      "ok": true,
+      "label": "A：进入后场景 = general_pool",
+      "detail": "general_pool"
+    },
+    {
+      "ok": true,
+      "label": "menu：四种分辨率下都完整在屏幕内",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "B：页面列出全部可用武将",
+      "detail": "84 名"
+    },
+    {
+      "ok": true,
+      "label": "B：计数显示 已选择 N / M",
+      "detail": "84 / 84"
+    },
+    {
+      "ok": true,
+      "label": "B：点击可以取消已选武将",
+      "detail": "84 → 82"
+    },
+    {
+      "ok": true,
+      "label": "B：再点一次可以重新加入",
+      "detail": "84"
+    },
+    {
+      "ok": true,
+      "label": "B：悬停后详情区显示该武将",
+      "detail": "曹操"
+    },
+    {
+      "ok": true,
+      "label": "B：网格在屏幕内",
+      "detail": "(14, 82, 726, 543)"
+    },
+    {
+      "ok": true,
+      "label": "B：详情面板在屏幕内",
+      "detail": "(754, 82, 256, 615)"
+    },
+    {
+      "ok": true,
+      "label": "B：候选卡片高度足够（1366×768 也看得清）",
+      "detail": "99"
+    },
+    {
+      "ok": true,
+      "label": "B：滚到底部不越界",
+      "detail": "540 / 540"
+    },
+    {
+      "ok": true,
+      "label": "pool：四种分辨率下都完整在屏幕内",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "C：只留 4 人时保存被拦下",
+      "detail": "blocked"
+    },
+    {
+      "ok": true,
+      "label": "C：页面明确提示至少 5 名",
+      "detail": "至少选择 5 名武将才能保存。"
+    },
+    {
+      "ok": true,
+      "label": "B：保存成功并写入磁盘",
+      "detail": "saved / 20 名"
+    },
+    {
+      "ok": true,
+      "label": "B：保存后重启仍能读回（同一份文件）",
+      "detail": "C:/Users/lihao/AppData/Local/Temp/tmp.6wmaJJH8yL/prefs.json"
+    },
+    {
+      "ok": true,
+      "label": "E：本局候选恰好 5 人",
+      "detail": "('zhangfei', 'xiahoudun', 'machao', 'zhugeliang', 'guojia')"
+    },
+    {
+      "ok": true,
+      "label": "E：候选都来自我的武将池",
+      "detail": "20 名池"
+    },
+    {
+      "ok": true,
+      "label": "E：选将屏只显示这 5 个候选",
+      "detail": "5"
+    },
+    {
+      "ok": true,
+      "label": "E：进入时没有替玩家选中",
+      "detail": "None"
+    },
+    {
+      "ok": true,
+      "label": "E：中央大卡在屏幕内",
+      "detail": "(38, 84, 948, 437)"
+    },
+    {
+      "ok": true,
+      "label": "E：候选条在屏幕内",
+      "detail": "(698, 535, 108, 145)"
+    },
+    {
+      "ok": true,
+      "label": "G：四种分辨率重绘后候选不变",
+      "detail": "('zhangfei', 'xiahoudun', 'machao', 'zhugeliang', 'guojia')"
+    },
+    {
+      "ok": true,
+      "label": "select：四种分辨率下都完整在屏幕内",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "H：点击候选选中该武将",
+      "detail": "xiahoudun"
+    },
+    {
+      "ok": true,
+      "label": "H：确认后可以进入对局",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "H：开局后的武将与技能正确",
+      "detail": "xiahoudun / ['ganglie']"
+    }
+  ],
+  "notes": [],
+  "failed": 0,
+  "total": 30
+}

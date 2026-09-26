@@ -25,6 +25,7 @@ from ..mechanics import (
     limited_used,
     lose_hp,
     other_alive_players,
+    pindian_possible,
     start_pindian,
     use_virtual,
 )
@@ -227,7 +228,9 @@ def _can_tianyi(game, player):
 
 
 def _activate_tianyi(game, player, target=None, cards=None):
-    if target is None:
+    # 拼点真的能成立（双方都有手牌）才扣技能次数：只要目标空手，
+    # 拼点会当场取消，次数却已经用掉——白付一次机会。
+    if not pindian_possible(player, target):
         return False
     player.skill_state.set("tianyi", "used", 1, ResetScope.TURN)
     start_pindian(
@@ -426,7 +429,7 @@ def _can_quhu(game, player):
 
 
 def _activate_quhu(game, player, target=None, cards=None):
-    if target is None:
+    if not pindian_possible(player, target):
         return False
     player.skill_state.set("quhu", "used", 1, ResetScope.TURN)
     QuhuFlow(game.engine, player, target).start()
@@ -511,20 +514,35 @@ class Jieming(Skill):
         return self.owner.alive and amount > 0
 
     def resolve(self, context, event):
-        JiemingFlow(context.services["engine"], self.owner).start()
+        # 官方是"每受到 1 点伤害后"，所以一次 2 点伤害要问两次、补两次。
+        # 伤害事件一次只发一条，触发次数只能按 amount 展开。
+        amount = int(event.payload.get("amount", 0) or 0)
+        JiemingFlow(context.services["engine"], self.owner, rounds=amount).start()
 
 
 class JiemingFlow(Flow):
-    def __init__(self, engine, owner):
+    def __init__(self, engine, owner, rounds=1):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
         self.owner = owner
+        self.rounds = max(1, int(rounds))
+        self.remaining = self.rounds
         self.stage = "target"
 
     def begin(self):
+        return self._ask()
+
+    def _ask(self):
+        """剩下的每一次都独立问一次目标——可以补给自己，也可以补给同一个人。"""
+
+        if self.remaining <= 0:
+            return self.complete({"applied": True})
+        self.stage = "target"
         ask_targets(self.engine, self, source=self.owner, target=self.owner,
-                    prompt="【节命】：请选择将手牌补至体力上限的角色",
+                    prompt="【节命】：请选择将手牌补至体力上限的角色"
+                           + ("（%d/%d）" % (self.rounds - self.remaining + 1, self.rounds)
+                              if self.rounds > 1 else ""),
                     reason="jieming",
                     candidates=list(self.game.get_alive_players()),
                     min_targets=1, max_targets=1)
@@ -535,6 +553,8 @@ class JiemingFlow(Flow):
             raise RuntimeError("JiemingFlow cannot advance from stage " + self.stage)
         targets = list(getattr(response, "targets", ()) or ())
         if not targets:
+            # 放弃这一次，但已经攒下的剩余次数照样继续问（不是整条作废）。
+            self.remaining = 0
             return self.complete({"applied": False})
         target = targets[0]
         limit = min(5, int(target.max_hp))
@@ -543,6 +563,9 @@ class JiemingFlow(Flow):
             self.context.apply(DrawCardsAtom(target, lack))
         self.game.add_log("%s 的【节命】令 %s 将手牌补至 %d 张"
                           % (self.owner.name, target.name, limit))
+        self.remaining -= 1
+        if self.remaining > 0:
+            return self._ask()
         return self.complete({"applied": True})
 
 
@@ -792,8 +815,10 @@ FIRE_SKILLS = (
             needs_target=True,
             target_candidates=_tianyi_targets,
             target_prompt="【天义】：请选择拼点的角色",
-            cost_cards=1,
-            cost_prompt="【天义】：请选择一张手牌拼点",
+            # 拼点牌**不能**走 cost 通道。那条路是"先支付再结算"：牌先被弃掉，
+            # 拼点流程随后还要再收一张 → 一次拼点掉两张牌；只剩一张时更糟，
+            # 费用先被扣光、拼点根本成立不了，技能没发动而牌已经没了。
+            # 拼点牌由拼点流程自己收集（与【制霸】的写法一致）。
         ),
         modifiers=(
             ModifierSpec(kind=ModifierKind.ATTACK_RANGE, value=98, roles=("player",),
@@ -844,8 +869,7 @@ FIRE_SKILLS = (
             needs_target=True,
             target_candidates=_quhu_targets,
             target_prompt="【驱虎】：请选择体力比你多的角色",
-            cost_cards=1,
-            cost_prompt="【驱虎】：请选择一张手牌拼点",
+            # 同【天义】：拼点牌交给拼点流程收，见上面那段说明。
         ),
         tags=("active", "pindian"),
     ),

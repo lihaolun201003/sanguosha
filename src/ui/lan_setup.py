@@ -87,6 +87,7 @@ class LanSetupScreen:
         self.stage = STAGE_IDENTITY
         self.notice = ""
         self._identity_value = None
+        self._candidates_version = 0
 
     # ==================================================
     # 数据入口（由网络桥的回调驱动）
@@ -97,6 +98,7 @@ class LanSetupScreen:
         self.stage = STAGE_IDENTITY
         self.notice = ""
         self._identity_value = None
+        self._candidates_version = 0
         return self
 
     def apply_identity(self, value, lord_name=""):
@@ -105,10 +107,12 @@ class LanSetupScreen:
         self.notice = "看好了就点「继续」，接下来选武将"
         return self
 
-    def apply_candidates(self, entries):
+    def apply_candidates(self, entries, *, resend=False):
         self.game.set_candidates(entries)
         self.stage = STAGE_GENERALS
-        self.notice = "候选由房主给出，选定后确认出战"
+        # 重发（武将池生效 / 你想要的武将被别人选走了）：换一批候选让玩家重选。
+        self.notice = ("房主更新了候选武将，请重新选择" if resend
+                       else "候选由房主给出，选定后确认出战")
         self._sync_candidates_layout()
         return self
 
@@ -135,9 +139,13 @@ class LanSetupScreen:
         if identity != self._identity_value:
             self._identity_value = identity
             self.apply_identity(identity, getattr(match, "lord_name", ""))
+        version = int(getattr(match, "candidates_version", 0) or 0)
         if (getattr(match, "candidates_ready", False)
-                and self.stage == STAGE_IDENTITY):
-            self.apply_candidates(getattr(match, "candidates", ()))
+                and (self.stage == STAGE_IDENTITY
+                     or version != self._candidates_version)):
+            resend = self.stage == STAGE_GENERALS
+            self.apply_candidates(getattr(match, "candidates", ()), resend=resend)
+            self._candidates_version = version
         self.notice = self._notice_for(match)
         return self
 

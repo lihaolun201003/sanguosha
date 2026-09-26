@@ -34,6 +34,7 @@ from ..mechanics import (
     lose_hp,
     lost_hp,
     other_alive_players,
+    pindian_possible,
     start_pindian,
     use_virtual,
 )
@@ -1128,7 +1129,9 @@ def _can_xianzhen(game, player):
 
 
 def _activate_xianzhen(game, player, target=None, cards=None):
-    if target is None:
+    # 拼点真的能成立（双方都有手牌）才扣技能次数：只要目标空手，
+    # 拼点会当场取消，次数却已经用掉——白付一次机会。
+    if not pindian_possible(player, target):
         return False
     player.skill_state.set("xianzhen", "used", 1, ResetScope.TURN)
     player.skill_state.set("xianzhen", "target_id", id(target), ResetScope.TURN)
@@ -1175,7 +1178,10 @@ def _xianzhen_ignore_distance(game, query):
         return 0
     from src.game.rules import DistanceRule
 
-    return -DistanceRule.distance(game, source, target)
+    # 用**基础距离**当基数：这里正在算的就是"距离修正"，再调 distance()
+    # 会把本修正重新算一遍（无限递归）。减去基础距离后，最终距离被
+    # distance() 夹到最小值 1 = "视为相邻，永远够得着"。
+    return -DistanceRule.base_distance(game, source, target)
 
 
 class XianzhenArmorIgnore(Skill):
@@ -1285,7 +1291,7 @@ YIJIANG_SKILLS = (
             max_cost_cards=3,
             cost_prompt="【举荐】：请选择至多三张牌弃置",
         ),
-        tags=("active",),
+        tags=("active", "card_transfer"),
     ),
     triggered(
         "pojun",
@@ -1337,7 +1343,7 @@ YIJIANG_SKILLS = (
             cost_prompt="【眩惑】：请选择一张红桃手牌交给目标",
             cost_candidates=_is_xuanhuo_source,
         ),
-        tags=("active",),
+        tags=("active", "card_transfer"),
     ),
     active(
         "mingce",
@@ -1356,7 +1362,7 @@ YIJIANG_SKILLS = (
             cost_prompt="【明策】：请选择一张装备牌或【杀】交给目标",
             cost_candidates=_is_mingce_source,
         ),
-        tags=("active",),
+        tags=("active", "card_transfer"),
     ),
     triggered(
         "zhichi",
@@ -1397,8 +1403,9 @@ YIJIANG_SKILLS = (
             needs_target=True,
             target_candidates=_xianzhen_targets,
             target_prompt="【陷阵】：请选择拼点的角色",
-            cost_cards=1,
-            cost_prompt="【陷阵】：请选择一张手牌拼点",
+            # 拼点牌**不能**走 cost 通道：那条路是"先支付再结算"，牌先被弃掉，
+            # 拼点流程还要再收一张 → 一次拼点掉两张牌；只剩一张时费用先被扣光、
+            # 拼点成立不了，技能没发动而牌已经没了。拼点牌由拼点流程自己收集。
         ),
         modifiers=(
             ModifierSpec(kind=ModifierKind.DISTANCE_OUTGOING,

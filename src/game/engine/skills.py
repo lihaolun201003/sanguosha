@@ -18,6 +18,13 @@ class Skill(ABC):
     name = "Skill"
     optional = False
 
+    #: 触发时要不要发一条"技能发动"只读通知（界面据此显示技能提示）。
+    #: 默认要；装备一类的**规则集合**技能（``equipment.locked_rules``）关掉它——
+    #: 那不是一个武将技能，名字（"装备锁定技"）对玩家没有意义，而且它绑的是
+    #: 每次伤害计算 / 每次杀，会把提示刷爆。真正生效的锁定效果（仁王盾、
+    #: 藤甲、白银狮子）由规则自己发一条带牌名的通知。
+    announces = True
+
     # 技能 resolve 期间可能触发新的 Atom/事件，进而再次触发技能。
     # 允许合理嵌套（受到伤害 → 摸牌 → 摸牌事件 → 其他技能），但超过
     # 这个深度就放弃当次触发，避免无限连锁。
@@ -68,12 +75,13 @@ class Skill(ABC):
             return
         Skill._depth += 1
         try:
-            # 只读通知：UI 用它显示「【技能名】」浮字，不驱动任何规则。
-            context.emit(Event(
-                EventType.SKILL_TRIGGERED,
-                source=self.owner,
-                payload={"skill_id": self.id, "skill_name": self.name},
-            ))
+            if self.announces:
+                # 只读通知：UI 用它显示技能发动提示，不驱动任何规则。
+                context.emit(Event(
+                    EventType.SKILL_TRIGGERED,
+                    source=self.owner,
+                    payload={"skill_id": self.id, "skill_name": self.name},
+                ))
             self.resolve(context, event)
         finally:
             Skill._depth -= 1

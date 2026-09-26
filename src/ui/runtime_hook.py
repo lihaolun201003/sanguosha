@@ -29,7 +29,7 @@ class RuntimeContext:
 
     __slots__ = ("screen", "game", "renderer", "start_menu", "general_select",
                  "identity_reveal", "choice_overlay", "lan_scene", "resync",
-                 "settings", "hud")
+                 "settings", "hud", "preferences", "favorite_generals")
 
     def __init__(self, **values):
         for key in self.__slots__:

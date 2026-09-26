@@ -29,6 +29,7 @@ from src.actions import ActionQueue, MoveCardAction, WaitAction
 from src.game.judge_presentation import JudgeOutcome, JudgeOutcomeTone, judge_source
 from src.game.view.presentation import (
     EV_CARD_RESPONSE,
+    EV_CARD_REVEALED,
     EV_CARDS_DRAWN,
     EV_CARDS_MOVED,
     EV_CHAIN,
@@ -40,6 +41,7 @@ from src.game.view.presentation import (
     EV_JUDGE,
     EV_LOG,
     EV_PHASE,
+    EV_PHASE_SKIPPED,
     EV_PUBLIC_POOL,
     EV_RECOVER,
     EV_RESPONSE_REQUEST,
@@ -47,6 +49,7 @@ from src.game.view.presentation import (
     EV_TURN_START,
     EV_CARD_USED,
 )
+from src.ui.storyboard import STEP_PHASE_SKIP
 
 #: 移动动画时长（表现用；与房主侧的 0.3s 同一观感）。
 MOVE_DURATION = 0.3
@@ -426,8 +429,9 @@ def _p_card_used(feed, event):
     feed.fly(card, feed.zone_rect("hand", actor),
              feed.zone_rect("table", actor), duration=MOVE_DURATION,
              key=(str(card.id), "use->table"))
-    feed.effects.show_card_used(actor, targets, card,
-                                sequential=bool(event.get("sequential")))
+    # 横幅与箭头排进**统一演出队列**：房主那边怎么排队，客户端就怎么排队。
+    feed.effects.present_card_used(
+        actor, targets, card, sequential=bool(event.get("sequential")))
 
 
 def _p_response_request(feed, event):
@@ -495,43 +499,76 @@ def _p_cards_moved(feed, event):
 
 
 def _p_damage(feed, event):
-    feed.effects.show_damage(feed.player(event.get("player_id")),
-                             int(event.get("amount") or 0))
+    # 排进演出队列（不是立刻播）：判定 / 技能提示还在演的时候，这一次伤害
+    # 不会抢在它前面出现。房主侧与客户端是同一条队列实现。
+    feed.effects.present_damage(feed.player(event.get("player_id")),
+                                int(event.get("amount") or 0))
 
 
 def _p_recover(feed, event):
-    feed.effects.show_recover(feed.player(event.get("player_id")),
-                              int(event.get("amount") or 0))
+    feed.effects.present_recover(feed.player(event.get("player_id")),
+                                 int(event.get("amount") or 0))
 
 
 def _p_hp_lost(feed, event):
-    feed.effects.show_lose_hp(feed.player(event.get("player_id")),
-                              int(event.get("amount") or 0))
+    feed.effects.present_lose_hp(feed.player(event.get("player_id")),
+                                 int(event.get("amount") or 0))
 
 
 def _p_dying(feed, event):
-    feed.effects.show_dying(feed.player(event.get("player_id")))
+    feed.effects.present_dying(feed.player(event.get("player_id")))
 
 
 def _p_death(feed, event):
-    feed.effects.show_death(feed.player(event.get("player_id")))
+    feed.effects.present_death(feed.player(event.get("player_id")))
 
 
 def _p_chain(feed, event):
-    feed.effects.show_chain(feed.player(event.get("player_id")),
-                            bool(event.get("chained")))
+    feed.effects.present_chain(feed.player(event.get("player_id")),
+                               bool(event.get("chained")))
 
 
 def _p_skill(feed, event):
-    feed.effects.show_skill(
+    feed.effects.present_skill(
         feed.player(event.get("player_id")),
         event.get("skill_name"),
         [feed.player(item) for item in event.get("target_ids") or ()],
+        skill_id=str(event.get("skill_id") or ""),
+        kind_label=str(event.get("kind_label") or ""),
+        text=str(event.get("text") or ""),
     )
 
 
 def _p_turn_start(feed, event):
-    feed.effects.show_turn_start(feed.player(event.get("player_id")))
+    feed.effects.present_turn_start(feed.player(event.get("player_id")))
+
+
+def _p_phase_skipped(feed, event):
+    """阶段被跳过（乐不思蜀 / 兵粮寸断）：结论提示条，同样排进演出队列。"""
+
+    text = str(event.get("text") or "")
+    if not text:
+        return
+    feed.effects.present_result(
+        text, detail=str(event.get("detail") or ""),
+        tone=str(event.get("tone") or "phase"), kind=STEP_PHASE_SKIP,
+    )
+
+
+def _p_card_revealed(feed, event):
+    """公开亮出的牌（火攻展示）：所有客户端都要看得到。"""
+
+    card = feed.card(event.get("card"))
+    player = feed.player(event.get("player_id"))
+    if card is None or player is None:
+        return
+    mark = (getattr(card, "suit_name", "") or "") + str(getattr(card, "rank", "") or "")
+    feed.effects.present_result(
+        "%s 展示了一张手牌" % getattr(player, "name", ""),
+        detail=("【%s】%s" % (card.display_name, mark)) if mark
+               else ("【%s】" % card.display_name),
+        tone="",
+    )
 
 
 def _p_phase(feed, event):
@@ -589,25 +626,27 @@ def _p_judge(feed, event):
 
     if stage in ("started", "revealed"):
         feed.judge_history = ()
-        feed.effects.judge_begin(RemoteJudgeResult(
+        # 判定排进演出队列：它前面的演出（技能提示 / 上一次结算）先演完，
+        # 它后面的（伤害 / 濒死 / 阵亡 / 下一个回合）一定排在它后面。
+        feed.effects.present_judge(RemoteJudgeResult(
             reason=reason, card=card, target=target, source_spec=spec))
         return
     if stage == "replaced":
         feed.judge_history = tuple(event.get("history") or ())
-        feed.effects.judge_replace({
+        feed.effects.judge_note("replaced", {
             # 改判事件用的是 new_card / old_card（不是 card）。
             "new_card": feed.card(event.get("new_card")),
             "old_card": feed.card(event.get("old_card")),
             "player": feed.player(event.get("player_id")),
             "skill_id": str(event.get("skill_id") or ""),
             "history": tuple(event.get("history") or ()),
-        }, feed.view)
+        })
         return
     if stage == "result":
         outcome = JudgeOutcome(
             _tone(event.get("tone")), str(event.get("title") or ""),
             str(event.get("text") or ""))
-        feed.effects.judge_finish(RemoteJudgeResult(
+        feed.effects.judge_note("result", RemoteJudgeResult(
             reason=reason, card=card, target=target, source_spec=spec,
             outcome=outcome, final=True, replacement_history=feed.judge_history))
         return
@@ -654,6 +693,8 @@ _HANDLERS = {
     EV_SKILL: _p_skill,
     EV_TURN_START: _p_turn_start,
     EV_PHASE: _p_phase,
+    EV_PHASE_SKIPPED: _p_phase_skipped,
+    EV_CARD_REVEALED: _p_card_revealed,
     EV_EQUIPMENT: _p_equipment,
     EV_PUBLIC_POOL: _p_public_pool,
     EV_LOG: _p_log,

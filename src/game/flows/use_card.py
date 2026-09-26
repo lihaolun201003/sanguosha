@@ -141,9 +141,9 @@ class UseCardFlow(Flow):
         material_sources = self.material_cards
         if material_sources and material_sources != [self.card]:
             for source_card in material_sources:
-                self.game.move_source_card_to_processing(self.actor, source_card)
+                self._move_material(source_card)
         elif not getattr(self.card, "_virtual", False):
-            self.game.move_source_card_to_processing(self.actor, self.card)
+            self._move_material(self.card)
         self.engine.animate_card_use(self.action)
 
         if self.card.name == "SHA":
@@ -179,6 +179,21 @@ class UseCardFlow(Flow):
             return self.finish(cancelled=True)
         self.stage = "effect"
         return self.effect.begin(self)
+
+    def _move_material(self, card):
+        """把这件素材移进处理区；它已经不在了就跳过。
+
+        什么时候会不在：**使用过程中本体被自己的结算送走**。例如神吕布用
+        锦囊触发【无谋】、在 1 体力时选择失去 1 点体力 → 濒死 → 阵亡，
+        死亡清场已经把这张牌收走；这时结算继续走完，但不能再假设它还在
+        手牌/装备区（以前这里会抛 ValueError 把整局打断）。
+        """
+
+        if self.game is None or card is None:
+            return False
+        if self.game.source_container(self.actor, card) is None:
+            return False
+        return self.game.move_source_card_to_processing(self.actor, card)
 
     @property
     def material_cards(self):

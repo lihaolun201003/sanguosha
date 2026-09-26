@@ -10,6 +10,10 @@ class CardSelectionMixin:
         owner=None,
         request_id=None,
         cancellable=False,
+        reason="",
+        revealed=None,
+        revealed_player=None,
+        caster=None,
     ):
 
         candidates = list(candidates)
@@ -27,6 +31,14 @@ class CardSelectionMixin:
             "cancellable": bool(cancellable),
             # 别人手牌的内容是隐藏信息：这些候选在选择界面上只显示牌背。
             "face_down_ids": self._face_down_candidate_ids(owner, candidates),
+            # ---- 有上下文的选择（火攻一类）----
+            # ``reason`` 是引擎给出的请求原因，UI 用它决定要不要显示专用界面；
+            # ``revealed`` 是这次选择里已经被公开亮出的牌（火攻的展示牌）。
+            # 规则合法性仍然**只**由 ``candidates`` 决定——UI 不自己算规则。
+            "reason": str(reason or ""),
+            "revealed": revealed,
+            "revealed_player": revealed_player,
+            "caster": caster,
         }
 
         self._update_selection_message()

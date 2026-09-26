@@ -44,7 +44,16 @@ def target_candidates(game, actor, rule, card=None):
     if rule is TargetRule.SELF:
         return [actor]
     ordered = game.seats.alive_players_in_order(start_after=actor, include_start=True)
-    if rule in (TargetRule.SINGLE_OTHER, TargetRule.ALL_OTHERS):
+    # 群体牌（南蛮 / 万箭 / 桃园 / 五谷）的目标就是"场上的全体"，**不做**
+    # 技能层过滤。免疫类能力（【祸首】【巨象】的"南蛮入侵对你无效"）的语义是
+    # "成为目标但不受影响"，把它从候选里删掉会让"出牌时算出的目标"和
+    # "校验时算出的目标"数量不等——场上只要有孟获或祝融，别人整张南蛮
+    # 就会卡在 validate_targets 上用不出来。免疫由效果层逐目标跳过。
+    if rule is TargetRule.ALL_OTHERS:
+        return [player for player in ordered if player is not actor]
+    if rule is TargetRule.ALL_PLAYERS:
+        return list(ordered)
+    if rule is TargetRule.SINGLE_OTHER:
         return _skill_allows(game, actor, [p for p in ordered if p is not actor], card)
     return _skill_allows(game, actor, ordered, card)
 

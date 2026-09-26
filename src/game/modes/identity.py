@@ -38,7 +38,7 @@ class IdentityMode(GameMode):
     description = "5～8 人，主公 / 忠臣 / 反贼 / 内奸各怀心思。"
     allowed_player_counts = IDENTITY_PLAYER_COUNTS
     uses_identities = True
-    general_choice_count = 3
+    general_choice_count = 5
 
     LORD_BONUS_HP = 1
     REBEL_KILL_REWARD = 3

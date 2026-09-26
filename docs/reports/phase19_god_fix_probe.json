@@ -1,0 +1,91 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "狂暴：造成 2 点伤害获得 2 枚暴怒标记",
+      "detail": "2 → 4"
+    },
+    {
+      "ok": true,
+      "label": "狂暴：受到 1 点伤害仍然给 1 枚",
+      "detail": "4 → 5"
+    },
+    {
+      "ok": true,
+      "label": "连破：目标已被击杀",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "连破：自己回合内击杀 → 排入额外回合",
+      "detail": "['玩家']"
+    },
+    {
+      "ok": true,
+      "label": "归心：2 点伤害发动两次（每名角色各拿 2 张）",
+      "detail": "拿到 6 张（3 名其他角色 × 2 = 6）"
+    },
+    {
+      "ok": true,
+      "label": "归心：翻两次面 = 回到正面（不再白送一个回合）",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "武神：真实红桃【杀】无视距离",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "武神：黑桃【杀】照常受距离限制",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "神愤：AI 真的发动了它（以前恒为 False）",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "神愤：扣 6 枚、又因对 3 人造成伤害各回 1 枚（狂暴联动）",
+      "detail": "8 → 5"
+    },
+    {
+      "ok": true,
+      "label": "神愤：结算顺序是 先伤害 → 后弃牌",
+      "detail": "['damage', 'damage', 'damage', 'discard', 'discard', 'discard']"
+    },
+    {
+      "ok": true,
+      "label": "业炎：AI 在 2 体力时也能发动",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "龙魂：2 体力时能凑齐两张同花色当【闪】",
+      "detail": "['SHAN', 'SHAN']"
+    },
+    {
+      "ok": true,
+      "label": "忍戒：AI 在弃牌阶段弃超限牌 → 攒到「忍」标记（以前是 0）",
+      "detail": "5"
+    },
+    {
+      "ok": true,
+      "label": "仁德被打上了 card_transfer 标签",
+      "detail": "('active', 'card_transfer')"
+    },
+    {
+      "ok": true,
+      "label": "AI 判定：把牌给对手是有害的",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "AI 不会为了发动仁德把牌送给对手",
+      "detail": "发动=False 手牌 4 → 4"
+    }
+  ],
+  "failed": 0,
+  "total": 17
+}

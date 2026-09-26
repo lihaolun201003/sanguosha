@@ -1,0 +1,129 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "所有注册判定都有结果结论（13 种）",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（非红桃=判定成功）：判定演出出现过",
+      "detail": "turn_start / judge:lebu / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（非红桃=判定成功）：判定之前没有伤害/死亡演出",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（非红桃=判定成功）：出现阶段跳过提示",
+      "detail": "turn_start / judge:lebu / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（非红桃=判定成功）：跳过提示排在判定之后",
+      "detail": "turn_start / judge:lebu / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（红桃=判定失败）：判定演出出现过",
+      "detail": "turn_start / judge:lebu"
+    },
+    {
+      "ok": true,
+      "label": "乐不思蜀（红桃=判定失败）：判定之前没有伤害/死亡演出",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "兵粮寸断（非梅花=判定成功）：判定演出出现过",
+      "detail": "turn_start / judge:bingliang / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "兵粮寸断（非梅花=判定成功）：判定之前没有伤害/死亡演出",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "兵粮寸断（非梅花=判定成功）：出现阶段跳过提示",
+      "detail": "turn_start / judge:bingliang / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "兵粮寸断（非梅花=判定成功）：跳过提示排在判定之后",
+      "detail": "turn_start / judge:bingliang / phase_skip"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：抓到判定演出的中间帧",
+      "detail": "{'playing': 'judge:shandian', 'queued': ['damage', 'dying', 'death'], 'display_hp': 3, 'real_hp': 0, 'display_alive': True, 'real_alive': False}"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：判定演出中，画面血量仍是 3（未提前扣血）",
+      "detail": "display=3 real=0"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：权威血量已经结算为 0（引擎没有为动画等待）",
+      "detail": "real=0"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：判定演出中，画面仍显示角色存活（死亡 UI 没有提前出现）",
+      "detail": "display_alive=True real_alive=False"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：伤害演出出现过",
+      "detail": "turn_start / judge:shandian / damage / dying / death"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：伤害排在判定之后",
+      "detail": "turn_start / judge:shandian / damage / dying / death"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：濒死排在伤害之后",
+      "detail": "turn_start / judge:shandian / damage / dying / death"
+    },
+    {
+      "ok": true,
+      "label": "闪电命中：真实血量归零",
+      "detail": "hp=0"
+    },
+    {
+      "ok": true,
+      "label": "闪电未命中：判定先演出",
+      "detail": "turn_start / judge:shandian"
+    },
+    {
+      "ok": true,
+      "label": "闪电未命中：没有任何伤害演出",
+      "detail": "turn_start / judge:shandian"
+    },
+    {
+      "ok": true,
+      "label": "闪电未命中：闪电转移到下家判定区",
+      "detail": "['AI 2']"
+    },
+    {
+      "ok": true,
+      "label": "闪电未命中：没有掉血",
+      "detail": "hp=4"
+    }
+  ],
+  "notes": [
+    "已注册判定：bagua, baonue, beige, bingliang, ganglie, lebu, leiji, luoshen, shandian, shuangxiong, tieji, tuntian, wuhun",
+    "乐不思蜀（非红桃=判定成功） 顺序：turn_start / judge:lebu / phase_skip",
+    "乐不思蜀（红桃=判定失败） 顺序：turn_start / judge:lebu",
+    "兵粮寸断（非梅花=判定成功） 顺序：turn_start / judge:bingliang / phase_skip",
+    "闪电命中顺序：turn_start / judge:shandian / damage / dying / death",
+    "闪电未命中顺序：turn_start / judge:shandian"
+  ],
+  "failed": 0,
+  "total": 23
+}

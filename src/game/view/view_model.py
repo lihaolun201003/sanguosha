@@ -350,6 +350,14 @@ class SelectionView:
     number: int = 1
     candidates: tuple = ()
     selected_ids: tuple = ()
+    #: 引擎给出的选择原因（``huogong_reveal`` / ``huogong_discard`` 一类）：
+    #: UI 据此决定要不要显示专用界面。规则合法性仍只看 ``candidates``。
+    reason: str = ""
+    #: 这次选择里已经**公开亮出**的牌（火攻的展示牌）。只发给正在做这个选择
+    #: 的人，而且它在规则上本来就是公开信息。
+    revealed: object = None
+    revealed_player_id: str = ""
+    caster_id: str = ""
 
     @classmethod
     def from_payload(cls, payload):
@@ -362,6 +370,11 @@ class SelectionView:
             candidates=tuple(
                 PoolEntryView.from_payload(item) for item in payload.get("candidates") or ()),
             selected_ids=tuple(str(item) for item in payload.get("selected_ids") or ()),
+            reason=str(payload.get("reason") or ""),
+            revealed=(ViewCard.from_payload(payload["revealed"])
+                      if payload.get("revealed") else None),
+            revealed_player_id=str(payload.get("revealed_player_id") or ""),
+            caster_id=str(payload.get("caster_id") or ""),
         )
 
     def to_payload(self):
@@ -371,6 +384,10 @@ class SelectionView:
             "number": self.number,
             "candidates": [item.to_payload() for item in self.candidates],
             "selected_ids": list(self.selected_ids),
+            "reason": self.reason,
+            "revealed": self.revealed.to_payload() if self.revealed is not None else None,
+            "revealed_player_id": self.revealed_player_id,
+            "caster_id": self.caster_id,
         }
 
 

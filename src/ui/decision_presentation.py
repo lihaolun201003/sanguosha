@@ -163,6 +163,10 @@ def selection_presentation(request, *, resolve_card, my_player_id="", owner=None
 
     minimum = int_field(request, "min_cards", 1)
     maximum = max(minimum, int_field(request, "max_cards", minimum))
+    # 有上下文的选择（火攻）：请求里带着原因与"已经公开亮出的那张牌"，
+    # 客户端据此画专用界面；规则合法性仍然只由候选集决定。
+    context = request.get("context") or {}
+    revealed = context.get("revealed_card")
     return {
         "zone": zone,
         "owner": owner,
@@ -176,6 +180,10 @@ def selection_presentation(request, *, resolve_card, my_player_id="", owner=None
         "request_id": request.get("request_id"),
         "cancellable": bool(constraints(request).get("allow_cancel")),
         "face_down_ids": face_down,
+        "reason": str(context.get("reason") or ""),
+        "revealed": (resolve_card(revealed) if isinstance(revealed, dict) else None),
+        "revealed_player": str(context.get("revealed_by") or ""),
+        "caster": str(context.get("caster") or ""),
     }
 
 

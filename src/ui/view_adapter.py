@@ -334,6 +334,16 @@ class ViewMode:
         self._self_id = ""
         self._player_id = ""
 
+    def overlay_result_texts(self, game):
+        """结算面板文案：客户端没有规则模式对象，用通用推断（返回 None）。
+
+        与 ``modes.base.GameMode.overlay_result_texts`` 同一个契约：返回
+        ``None`` 表示"用界面自己的通用文案"。房主侧的 1v1 测试模式会给出
+        中立文案；客户端拿不到那份规则对象，所以这里只保证界面不崩。
+        """
+
+        return None
+
     def apply(self, view: ClientGameView):
         from src.game.identity import identity_name
 
@@ -696,7 +706,22 @@ class RemoteGameView:
             "request_id": None,
             "cancellable": True,
             "face_down_ids": face_down,
+            # 有上下文的选择（火攻）：原因 + 已经公开亮出的展示牌。
+            # 规则合法性仍然只看 candidates——客户端不自己判规则。
+            "reason": str(getattr(selection, "reason", "") or ""),
+            "revealed": self._revealed_card(selection),
+            "revealed_player": self.player_by_id(
+                str(getattr(selection, "revealed_player_id", "") or "")),
+            "caster": self.player_by_id(str(getattr(selection, "caster_id", "") or "")),
         }
+
+    def _revealed_card(self, selection):
+        """客户端视图里的"已展示牌"实体（走同一份卡牌缓存，身份稳定）。"""
+
+        entry = getattr(selection, "revealed", None)
+        if entry is None:
+            return None
+        return self.cards.get(entry)
 
     # ==================================================
     # 既有渲染路径会调用的只读查询
