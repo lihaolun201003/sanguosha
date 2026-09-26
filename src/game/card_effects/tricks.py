@@ -8,7 +8,9 @@ from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.flows.response_requirement import ResponseRequirement
 from src.game.rules import DistanceRule, TargetRule
 
-from .base import CardEffect
+from src.game.engine.flows import Flow
+
+from .base import AuxiliaryInput, CardEffect
 
 
 class WuzhongEffect(CardEffect):
@@ -305,6 +307,232 @@ class WuxieEffect(CardEffect):
         return False, "【无懈可击】只能在锦囊响应链中使用。"
 
 
+# ==================================================
+# 借刀杀人
+# ==================================================
+
+def _probe_sha(actor):
+    """一张"只为合法性探测"的虚拟【杀】。
+
+    用虚拟牌而不是新造的实体牌：``can_use`` 会检查"这张牌还在不在使用者
+    手里"，凭空造一张实体牌永远过不了那道校验。虚拟牌的语义正好是"一张
+    还没落到具体实体上的【杀】"，探测"能不能杀到某个人"用它最贴切。
+    """
+
+    from src.game.skills.mechanics import virtual_card
+
+    return virtual_card("SHA", actor, (), category="basic")
+
+
+def can_use_sha_on(game, actor, target):
+    """actor 现在能不能对 target 使用一张【杀】。
+
+    走真实的 CardEffect 判定：距离、攻击范围、目标规则、技能限制全部算进去，
+    不在这里重写一套。借刀的两处都需要它——第二目标的候选、以及持武器者
+    "还有没有合法【杀】可用"。
+    """
+
+    probe = _probe_sha(actor)
+    effect = game.engine.card_effects.get(probe)
+    if effect is None:                                    # pragma: no cover
+        return False
+    from src.game.engine import UseCardAction
+
+    action = UseCardAction(actor, probe, [target], ignore_usage_limit=True)
+    valid, _reason = effect.can_use(game, action)
+    return bool(valid)
+
+
+def jiedao_victim_candidates(game, actor, targets):
+    """【借刀杀人】的第二目标：持武器者**真的能杀到**的其他角色。
+
+    候选按规则完整筛选（存活 / 不是持武器者 / 不是使用者 / 在持武器者的
+    攻击范围内 / 通过真实的【杀】合法性判定），而不是"所有活人"再在结算时
+    拿第一名去试——那样第一个候选不合法就会错误地走到"交武器"。
+    """
+
+    if not targets:
+        return []
+    wielder = list(targets)[0]
+    result = []
+    for other in game.seats.alive_players_in_order(
+            start_after=wielder, include_start=True):
+        if other is wielder or other is actor:
+            continue
+        if not other.alive or other.hp <= 0:
+            continue
+        if can_use_sha_on(game, wielder, other):
+            result.append(other)
+    return result
+
+
+def jiedao_sha_options(game, wielder, victim):
+    """持武器者对指定角色可用的**全部**【杀】使用方式（含 View-As 转化）。
+
+    统一走 Card Action Discovery：实体【杀】、火杀 / 雷杀、【武圣】【龙胆】
+    一类"当【杀】使用"的转化都在里面。不写"只看 card.name == SHA"那种判断。
+    """
+
+    actions = getattr(game, "card_actions", None)
+    if actions is None:                                   # pragma: no cover
+        return []
+    context = actions.play_context(wielder)
+    result = []
+    seen = set()
+    for card in list(getattr(wielder, "hand", ()) or ()):
+        for option in actions.actions_for_card(wielder, card, context):
+            if option.result_name != "SHA" or not option.complete or not option.enabled:
+                continue
+            if not context.allows(option.result_name):
+                continue
+            virtual = actions.effective_card(option)
+            if virtual is None:
+                continue
+            from src.game.engine import UseCardAction
+
+            effect = game.engine.card_effects.get(virtual)
+            if effect is None:
+                continue
+            probe = UseCardAction(wielder, virtual, [victim],
+                                  ignore_usage_limit=True)
+            valid, _reason = effect.can_use(game, probe)
+            if not valid:
+                continue
+            token = (option.action_id,
+                     tuple(id(item) for item in option.source_cards))
+            if token in seen:
+                continue
+            seen.add(token)
+            result.append(option)
+    return result
+
+
+class JiedaoWielderFlow(Flow):
+    """借刀后半段：**持武器者自己**决定"对指定角色使用【杀】"还是"交出武器"。
+
+    三件事必须在玩家手里：
+
+    * 出不出【杀】（不是系统看到有杀就替他出）；
+    * 用哪一种【杀】（实体杀 / 火杀 / 武圣 / 龙胆…，伤害属性、素材与触发
+      的技能都不一样）；
+    * 不使用时要交出的武器，走统一装备离场入口。
+
+    没有合法【杀】时直接交武器，不弹一个只能点"不杀"的假入口。
+    """
+
+    SHA = "sha"
+    SURRENDER = "surrender"
+
+    def __init__(self, owner_flow, options):
+        super().__init__(owner_flow.context)
+        self.owner_flow = owner_flow
+        self.engine = owner_flow.engine
+        self.game = owner_flow.game
+        self.user = owner_flow.actor
+        self.wielder = owner_flow.targets[0]
+        self.victim = owner_flow.action.metadata.get("jiedao_victim")
+        self.options = list(options)
+        self.stage = "choose"
+
+    # ---- 1. 出杀还是交武器 ----
+
+    def begin(self):
+        if self.victim is None or not self.options:
+            return self._surrender()
+        from src.game.skills.mechanics import ask_option
+
+        ask_option(self.engine, self, source=self.user, target=self.wielder,
+                   prompt="【借刀杀人】：对 %s 使用一张【杀】，或交出武器"
+                          % self.victim.name,
+                   reason="jiedao",
+                   options=((self.SHA, "对 %s 使用【杀】" % self.victim.name),
+                            (self.SURRENDER, "不使用【杀】，交出武器")))
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "choose":
+            option = str(getattr(response, "option", "") or "")
+            if option == self.SHA:
+                return self._ask_source()
+            return self._surrender()
+        return self._use_sha(response)
+
+    # ---- 2. 用哪一种【杀】 ----
+
+    def _ask_source(self):
+        if len(self.options) == 1:
+            return self._submit(self.options[0])
+        cards = []
+        for option in self.options:
+            for card in option.source_cards:
+                if not any(card is other for other in cards):
+                    cards.append(card)
+        if len(cards) <= 1:
+            return self._submit(self.options[0])
+        from src.game.skills.mechanics import ask_cards
+
+        self.stage = "source"
+        ask_cards(self.engine, self, source=self.user, target=self.wielder,
+                  prompt="【借刀杀人】：请选择要使用的【杀】",
+                  reason="jiedao", candidates=cards, min_cards=1, max_cards=1)
+        return self.current_result()
+
+    def _use_sha(self, response):
+        cards = list(getattr(response, "cards", ()) or ())
+        if not cards:
+            return self._surrender()
+        chosen = cards[0]
+        option = next(
+            (item for item in self.options
+             if any(card is chosen for card in item.source_cards)), None)
+        if option is None:
+            # 素材在收集期间被移走：重新校验失败就退回"交武器"，不硬来。
+            return self._surrender()
+        return self._submit(option)
+
+    # ---- 3. 真正使用（走正常 UseCardFlow）----
+
+    def _submit(self, option):
+        actions = self.game.card_actions
+        virtual = actions.effective_card(option)
+        if (virtual is None or not self.wielder.alive or self.victim is None
+                or not self.victim.alive or self.victim.hp <= 0):
+            return self._surrender()
+        for card in option.source_cards:
+            if not any(item is card for item in self.wielder.hand):
+                return self._surrender()
+        from src.game.engine import UseCardAction
+
+        self.stage = "using"
+        self.engine.submit(UseCardAction(
+            self.wielder, virtual, [self.victim],
+            ignore_usage_limit=True,
+            on_complete=lambda _result: self._after_sha(),
+        ))
+        return self.current_result()
+
+    def _after_sha(self):
+        """【杀】按正常流程结算完了（含闪响应 / 伤害 / 濒死）。"""
+
+        self.game.add_log("%s 的【借刀杀人】结算完成" % self.user.name)
+        return self.complete({"applied": True, "mode": self.SHA})
+
+    # ---- 4. 交武器 ----
+
+    def _surrender(self):
+        weapon = self.wielder.get_equipment("weapon")
+        if weapon is None or not self.wielder.alive:
+            # 武器在流程中被别的效果移走了：不复制、不凭空造，直接结束。
+            self.game.add_log("%s 的武器已经不在装备区，【借刀杀人】结束"
+                              % self.wielder.name)
+            return self.complete({"applied": True, "mode": "lost"})
+        self.context.apply(TransferEquipmentAtom(
+            self.wielder, "weapon", self.user.hand))
+        self.game.add_log("%s 未使用【杀】，将武器交给 %s"
+                          % (self.wielder.name, self.user.name))
+        return self.complete({"applied": True, "mode": self.SURRENDER})
+
+
 class JiedaoEffect(CardEffect):
     card_name = "JIEDAO"
     target_rule = TargetRule.SINGLE_OTHER
@@ -319,19 +547,32 @@ class JiedaoEffect(CardEffect):
             return False, "目标没有武器。"
         return True, ""
 
+    def required_inputs(self, game, actor, targets, card=None):
+        # 第二目标在**提交之前**由使用者自己选：它是规则要求的玩家决定
+        # （"由你指定的另一名角色"），不是这张牌的牌面目标，所以走附加输入。
+        if not targets:
+            return ()
+        return (AuxiliaryInput(
+            key="jiedao_victim",
+            prompt="【借刀杀人】：请指定 %s 使用【杀】的目标" % list(targets)[0].name,
+            candidates=jiedao_victim_candidates,
+        ),)
+
     def begin(self, flow):
         wielder = flow.targets[0]
-        candidates = [p for p in flow.game.get_alive_players() if p is not wielder and p is not flow.actor]
+        has_victim = "jiedao_victim" in flow.action.metadata
         victim = flow.action.metadata.get("jiedao_victim")
-        if victim is None and candidates:
-            victim = candidates[0]
-        sha = next((card for card in wielder.hand if card.name == "SHA"), None)
-        if victim is not None and sha is not None and DistanceRule.in_attack_range(flow.game, wielder, victim):
-            flow.wait({"reason": "jiedao_sha"})
-            flow.engine.submit(__import__("src.game.engine", fromlist=["UseCardAction"]).UseCardAction(wielder, sha, [victim], ignore_usage_limit=True, on_complete=lambda _: flow.finish(cancelled=False)))
-            return flow.current_result()
-        flow.context.apply(TransferEquipmentAtom(wielder, "weapon", flow.actor.hand))
-        return flow.finish(cancelled=False)
+        if not has_victim:
+            # 连"第二目标"这个选择都没做过：这次使用不合法（正常路径上它
+            # 一定由使用者先选好；走到这里说明是绕过界面的提交）。
+            # 静默替他挑一个才是真正的错误。
+            flow.game.add_log("【借刀杀人】未指定被杀目标，本次使用无效")
+            return flow.finish(cancelled=True)
+        if victim is None or not victim.alive or victim.hp <= 0:
+            # 收集时选定的第二目标此刻已不在场：无从要求出杀，进入交武器。
+            return JiedaoWielderFlow(flow, []).start()
+        options = jiedao_sha_options(flow.game, wielder, victim)
+        return JiedaoWielderFlow(flow, options).start()
 
 
 class _DelayedTrickEffect(CardEffect):

@@ -400,8 +400,26 @@ class AIController(PlayerController):
         else:
             targets = []
 
-        action = UseCardAction(self.player, card, targets)
+        action = UseCardAction(
+            self.player, card, targets,
+            metadata=self._auxiliary_metadata(effect, targets, card))
         return action if self._can_use(card, action) else None
+
+    def _auxiliary_metadata(self, effect, targets, card):
+        """AI 对"使用这张牌还要补全的输入"的自动选择。
+
+        候选来自**规则层声明的同一份查询**（借刀的第二目标就是按"持武器者
+        真的能杀到谁"筛出来的），AI 只是在合法候选里挑一个——它不允许凭空
+        造一个不在候选里的目标。
+        """
+
+        metadata = {}
+        for spec in effect.required_inputs(
+                self.game, self.player, list(targets), card=card):
+            candidates = list(
+                spec.candidates(self.game, self.player, list(targets)) or ())
+            metadata[spec.key] = candidates[0] if candidates else None
+        return metadata
 
     def choose_action(self):
         hand = [card for card in self.player.hand if card.id not in self._failed_cards]

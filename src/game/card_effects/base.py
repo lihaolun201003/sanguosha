@@ -1,6 +1,29 @@
 """Card rules are registered independently from physical card data."""
 
+from dataclasses import dataclass
+from typing import Any, Callable, Tuple
+
 from src.game.rules import TargetRule, validate_targets
+
+
+@dataclass(frozen=True)
+class AuxiliaryInput:
+    """一次用牌在"目标已选之后、真正提交之前"还需要玩家补全的输入。
+
+    它不是这张牌的普通目标（那些走 ``min_targets`` / ``max_targets``），
+    而是**效果内部**要求玩家指定的东西：【借刀杀人】的"被杀目标"就是这一类
+    ——规则原文是"该角色需对其攻击范围内、**由你指定**的另一名角色使用一张
+    【杀】"，这个"另一名角色"必须由使用者自己选，却不是这张牌的牌面目标。
+
+    之所以要在提交之前收：一张牌的合法性与选牌在提交那一刻一起定下来，
+    收集期间取消则一张牌都不会动。收集到的值按 ``key`` 放进 metadata，
+    效果自己在结算时读它。
+    """
+
+    key: str                       # metadata 里的键名
+    prompt: str
+    candidates: Callable[..., Any]  # callable(game, actor, targets) -> list[player]
+    kind: str = "target"
 
 
 class CardEffect:
@@ -26,6 +49,16 @@ class CardEffect:
     # 里——能力在这里声明，动作由决策来源用 ``metadata={"recast": True}`` 构造，
     # 合法性仍由本效果自己的 ``can_use`` 判定。
     can_recast = False
+
+    def required_inputs(self, game, actor, targets, card=None) -> Tuple[AuxiliaryInput, ...]:
+        """使用这张牌还需要玩家补全的**附加输入**（默认没有）。
+
+        返回的每一项都会在目标选好之后、这次使用提交之前，由引擎逐个向
+        使用者索取；全部齐了才提交。需要"第二个角色 / 第二张牌"的效果
+        （借刀杀人）声明在这里，而不是在结算阶段临时挑一个默认值。
+        """
+
+        return ()
 
     def target_rule_for(self, game, actor, card=None):
         """本次使用的目标规则，默认就是类上声明的 ``target_rule``。

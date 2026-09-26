@@ -208,6 +208,52 @@ class BasicCardMixin:
         }
         self.message = self._target_prompt(self.pending_target_selection)
 
+    # ==================================================
+    # 用牌的附加输入（借刀杀人的第二目标一类）
+    # ==================================================
+
+    def _pending_auxiliary(self, card, targets, metadata):
+        """这次使用还没收齐的那个附加输入；全齐了返回 None。"""
+
+        effect = self.engine.card_effects.get(card)
+        if effect is None:
+            return None
+        for spec in effect.required_inputs(self, self.player, list(targets), card=card):
+            if spec.key not in metadata:
+                return spec
+        return None
+
+    def _request_auxiliary(self, spec, card, source_rect, targets, metadata,
+                           ignore_usage_limit):
+        candidates = list(spec.candidates(self, self.player, list(targets)) or ())
+        if not candidates:
+            # 一个合法候选都没有：这一项没有可选项，交给效果自己按规则处理
+            # （借刀在这里就是"交武器"），绝不摆一个空窗口。
+            metadata[spec.key] = None
+            return self._submit_selected_card(
+                card, source_rect, targets, metadata=metadata,
+                ignore_usage_limit=ignore_usage_limit)
+
+        def finish(chosen):
+            metadata[spec.key] = chosen[0] if chosen else None
+            self._submit_selected_card(
+                card, source_rect, targets, metadata=metadata,
+                ignore_usage_limit=ignore_usage_limit)
+
+        self.start_target_selection(
+            candidates, 1, 1, spec.prompt,
+            on_complete=finish,
+            on_cancel=lambda: self.cancel_card_action_auxiliary(card),
+            request_id=None,
+        )
+
+    def cancel_card_action_auxiliary(self, card):
+        """附加输入阶段被玩家取消：什么都不提交，也不留状态。"""
+
+        self.pending_target_selection = None
+        self.pending_card_action = None
+        self.message = "已取消使用【" + str(getattr(card, "display_name", "")) + "】。"
+
     def start_target_selection(self, candidates, minimum, maximum, prompt, on_complete,
                                on_cancel=None, request_id=None):
         """通用目标选择入口：技能与卡牌共用同一套选目标 UI。
@@ -318,8 +364,15 @@ class BasicCardMixin:
         return True
 
     def _submit_selected_card(self, card, source_rect, targets, metadata=None, ignore_usage_limit=False):
-        self.pending_target_selection = None
         metadata = dict(metadata or {})
+        # 目标选好了，但这次使用可能还要玩家补全别的输入（借刀杀人的第二
+        # 目标）：在真正提交之前逐个收齐。取消就停在收集阶段，一张牌都不动。
+        pending = self._pending_auxiliary(card, tuple(targets), metadata)
+        if pending is not None:
+            self._request_auxiliary(pending, card, source_rect, tuple(targets),
+                                    metadata, ignore_usage_limit)
+            return None
+        self.pending_target_selection = None
         # 战报上的名字取**出牌的人**，而不是"本机鼠标现在指向谁"：1v1 测试的
         # 双边手动模式下，视角会在这次结算途中切到另一方，用 self.player 记出来
         # 的战报会写成别人的名字（"对手 使用【杀】"其实是"我方"用的）。
