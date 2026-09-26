@@ -46,12 +46,15 @@ class AIMixin:
     # ==================================================
 
     def _legacy_ai_equip(self, card):
+        """旧回调链上的装备：同样走 ``EquipCardAtom``。
 
-        self.enemy.set_equipment(card)
+        直接 ``set_equipment`` 会覆盖掉原来的装备而不把它移出任何区域
+        （那张牌从此消失），所以这里也统一到原子入口。
+        """
 
-        from .equipment_skills.granted import sync_equipment_skills
+        from .atoms_v2 import EquipCardAtom
 
-        sync_equipment_skills(self, self.enemy)
+        self.engine.context.apply(EquipCardAtom(self.enemy, card))
 
     # ==================================================
     # AI 尝试装备

@@ -174,6 +174,14 @@ class EquipCardAtom(Atom):
 
     def apply(self, context):
         old = self.target.get_equipment(self.card.subtype)
+        if old is not None:
+            # 换装：旧装备必须**离开**装备区并按规则进弃牌堆。
+            # 直接 set_equipment 覆盖会让那张牌从所有区域里凭空消失——
+            # 既丢牌（长局里牌堆会慢慢被掏空），也让"失去装备"类技能
+            # （枭姬 / 白银狮子）收不到事件。
+            context.apply(UnequipAtom(
+                self.target, self.card.subtype,
+                context.state.deck.discard_pile))
         self.target.set_equipment(self.card)
         _sync_granted_skills(context.state, self.target)
         return AtomResult(data={"target": self.target, "card": self.card, "old": old})
