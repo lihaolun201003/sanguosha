@@ -1,0 +1,276 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "改判窗口真的出现了",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "改判 → SELECT_CARDS",
+      "detail": "select_cards"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 最少 0 张（可以不换）",
+      "detail": "0"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 允许放弃（单机与联机同判据）",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 允许动作里有 cancel",
+      "detail": "('submit', 'cancel')"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 语义是 SELECT_CARD",
+      "detail": "SELECT_CARD"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 说明文案由规则层给",
+      "detail": "选择一张手牌替换当前的判定牌；不选则维持原判定。"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 用通用界面（规则层没声明专用面板）",
+      "detail": "''"
+    },
+    {
+      "ok": true,
+      "label": "改判 → 本地界面也走通用选牌",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻展示窗口出现",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 规则层声明了专用面板",
+      "detail": "reveal_and_pick"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 阶段语义来自规则层",
+      "detail": "reveal"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 文案由规则层模板渲染（不是 UI 手抄）",
+      "detail": "选择一张手牌展示给对方；对方若能弃置同花色的牌，你将受到 1 点火焰伤害。"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 必须展示一张（规则上不能放弃）",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "必须选满的请求 → 允许动作里没有 cancel",
+      "detail": "('submit',)"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 本地界面按规则声明的面板接管",
+      "detail": "reveal_and_pick"
+    },
+    {
+      "ok": true,
+      "label": "火攻展示 → 本地界面拿到阶段语义",
+      "detail": "reveal"
+    },
+    {
+      "ok": true,
+      "label": "必须选满的请求 → 界面不画跳过按钮（单机与联机同判据）",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置窗口出现（问的是使用者）",
+      "detail": "<src.player.Player object at 0x0000027B08B1F160>"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置界面出现",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 界面按规则声明的面板接管",
+      "detail": "reveal_and_pick"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 阶段语义由规则层声明",
+      "detail": "discard"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 规则层声明可以放弃",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 花色要求来自规则层",
+      "detail": "梅花"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 文案由规则层渲染",
+      "detail": "你需要弃置一张梅花手牌。"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 合法候选只有同花色那张（引擎给的）",
+      "detail": "['杀']"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置 → 界面拿到对方展示的真实牌",
+      "detail": "梅花"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置窗口出现（放弃场景）",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "弃置界面已建立",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置：放弃操作被接受",
+      "detail": "True"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置：放弃后一张牌都不弃",
+      "detail": "1 → 1"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置：放弃后目标不受伤害",
+      "detail": "4 → 4"
+    },
+    {
+      "ok": true,
+      "label": "火攻弃置：放弃之后流程正常收尾（没有卡住）",
+      "detail": "None"
+    },
+    {
+      "ok": true,
+      "label": "五谷：公共池选牌请求出现",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "五谷：必须选 1 张（规则层给的约束）",
+      "detail": "1~1"
+    },
+    {
+      "ok": true,
+      "label": "五谷：不允许放弃",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "五谷：取牌区域由规则层给出（自己在手牌、公共池摆桌面）",
+      "detail": "public_pool"
+    },
+    {
+      "ok": true,
+      "label": "五谷：候选就是公共池里的 3 张（引擎给的）",
+      "detail": "['闪', '桃', '杀']"
+    },
+    {
+      "ok": true,
+      "label": "五谷：界面不画跳过按钮",
+      "detail": "False"
+    },
+    {
+      "ok": true,
+      "label": "联机开局完成（契约场景）",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "房主（目标）展示了一张手牌",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "客户端收到了火攻弃牌决策请求（取自 socket 原始报文）",
+      "detail": "{'request': {'match_id': 'DDACF4F4', 'request_id': 2, 'player_id': '01bb7ce52293', 'kind': 'select_cards', 'prompt': '弃置"
+    },
+    {
+      "ok": true,
+      "label": "Guest：面板名来自房主（不是自己认领）",
+      "detail": "reveal_and_pick"
+    },
+    {
+      "ok": true,
+      "label": "Guest：面板名与房主 schema 逐字一致",
+      "detail": "host='reveal_and_pick' wire='reveal_and_pick'"
+    },
+    {
+      "ok": true,
+      "label": "Guest：阶段语义与房主一致",
+      "detail": "host='discard' wire='discard'"
+    },
+    {
+      "ok": true,
+      "label": "Guest：规则文案与房主逐字一致",
+      "detail": "host='你需要弃置一张梅花手牌。' wire='你需要弃置一张梅花手牌。'"
+    },
+    {
+      "ok": true,
+      "label": "Guest：规则文案来自房主（非空）",
+      "detail": "你需要弃置一张梅花手牌。"
+    },
+    {
+      "ok": true,
+      "label": "Guest：花色约束来自房主",
+      "detail": "host='梅花' wire='梅花'"
+    },
+    {
+      "ok": true,
+      "label": "Guest：能不能放弃与房主 schema 完全一致",
+      "detail": "host=True wire=True"
+    },
+    {
+      "ok": true,
+      "label": "Guest：弃置界面已建立",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "Guest：客户端界面也按同一个面板名接管",
+      "detail": "reveal_and_pick"
+    },
+    {
+      "ok": true,
+      "label": "Guest：客户端界面用的就是房主的文案",
+      "detail": "你需要弃置一张梅花手牌。"
+    },
+    {
+      "ok": true,
+      "label": "Guest：跳过按钮的有无与房主声明一致（不再恒 True）",
+      "detail": "host=True guest=True"
+    }
+  ],
+  "notes": [
+    "改判 schema：interaction#1 select_cards/SELECT_CARD → P1 / 选择一张手牌替换当前的判定牌；不选则维持原判定。",
+    "火攻弃置：panel=reveal_and_pick stage=discard note=你需要弃置一张梅花手牌。 花色=梅花",
+    "火攻放弃：手牌 1→1，目标体力 4→4",
+    "五谷：min=1 max=1 zone=public_pool 候选=3",
+    "联机火攻 wire：panel=reveal_and_pick stage=discard note=你需要弃置一张梅花手牌。 suit=梅花 cancel=True"
+  ]
+}

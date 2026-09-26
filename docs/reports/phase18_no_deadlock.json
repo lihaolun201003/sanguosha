@@ -1,0 +1,69 @@
+{
+  "results": [
+    {
+      "ok": true,
+      "label": "ffa：演出闸门没有卡住过",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "ffa：本机回合确实交出去了（与基线一致）",
+      "detail": "回合数=2 / 1800 帧 / 本机代打 5 次"
+    },
+    {
+      "ok": true,
+      "label": "ffa：表现层没有内部错误",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "ffa：渲染无异常",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "identity：演出闸门没有卡住过",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "identity：本机回合确实交出去了（与基线一致）",
+      "detail": "回合数=2 / 1800 帧 / 本机代打 5 次"
+    },
+    {
+      "ok": true,
+      "label": "identity：表现层没有内部错误",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "identity：渲染无异常",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "duel：演出闸门没有卡住过",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "duel：本机回合确实交出去了（与基线一致）",
+      "detail": "回合数=2 / 1800 帧 / 本机代打 5 次"
+    },
+    {
+      "ok": true,
+      "label": "duel：表现层没有内部错误",
+      "detail": "[]"
+    },
+    {
+      "ok": true,
+      "label": "duel：渲染无异常",
+      "detail": "[]"
+    }
+  ],
+  "notes": [
+    "ffa：1800 帧 / 回合 2 次 / 本机代打 5 次 / 判定展示帧 0 / 闸门强制放行 0",
+    "identity：1800 帧 / 回合 2 次 / 本机代打 5 次 / 判定展示帧 0 / 闸门强制放行 0",
+    "duel：1800 帧 / 回合 2 次 / 本机代打 5 次 / 判定展示帧 0 / 闸门强制放行 0"
+  ]
+}

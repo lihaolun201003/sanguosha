@@ -1,12 +1,22 @@
 """本地真人控制器：把引擎的决策请求挂到 Pygame 交互状态上。
 
 真人点击手牌 / 角色 / 按钮最终都会走回 ``engine.submit(...)``，所以这里的
-职责只有一件：**把请求翻译成界面能显示的交互状态**。规则判定一条都不在这里。
+职责只有一件：**把交互契约翻译成界面能显示的交互状态**。规则判定一条都不在
+这里。
+
+Phase 18 起这条翻译只读 ``InteractionSchema``（``contracts.interaction``）：
+候选牌、张数约束、能不能放弃、要不要专用面板、规则文案全部由规则层在 schema
+里给好。**联机客户端读的是同一份 schema**（房主把它序列化成
+``DecisionRequest`` 发出去），所以同一个窗口在单机与联机下不再可能不一致。
 
 （这段代码原本写在 ``GameEngine.present_or_auto_resolve`` 的"非 AI"分支里，
 Phase 11.2 把它挪进控制器，好让远程真人复用同一个决策入口。）
 """
 
+from src.game.contracts import (
+    InteractionKind,
+    build_interaction,
+)
 from src.game.engine import (
     ChooseOptionAction,
     ConfirmPendingAction,
@@ -39,10 +49,11 @@ class HumanController(PlayerController):
         return False
 
     def present(self, request):
-        game = self.game
+        # 唯一的翻译口：同一条请求，本机与联机读的是同一份 schema。
+        schema = build_interaction(self.game, request)
         responder = self.player
 
-        if request.request_type is PendingRequestType.RESPOND_CARD:
+        if schema.kind == InteractionKind.RESPOND_CARD:
             if request.is_group:
                 self._present_group(request)
                 return
@@ -52,10 +63,10 @@ class HumanController(PlayerController):
                 if not self._can_respond(request):
                     self.submit(PassPendingAction(responder, request.request_id))
                     return
-            game.response.request(
-                prompt=request.prompt,
+            self.game.response.request(
+                prompt=schema.prompt,
                 allowed_cards=request.allowed_cards,
-                reason=str(request.context.get("reason") or ""),
+                reason=schema.purpose,
                 responder=responder,
                 on_card=(
                     lambda index, card, rect, request_id=request.request_id:
@@ -68,9 +79,9 @@ class HumanController(PlayerController):
             )
             return
 
-        if request.request_type is PendingRequestType.CONFIRM:
-            game.choice.request(
-                title="装备技能", prompt=request.prompt,
+        if schema.kind == InteractionKind.CONFIRM:
+            self.game.choice.request(
+                title=schema.title or "装备技能", prompt=schema.prompt,
                 yes_label="发动", no_label="不发动",
                 responder=responder,
                 on_yes=lambda request_id=request.request_id: self.submit(
@@ -80,29 +91,30 @@ class HumanController(PlayerController):
             )
             return
 
-        if request.request_type is PendingRequestType.CHOOSE_OPTION:
-            first = request.options[0]
-            second = request.options[1] if len(request.options) > 1 else first
-            from src.game.skills.mechanics import option_label
-
-            game.choice.request(
-                title="请选择", prompt=request.prompt,
-                yes_label=option_label(request, first),
-                no_label=option_label(request, second),
+        if schema.kind == InteractionKind.SELECT_OPTION:
+            # 选项的（值, 文案）由 schema 给：界面不需要认识 "选项" 是什么，
+            # 也不许自己拼标签（``mechanics.option_label`` 只在规则层调用）。
+            options = list(schema.options) or [(value, str(value))
+                                              for value in request.options]
+            first, second = options[0], (options[1] if len(options) > 1 else options[0])
+            self.game.choice.request(
+                title=schema.title or "请选择", prompt=schema.prompt,
+                yes_label=first[1], no_label=second[1],
                 responder=responder,
-                on_yes=lambda value=first, request_id=request.request_id: self.submit(
+                on_yes=lambda value=first[0], request_id=request.request_id: self.submit(
                     ChooseOptionAction(responder, request_id, value)),
-                on_no=lambda value=second, request_id=request.request_id: self.submit(
+                on_no=lambda value=second[0], request_id=request.request_id: self.submit(
                     ChooseOptionAction(responder, request_id, value)),
             )
             return
 
-        if request.request_type is PendingRequestType.SELECT_TARGETS:
-            game.start_target_selection(
-                candidates=list(request.context.get("candidates", ())),
-                minimum=request.min_cards,
-                maximum=request.max_cards,
-                prompt=request.prompt,
+        if schema.kind == InteractionKind.SELECT_TARGETS:
+            self.game.start_target_selection(
+                candidates=list(schema.payload.get("candidates_objects") or
+                                request.context.get("candidates", ())),
+                minimum=schema.min_count,
+                maximum=schema.max_count,
+                prompt=schema.prompt,
                 request_id=request.request_id,
                 on_complete=lambda targets, request_id=request.request_id: self.submit(
                     SelectTargetsAction(responder, request_id, targets)),
@@ -111,39 +123,54 @@ class HumanController(PlayerController):
             )
             return
 
-        if request.request_type is PendingRequestType.SELECT_CARDS:
-            owner = request.context.get("zone_owner", responder)
-            zone = request.context.get("zone")
-            if zone is None:
-                zone = game.engine.zone_name(owner, request)
-            candidates = []
-            for card in list(request.context.get("candidates", ())):
-                key = None
-                for slot, equipped in owner.equipment.items():
-                    if equipped is card:
-                        key = slot
-                        break
-                candidates.append((card, key))
-            game.start_card_selection(
-                zone=zone,
-                owner=owner,
-                candidates=candidates,
-                number=request.min_cards,
-                prompt=request.prompt,
-                request_id=request.request_id,
-                # 有上下文的选择（火攻）：把请求原因与已公开的展示牌一起交给
-                # 界面层，让专门的面板能把"对方翻出来的是什么"画出来。
-                reason=request.context.get("reason"),
-                revealed=request.context.get("revealed_card"),
-                revealed_player=request.context.get("revealed_by"),
-                caster=request.context.get("caster") or request.source,
-                on_complete=lambda selected, request_id=request.request_id: self.submit(
-                    SelectCardsAction(responder, request_id, [item[0] for item in selected])),
-            )
+        if schema.kind == InteractionKind.SELECT_CARDS:
+            self._present_selection(schema, request, responder)
             return
 
         raise ValueError(
             "unsupported pending request for a human: " + str(request.request_type))
+
+    def _present_selection(self, schema, request, responder):
+        """选牌（含火攻一类的"有上下文的选择"）→ 专用/通用选牌界面。"""
+
+        game = self.game
+        owner = request.context.get("zone_owner") or responder
+        candidates = []
+        for card in schema.candidates:
+            key = None
+            for slot, equipped in owner.equipment.items():
+                if equipped is card:
+                    key = slot
+                    break
+            candidates.append((card, key))
+        game.start_card_selection(
+            zone=str(schema.payload.get("zone") or "hand"),
+            owner=owner,
+            candidates=candidates,
+            number=schema.min_count,
+            prompt=schema.prompt,
+            request_id=request.request_id,
+            # 能不能放弃由规则层裁决（``min_cards == 0`` 或显式声明），
+            # 单机与联机因此拿到同一个"放弃/跳过"按钮。
+            cancellable=bool(schema.cancellable),
+            # 有上下文的选择（火攻）：请求意图、专用面板名、规则文案、已公开的
+            # 展示牌、要什么花色——全部由 schema 给，界面不按 reason 白名单
+            # 自己接管画面，也不自己写"受到 1 点火焰伤害"这类规则文案。
+            reason=schema.purpose,
+            panel=schema.panel,
+            panel_stage=str(schema.payload.get("panel_stage") or ""),
+            title=schema.title,
+            note=schema.note,
+            revealed=schema.payload.get("revealed_card"),
+            revealed_player=request.context.get("revealed_by"),
+            caster=request.context.get("caster") or request.source,
+            required_suit=str(schema.payload.get("required_suit") or ""),
+            required_suit_label=str(schema.payload.get("required_suit_label") or ""),
+            on_complete=lambda selected, request_id=request.request_id: self.submit(
+                SelectCardsAction(responder, request_id, [item[0] for item in selected])),
+            on_cancel=lambda request_id=request.request_id: self.submit(
+                PassPendingAction(responder, request_id)),
+        )
 
     # ==================================================
     # 共享响应阶段（无懈）

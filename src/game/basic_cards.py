@@ -390,14 +390,13 @@ class BasicCardMixin:
                 # 转换必须写清楚"谁用什么技能把哪张实体牌当成了什么"。
                 if action.log_text:
                     self.add_log(action.log_text)
+                from src.game.interaction_presentation import skill_payload
+
                 self.context.emit(Event(
                     EventType.SKILL_TRIGGERED,
                     source=actor,
-                    payload={
-                        "skill_id": action.skill_id,
-                        "skill_name": action.skill_name,
-                        "card_action": action,
-                    },
+                    payload=skill_payload(
+                        self, action.skill_id, action.skill_name, card_action=action),
                 ))
             else:
                 self.add_log(actor.name + " 使用【" + card.display_name + "】" +

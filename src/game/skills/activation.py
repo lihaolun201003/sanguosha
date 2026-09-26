@@ -129,14 +129,13 @@ def resolve_activation(engine, action):
 
     # targets 只为表现层（指向箭头）提供"谁对谁发动了技能"，不参与任何规则判定。
     skill_targets = [action.target] if action.target is not None else []
+    from src.game.interaction_presentation import skill_payload
+
     game.context.emit(Event(
         EventType.SKILL_TRIGGERED,
         source=player,
-        payload={
-            "skill_id": definition.id,
-            "skill_name": definition.name,
-            "targets": skill_targets,
-        },
+        payload=skill_payload(
+            game, definition.id, definition.name, targets=skill_targets),
     ))
     # 技能自己知道为什么发动不了（"两张牌的花色必须相同"一类），
     # 那句提示比笼统的"技能未能发动"有用得多：先清掉旧提示，再让技能写。

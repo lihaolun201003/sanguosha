@@ -11,9 +11,16 @@ class CardSelectionMixin:
         request_id=None,
         cancellable=False,
         reason="",
+        panel="",
+        panel_stage="",
+        title="",
+        note="",
         revealed=None,
         revealed_player=None,
         caster=None,
+        required_suit="",
+        required_suit_label="",
+        on_cancel=None,
     ):
 
         candidates = list(candidates)
@@ -25,20 +32,31 @@ class CardSelectionMixin:
             "prompt": prompt,
             "selected": [],
             "on_complete": on_complete,
+            # 放弃这条选择的提交路径：本地真人按"跳过 / 放弃"时走它。
+            # 规则上允不允许放弃由 ``cancellable`` 决定，界面只负责照着画按钮。
+            "on_cancel": on_cancel,
             "request_id": request_id,
             # 选满才结束的选择（观星排序一类）也要有"放弃并保持原样"的出口，
-            # 否则玩家会被卡在无法取消的选牌里。
+            # 否则玩家会被卡在无法取消的选牌里。能不能放弃由**规则层**裁决
+            # （见 contracts.interaction）：界面不再各自决定。
             "cancellable": bool(cancellable),
             # 别人手牌的内容是隐藏信息：这些候选在选择界面上只显示牌背。
             "face_down_ids": self._face_down_candidate_ids(owner, candidates),
             # ---- 有上下文的选择（火攻一类）----
-            # ``reason`` 是引擎给出的请求原因，UI 用它决定要不要显示专用界面；
-            # ``revealed`` 是这次选择里已经被公开亮出的牌（火攻的展示牌）。
+            # 下面这几项全部来自 ``InteractionSchema``：请求意图、要用的专用
+            # 面板名、标题与规则文案、约束花色、已公开亮出的牌。界面只消费，
+            # 不按 reason 白名单自己接管画面，也不自己写规则文案。
             # 规则合法性仍然**只**由 ``candidates`` 决定——UI 不自己算规则。
             "reason": str(reason or ""),
+            "panel": str(panel or ""),
+            "panel_stage": str(panel_stage or ""),
+            "title": str(title or ""),
+            "note": str(note or ""),
             "revealed": revealed,
             "revealed_player": revealed_player,
             "caster": caster,
+            "required_suit": str(required_suit or ""),
+            "required_suit_label": str(required_suit_label or ""),
         }
 
         self._update_selection_message()
@@ -230,13 +248,23 @@ class CardSelectionMixin:
 
 
     def cancel_pending_selection(self):
-        """放弃当前选牌：按空选择回调，语义等同引擎侧的 Pass。"""
+        """放弃当前选牌。
+
+        两条语义截然不同的出口，必须分开：
+
+        * ``on_cancel`` 存在（规则层显式声明"这次可以放弃"）→ 走它，
+          交出去的是引擎侧的 **Pass**（火攻弃置：放弃 = 不弃牌也不受伤）；
+        * 否则按空选择回调（改判窗口一类："不选"就是维持原样）。
+        """
 
         if not self.can_cancel_pending_selection():
             return False
 
         selection = self.pending_selection
-        callback = selection["on_complete"]
         self.pending_selection = None
-        callback([])
+        cancel = selection.get("on_cancel")
+        if callable(cancel):
+            cancel()
+            return True
+        selection["on_complete"]([])
         return True

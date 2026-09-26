@@ -28,6 +28,7 @@ from .dying import DyingMixin
 from .ai import AIMixin
 from .engine import GameContext, GameEngine
 from .judge_gate import JudgeGate
+from .contracts import PresentationGate
 from .controllers import AIController, HumanController
 from .rules import SeatManager
 from .conversion import ConversionRegistry
@@ -94,6 +95,10 @@ class Game(
         self.engine = GameEngine(self.context)
         # 判定优先闸门：判定没走完之前全场只接受判定输入（见 judge_gate.py）。
         self.judge_gate = JudgeGate(self)
+        # 演出闸门（Phase 18）：重要演出（判定 / 主动技）还在飞的时候，房主的
+        # 规则时间线让路，由表现层汇报"演完了"。它只影响推进、不改任何状态，
+        # 并且有硬性上限（见 contracts/presentation.py）。
+        self.presentation_gate = PresentationGate(self)
 
         # ==================================================
         # 武将 / 技能基础设施

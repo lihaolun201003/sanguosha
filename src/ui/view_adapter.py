@@ -19,6 +19,7 @@ import pygame
 
 from src.card import Card as CardData
 from src.game.judge_gate import JudgeGate
+from src.game.contracts import PresentationGate
 from src.game.view.view_model import ClientGameView, PlayerView, ViewCard
 from src.network.decisions import DecisionKind
 
@@ -611,6 +612,12 @@ class RemoteGameView:
         #: 房主不会在判定期间下发新的出牌决策，但"判定刚结束、决策已经到、
         #: 判定牌还在屏幕中央"这一帧是真实存在的。
         self.judge_gate = JudgeGate(self)
+        #: 演出闸门（Phase 18）：它只作用于**本机**的表现时间线——判定 / 主动技
+        #: 这类重要演出还在飞的时候，本机界面先不让路，演完再放行。房主有自己
+        #: 一份（挂在权威 ``Game`` 上），两边互不通气：这正是"房主控制逻辑
+        #: 时间线、客户端本地按自己的节奏播放"的选择——一台卡顿的客人不会
+        #: 卡住任何人，也不会被任何人卡住。
+        self.presentation_gate = PresentationGate(self)
         self.network_notice = ""
         if view is not None:
             self.update(view)
@@ -704,11 +711,20 @@ class RemoteGameView:
             "selected": selected,
             "on_complete": None,
             "request_id": None,
-            "cancellable": True,
+            # 能不能放弃**由房主裁决**（决策请求 / 视图里的 cancellable），
+            # 客户端不再恒 True——否则"房主说不许取消、界面却画着跳过按钮"。
+            "cancellable": bool(getattr(selection, "cancellable", False)),
             "face_down_ids": face_down,
-            # 有上下文的选择（火攻）：原因 + 已经公开亮出的展示牌。
-            # 规则合法性仍然只看 candidates——客户端不自己判规则。
+            # 展示语义（Phase 18）：面板名 / 阶段 / 标题 / 规则文案 / 花色约束
+            # 全部来自房主下发的同一份交互契约，客户端不按 reason 自己认领画面、
+            # 也不自己写规则文案。规则合法性仍然只看 candidates。
             "reason": str(getattr(selection, "reason", "") or ""),
+            "panel": str(getattr(selection, "panel", "") or ""),
+            "panel_stage": str(getattr(selection, "panel_stage", "") or ""),
+            "title": str(getattr(selection, "title", "") or ""),
+            "note": str(getattr(selection, "note", "") or ""),
+            "required_suit_label": str(
+                getattr(selection, "required_suit_label", "") or ""),
             "revealed": self._revealed_card(selection),
             "revealed_player": self.player_by_id(
                 str(getattr(selection, "revealed_player_id", "") or "")),
@@ -757,7 +773,17 @@ class RemoteGameView:
                    for item, _rect, item_key in selection["selected"])
 
     def can_cancel_pending_selection(self):
-        return True
+        """能不能放弃这次选牌——判据来自**房主**声明的约束，客户端不自己定。
+
+        以前这里恒返回 True，于是"房主说不许取消、客户端却画着跳过按钮"，
+        按下去必然被拒（ERR_CANCEL_NOT_ALLOWED）。现在读的是房主决策请求里
+        的 ``allow_cancel``，与单机读的是同一份规则声明。
+        """
+
+        selection = self.pending_selection
+        if selection is None:
+            return False
+        return bool(selection.get("cancellable"))
 
     def network_playable_indices(self):
         """由**房主给的合法牌集合**决定手牌高亮，客户端不自己算规则。

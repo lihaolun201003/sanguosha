@@ -140,18 +140,23 @@ class EquipmentEventSkill(Skill):
 
     def _emit_skill(self, context, player, card, fallback_name):
         from src.game.engine.events import Event, EventType
+        from src.game.interaction_presentation import skill_payload
 
         name = getattr(card, "display_name", "") or EQUIPMENT_RULE_NAMES.get(
             fallback_name, fallback_name)
         context.emit(Event(
             EventType.SKILL_TRIGGERED, source=player, target=player,
-            payload={
-                "skill_id": "equipment.%s" % str(fallback_name).lower(),
-                "skill_name": name,
-                "kind_label": "锁定技",
-                "text": getattr(card, "description", "") or "",
-                "targets": [],
-            },
+            payload=skill_payload(
+                getattr(context, "state", None),
+                "equipment.%s" % str(fallback_name).lower(),
+                name,
+                # 装备一类的规则集合技没有 SkillDef：类型与说明由规则层直接
+                # 给出（说明取装备卡面自己的那一句）。界面照抄，不查表。
+                kind="locked",
+                kind_label="锁定技",
+                text=getattr(card, "description", "") or "",
+                targets=[],
+            ),
         ))
 
     def _modify_damage(self, context, event):

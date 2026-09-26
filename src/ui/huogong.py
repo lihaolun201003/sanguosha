@@ -8,12 +8,19 @@
 通用 SELECT_CARDS 只把候选牌摆出来，玩家看不到"对方翻出来的到底是什么牌"，
 也不知道自己手上哪几张才是能弃的。这个面板把两侧放在一起：
 
-    左侧：对方（或"即将展示"）的真实牌面 + 花色点数
+    左侧：对方（或"即将展示"）的真实牌面 + 花色点数 + 花色要求
     右侧：自己的手牌（合法候选高亮，非法候选变暗且点不动）
-    底部：这一轮到底要做什么（"你需要弃置一张 ♥ 手牌"）
+    底部：规则层写好的"这一轮要做什么"
 
-**规则真相仍然只在引擎 / 房主手里**：面板显示的候选集就来自引擎给出的
-``candidates``，它不自己算花色、不自己判断合法与否，也不改任何状态。
+**面板由规则层指定，不是 UI 自己认出火攻的**（Phase 18）：
+
+* 用哪块面板：``pending_selection["panel"]``（规则层在
+  ``interaction_presentation`` 里声明 ``reveal_and_pick``）；
+* 文案：``title`` / ``note`` 由规则层渲染（"受到 N 点火焰伤害"里的 N 来自
+  火攻规则本身，改了规则文案就跟着变）；
+* 合法候选：仍然**只**来自引擎给出的 ``candidates``；本面板不自己算花色、
+  不判断合法与否、也不改任何状态。
+
 客户端与单机读的是同一份结构（``pending_selection``），所以只有一个实现。
 """
 
@@ -22,6 +29,11 @@ import pygame
 from . import cards as card_draw
 from . import theme
 from .widgets import draw_panel, ellipsize_text
+
+#: 本面板对应的规则层面板名（``interaction_presentation.PANEL_REVEAL_AND_PICK``）。
+#: 与规则层同名是故意的：UI 用"我要不要接管画面"这个判断去比对它，而哪个
+#: 请求用这块面板是规则层说了算。
+PANEL_NAME = "reveal_and_pick"
 
 #: 面板的设计尺寸（实际按屏幕缩放，并限制在屏幕内）。
 PANEL_WIDTH = 960
@@ -34,9 +46,6 @@ LEFT_WIDTH = 320
 SHOW_CARD_SIZE = (168, 234)
 PICK_CARD_SIZE = (96, 134)
 PICK_CARD_MIN_WIDTH = 44
-
-#: 认得出的火攻选择（引擎在请求上下文里给出的 reason）。
-HUOGONG_REASONS = ("huogong_reveal", "huogong_discard")
 
 TITLE = "火攻"
 
@@ -59,13 +68,17 @@ def resolve_player(game, value):
 
 
 def panel_data(game):
-    """把当前选牌界面整理成火攻面板要的数据；不是火攻选择时返回 None。"""
+    """把当前选牌界面整理成火攻面板要的数据；不是本面板负责的选择时返回 None。
+
+    唯一的接管判据是 ``panel`` 字段（规则层声明），不是请求原因的白名单：
+    新增一种"展示 + 按条件挑牌"的交互只要在规则层声明同一个面板名，这里
+    一行都不用改。
+    """
 
     selection = getattr(game, "pending_selection", None)
     if not selection:
         return None
-    reason = str(selection.get("reason") or "")
-    if reason not in HUOGONG_REASONS:
+    if str(selection.get("panel") or "") != PANEL_NAME:
         return None
     owner = selection.get("owner") or getattr(game, "player", None)
     hand = [card for card in list(getattr(owner, "hand", ()) or ()) if card is not None]
@@ -74,8 +87,13 @@ def panel_data(game):
     selected_ids = {id(card) for item in selection.get("selected", ())
                     for card in (item[0],)}
     return {
-        "reason": reason,
-        "reveal": reason == "huogong_reveal",
+        "reason": str(selection.get("reason") or ""),
+        "title": str(selection.get("title") or TITLE),
+        "note": str(selection.get("note") or ""),
+        "stage": str(selection.get("panel_stage") or ""),
+        # 阶段语义由规则层声明（``panel_stage``）：左边要不要"等一张牌被亮出"
+        # 是布局决策，这里只做一次字符串比较，不去猜请求原因。
+        "revealing": str(selection.get("panel_stage") or "") == "reveal",
         "owner": owner,
         "hand": hand,
         "candidates": candidates,
@@ -84,6 +102,7 @@ def panel_data(game):
         "revealed": selection.get("revealed") or None,
         "revealed_player": resolve_player(game, selection.get("revealed_player")),
         "caster": resolve_player(game, selection.get("caster")),
+        "required_suit_label": str(selection.get("required_suit_label") or ""),
         "cancellable": bool(selection.get("cancellable")),
         "prompt": str(selection.get("prompt") or ""),
     }
@@ -240,7 +259,7 @@ class HuogongPanel:
         local = layer.get_rect()
         draw_panel(layer, local, fill=theme.PANEL_DEEP, border=theme.GOLD,
                    border_width=metrics.px(3), radius=metrics.px(18))
-        accent = theme.DANGER if not data["reveal"] else theme.TARGET_YELLOW
+        accent = theme.DANGER if not data["revealing"] else theme.TARGET_YELLOW
         pygame.draw.rect(layer, (*accent, 150),
                          local.inflate(-metrics.px(8), -metrics.px(8)),
                          metrics.px(2), border_radius=metrics.px(14))
@@ -260,11 +279,11 @@ class HuogongPanel:
         """``panel`` 是**局部坐标**的整块面板矩形。"""
 
         title_font = metrics.fonts.get("large")
-        title = title_font.render(TITLE, True, theme.GOLD_BRIGHT)
+        title = title_font.render(str(data.get("title") or TITLE), True, theme.GOLD_BRIGHT)
         layer.blit(title, title.get_rect(midtop=(panel.centerx, metrics.px(10))))
-        subtitle = ("对方要你展示一张手牌" if data["reveal"]
+        subtitle = ("对方要你展示一张手牌" if data["revealing"]
                     else "对方已展示一张手牌")
-        who = self._name(data["caster"] if data["reveal"] else data["revealed_player"])
+        who = self._name(data["caster"] if data["revealing"] else data["revealed_player"])
         if who:
             subtitle = who + " · " + subtitle
         small = metrics.fonts.get("small")
@@ -323,7 +342,7 @@ class HuogongPanel:
         """``rect`` 是**局部坐标**的右列内容区；牌位是屏幕坐标（这里换算）。"""
 
         caption = metrics.fonts.get("small")
-        label_text = "请选择你要展示的牌" if data["reveal"] else "请选择你要弃置的牌"
+        label_text = "请选择你要展示的牌" if data["revealing"] else "请选择你要弃置的牌"
         label = caption.render(label_text, True, theme.TEXT_DIM)
         layer.blit(label, (rect.x, rect.y))
 
@@ -350,25 +369,27 @@ class HuogongPanel:
     # ---- 底部说明 ----
 
     def _draw_footer(self, layer, panel, metrics, data):
-        """``panel`` 是**局部坐标**的整块面板矩形。"""
+        """``panel`` 是**局部坐标**的整块面板矩形。
+
+        文案由规则层渲染好放在 ``data["note"]`` 里（"受到 N 点火焰伤害"里的 N
+        来自火攻规则本身）。这里只剩两种**界面自己才有资格判断**的兜底：
+        手上没有合法候选、以及规则没有给出文案时退回引擎的 prompt。
+        """
 
         pad = metrics.px(PANEL_PAD)
-        card = data["revealed"]
-        font = metrics.fonts.get("normal")
-        if data["reveal"]:
-            text = "选择一张手牌展示给对方；对方若能弃置同花色的牌，你将受到 1 点火焰伤害。"
+        note = str(data.get("note") or "")
+        if note:
+            text = note
             color = theme.TEXT
-        elif not data["candidates"]:
+        elif not data["candidates"] and not data["revealing"]:
             text = "你手上没有与展示牌同花色的手牌，无需弃置。"
             color = theme.TEXT_DIM
-        elif card is not None:
-            text = "你需要弃置一张 %s 手牌。" % (getattr(card, "suit_name", "") or "同花色")
-            color = theme.TEXT
         else:
             text = data["prompt"] or "请选择要弃置的牌。"
             color = theme.TEXT
         room = panel.width - pad * 2 - metrics.px(170)
-        rendered = font.render(ellipsize_text(text, font, max(40, room)), True, color)
+        rendered = metrics.fonts.get("normal").render(
+            ellipsize_text(text, metrics.fonts.get("normal"), max(40, room)), True, color)
         layer.blit(rendered, rendered.get_rect(
             midleft=(pad, panel.bottom - pad - metrics.px(14))))
 

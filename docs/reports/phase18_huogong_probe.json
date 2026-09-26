@@ -73,7 +73,7 @@
     {
       "ok": true,
       "label": "火攻无同花色：没有弹出弃置窗口",
-      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal', 'sha']"
+      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal']"
     },
     {
       "ok": true,
@@ -83,7 +83,7 @@
     {
       "ok": true,
       "label": "火攻无同花色：展示阶段照常发生",
-      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal', 'sha'] / 3"
+      "detail": "['huogong_reveal', 'huogong_reveal', 'huogong_reveal'] / 3"
     },
     {
       "ok": true,

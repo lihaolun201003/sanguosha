@@ -19,6 +19,7 @@ Phase 11.3 追加的两件事：
 from src.actions import CallbackAction, WaitAction
 
 from src.game.available_actions import ActionType, AvailableActions, TargetMode
+from src.game.contracts import build_interaction
 from src.game.conversion import PLAY_CONTEXT, RESCUE_CONTEXT, RESPONSE_CONTEXT
 from src.game.engine import (
     ChooseOptionAction,
@@ -311,18 +312,35 @@ class RemoteHumanController(PlayerController):
 
     def _build_pending_request(self, kind, request):
         responder = self.player
+        # 统一交互契约（Phase 18）：种类 / 张数约束 / 能不能放弃 / 请求意图 /
+        # 专用面板 / 规则文案只从这一份 schema 来。**本机真人读的是同一份**
+        # （见 controllers/human.py），所以同一个窗口在单机与联机下不可能再
+        # 出现两套行为。签名字段（候选牌怎么发、隐藏牌怎么退化）留在本模块，
+        # 那是网络投影，不是规则。
+        schema = build_interaction(self.game, request)
         constraints = {
             "min_cards": 0, "max_cards": 0,
             "min_targets": 0, "max_targets": 0,
-            "allow_cancel": bool(request.context.get("cancellable", False)),
+            "allow_cancel": bool(schema.cancellable),
             "allow_pass": False,
         }
         cards, targets, options = [], [], []
         context = {
-            "reason": request.context.get("reason", ""),
+            "reason": schema.purpose,
             "source": getattr(request.source, "name", ""),
             "prompt": request.prompt,
         }
+        # 展示语义随请求一起下发：客户端照抄，不按 reason 自己认领画面。
+        if schema.panel:
+            context["panel"] = schema.panel
+        if schema.payload.get("panel_stage"):
+            context["panel_stage"] = str(schema.payload["panel_stage"])
+        if schema.title:
+            context["title"] = schema.title
+        if schema.note:
+            context["note"] = schema.note
+        if schema.payload.get("required_suit_label"):
+            context["required_suit_label"] = str(schema.payload["required_suit_label"])
 
         if kind is DecisionKind.RESPOND_CARD:
             # 响应的"牌数"不是恒定的 1：丈八蛇矛一类多来源转化要两张实体牌
@@ -343,21 +361,21 @@ class RemoteHumanController(PlayerController):
             ]
 
         elif kind is DecisionKind.CHOOSE_OPTION:
-            from src.game.skills.mechanics import option_label
-
+            # 选项的（值, 文案）由 schema 给（``mechanics.option_label`` 只在
+            # 规则层调用），网络两侧因此显示同一段标签。
             options = [
-                {"value": value, "label": option_label(request, value)}
-                for value in request.options
+                {"value": value, "label": label}
+                for value, label in schema.options
             ]
 
         elif kind is DecisionKind.SELECT_CARDS:
             owner = request.context.get("zone_owner", responder)
-            constraints["min_cards"] = int(request.min_cards)
-            constraints["max_cards"] = int(request.max_cards or request.min_cards)
-            constraints["allow_cancel"] = bool(request.context.get("cancellable", False))
+            constraints["min_cards"] = schema.min_count
+            constraints["max_cards"] = schema.max_count
+            constraints["allow_cancel"] = bool(schema.cancellable)
             cards = self._card_candidates(
                 owner, request.context.get("candidates", ()),
-                request.context.get("zone", "hand"),
+                str(schema.payload.get("zone") or "hand"),
                 request_id=request.request_id)
             # 有上下文的选择（火攻）：把"已经公开亮出的那张牌"一起下发，
             # 客户端才能画出专门的界面（谁展示了什么、我要弃哪一张）。
@@ -373,9 +391,9 @@ class RemoteHumanController(PlayerController):
 
         elif kind is DecisionKind.SELECT_TARGETS:
             candidates = list(request.context.get("candidates", ()))
-            constraints["min_targets"] = max(1, int(request.min_cards or 1))
+            constraints["min_targets"] = max(1, schema.min_count or 1)
             constraints["max_targets"] = max(
-                constraints["min_targets"], int(request.max_cards or request.min_cards or 1))
+                constraints["min_targets"], schema.max_count or schema.min_count or 1)
             # 本地真人的选目标界面允许取消（映射为 PassPendingAction）。
             constraints["allow_cancel"] = True
             targets = [player_entry(player) for player in candidates]
@@ -764,14 +782,13 @@ class RemoteHumanController(PlayerController):
         log = option.log_text
         if log:
             self.game.add_log(log)
+        from src.game.interaction_presentation import skill_payload
+
         self.game.context.emit(Event(
             EventType.SKILL_TRIGGERED,
             source=self.player,
-            payload={
-                "skill_id": option.skill_id,
-                "skill_name": option.skill_name,
-                "card_action": option,
-            },
+            payload=skill_payload(
+                self.game, option.skill_id, option.skill_name, card_action=option),
         ))
 
     # ==================================================

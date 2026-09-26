@@ -227,12 +227,44 @@ class TurnMixin:
 
 
     # ==================================================
-    # 开始下一个存活角色的回合
+    # 重要演出 → 规则推进让路（Phase 18）
     # ==================================================
+
+    #: 等演出演完时的重试间隔。演出按真实时间走，重试只是"到点再看一眼"。
+    PRESENTATION_RETRY_PAUSE = 0.25
+
+    def _wait_for_presentation(self, callback) -> bool:
+        """重要演出（判定 / 主动技）还在飞：把这次推进排到演出之后再做。
+
+        返回 True 表示"已经安排好了，调用方立即返回"。没有演出闸门（无头
+        演算 / 批量模拟）或闸门开着但没人演时一律返回 False，行为与之前完全
+        一致。
+
+        为什么必须在这里挡，而不能只靠表现层的"动作队列 hold"：**回合推进是
+        同步调用链**。判定刚结算完、AI 的出牌阶段被跳过（乐不思蜀）时，
+        "结束回合 → 下一个角色 → 又一个回合"整条链路跑在**同一个**动作的
+        ``update`` 里，表现层根本没有机会在中间插一次判据。结果是判定牌还
+        在屏幕中央，规则已经换了三个人。把判据放在推进的入口上，这条链就
+        会在第一次推进时主动让路。
+
+        为什么重试是安全的：闸门由表现层汇报、并且有硬性上限
+        （``PresentationGate.MAX_HOLD``）；没有 UI 时它压根不会被打开。
+        """
+
+        gate = getattr(self, "presentation_gate", None)
+        if gate is None or not gate.presenting:
+            return False
+        self.actions.add(WaitAction(self.PRESENTATION_RETRY_PAUSE))
+        self.actions.add(CallbackAction(callback))
+        return True
 
     def start_next_turn(self, previous=None):
 
         if self.game_over:
+            return
+        # 判定 / 主动技这类重要演出还没演完：下一个角色的回合先不开始。
+        if self._wait_for_presentation(
+                lambda p=previous: self.start_next_turn(p)):
             return
         # 额外回合优先（放权 / 连破）：队列里还有就先把回合交给它，
         # 而不是按座次继续——否则"额外回合"会变成"下一轮才生效"。
@@ -309,6 +341,13 @@ class TurnMixin:
         self._enter_play_phase(player, ready)
 
     def _enter_play_phase(self, player, can_play):
+
+        # 判定 / 主动技这类重要演出还没演完：本回合的出牌阶段先别开始。
+        # 这条与 ``start_next_turn`` 是同一个理由（见 ``_wait_for_presentation``）：
+        # "判定演完 → 出牌阶段开始"在判定被跳过（乐不思蜀）时也是同一条同步链。
+        if self._wait_for_presentation(
+                lambda p=player, c=can_play: self._enter_play_phase(p, c)):
+            return
 
         self.message = player.name + " 的回合。"
         self.add_log("当前回合：" + player.name)

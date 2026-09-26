@@ -165,14 +165,20 @@ def selection_presentation(request, *, resolve_card, my_player_id="", owner=None
     maximum = max(minimum, int_field(request, "max_cards", minimum))
     # 有上下文的选择（火攻）：请求里带着原因与"已经公开亮出的那张牌"，
     # 客户端据此画专用界面；规则合法性仍然只由候选集决定。
+    #
+    # 展示语义（面板名 / 阶段 / 标题 / 规则文案 / 花色约束）由房主在交互契约里
+    # 声明好、随请求下发，客户端**照抄**——不按 reason 白名单自己认领画面，
+    # 也不自己拼"受到 1 点火焰伤害"这类规则文案。
     context = request.get("context") or {}
     revealed = context.get("revealed_card")
     return {
         "zone": zone,
         "owner": owner,
         "candidates": candidates,
-        "number": max(1, minimum),
-        "minimum": maximum if minimum <= 0 else minimum,
+        "number": max(1, minimum) if minimum > 0 else 0,
+        # 张数约束**照抄房主的**：以前 min_cards=0 时这里被改写成"必须选满"，
+        # 于是"允许选 0 张"的请求在客户端变成了不可跳过。
+        "minimum": max(0, minimum),
         "maximum": maximum,
         "prompt": str(request.get("prompt") or "请选择卡牌"),
         "selected": selected,
@@ -181,6 +187,11 @@ def selection_presentation(request, *, resolve_card, my_player_id="", owner=None
         "cancellable": bool(constraints(request).get("allow_cancel")),
         "face_down_ids": face_down,
         "reason": str(context.get("reason") or ""),
+        "panel": str(context.get("panel") or ""),
+        "panel_stage": str(context.get("panel_stage") or ""),
+        "title": str(context.get("title") or ""),
+        "note": str(context.get("note") or ""),
+        "required_suit_label": str(context.get("required_suit_label") or ""),
         "revealed": (resolve_card(revealed) if isinstance(revealed, dict) else None),
         "revealed_player": str(context.get("revealed_by") or ""),
         "caster": str(context.get("caster") or ""),

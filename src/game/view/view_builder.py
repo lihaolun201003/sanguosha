@@ -8,6 +8,7 @@
 数据里。规则层完全不知道这个模块存在，视图生成也只读不改。
 """
 
+from src.game.contracts import build_interaction
 from src.game.identity import identity_name
 
 from .view_model import (
@@ -233,6 +234,9 @@ def build_selection_view(game, viewer_id):
     selection = getattr(game, "pending_selection", None)
     if not selection:
         return None
+    # 这条选择对应的引擎请求：展示语义（面板 / 文案 / 能否放弃）从**同一份**
+    # 交互契约里取，而不是让界面按 reason 自己认领画面。
+    request = getattr(game, "pending_request", None)
     owner = selection.get("owner")
     if owner is not None and not is_self(viewer_id, owner):
         return None
@@ -253,13 +257,24 @@ def build_selection_view(game, viewer_id):
     revealed = selection.get("revealed")
     revealed_player = selection.get("revealed_player")
     caster = selection.get("caster")
+    # 展示语义（Phase 18）：面板名 / 阶段 / 标题 / 规则文案 / 花色约束全部由
+    # 规则层在交互契约里声明好，这里只做一次透传——客户端不再按 reason 自己
+    # 认领画面，也不自己写规则文案。两边读的是**同一份** ``InteractionSchema``。
+    schema = build_interaction(game, request) if request is not None else None
     return SelectionView(
-        zone=str(selection.get("zone") or "hand"),
-        prompt=str(selection.get("prompt") or ""),
+        zone=str(selection.get("zone") or "hand"),        prompt=str(selection.get("prompt") or ""),
         number=int(selection.get("number") or 0),
         candidates=tuple(candidates),
         selected_ids=selected,
         reason=str(selection.get("reason") or ""),
+        panel=str(selection.get("panel") or ""),
+        panel_stage=str(selection.get("panel_stage") or ""),
+        title=str(selection.get("title") or ""),
+        note=str(selection.get("note") or ""),
+        required_suit_label=str(selection.get("required_suit_label") or ""),
+        # 能不能放弃由规则层裁决：与单机读的是同一个字段，客户端不再恒 True。
+        cancellable=(bool(schema.cancellable) if schema is not None
+                     else bool(selection.get("cancellable"))),
         revealed=(view_card(revealed) if revealed is not None else None),
         revealed_player_id=str(getattr(revealed_player, "player_id", "") or ""),
         caster_id=str(getattr(caster, "player_id", "") or ""),

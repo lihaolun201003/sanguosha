@@ -535,7 +535,10 @@ def _p_skill(feed, event):
         [feed.player(item) for item in event.get("target_ids") or ()],
         skill_id=str(event.get("skill_id") or ""),
         kind_label=str(event.get("kind_label") or ""),
-        text=str(event.get("text") or ""),
+        # 类型与说明来自房主（规则层）随事件下发的那一份：客户端不查技能表，
+        # 因此与房主显示同一段文案，缺定义也不会显示成空白。
+        skill_kind=str(event.get("kind") or ""),
+        text=str(event.get("text") or event.get("description") or ""),
     )
 
 

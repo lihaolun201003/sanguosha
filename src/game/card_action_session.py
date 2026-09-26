@@ -392,14 +392,13 @@ class CardActionSessionMixin:
         log = option.log_text
         if log:
             self.add_log(log)
+        from src.game.interaction_presentation import skill_payload
+
         self.context.emit(Event(
             EventType.SKILL_TRIGGERED,
             source=option.owner,
-            payload={
-                "skill_id": option.skill_id,
-                "skill_name": option.skill_name,
-                "card_action": option,
-            },
+            payload=skill_payload(
+                self, option.skill_id, option.skill_name, card_action=option),
         ))
 
     # ==================================================

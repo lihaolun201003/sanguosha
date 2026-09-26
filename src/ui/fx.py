@@ -618,7 +618,27 @@ class Effects:
     # ---- 判定 → 动作队列的门控 ----
 
     def _holds_actions(self):
-        return self.judge_panel.holds_actions
+        """动作队列现在要不要停（判定面板 / 重要演出）。
+
+        判定面板那一层管"判定期间别开始下一个动作"；演出闸门那一层更宽：
+        裁决"规则推进要不要等这段演出演完"（见 ``contracts.presentation``）。
+        两者叠加在同一条动作队列上——它们都只压**还没开始**的动作，已经飞在
+        半空的牌不受影响。
+
+        **闸门这一层的例外**：有请求正等着人回答时不让路。回答本身可能就排在
+        动作队列里（AI 的响应 / 远程真人的回包），压住队列会造出"流程等回答、
+        回答等队列"的互相锁死——判定改判窗口就是活例子（``JudgePanel.
+        holds_actions`` 里那条例外与这里同源）。
+        """
+
+        if self.judge_panel.holds_actions:
+            return True
+        gate = getattr(self.game, "presentation_gate", None)
+        if gate is None or not gate.presenting:
+            return False
+        if getattr(self.game, "pending_request", None) is not None:
+            return False
+        return True
 
     def sync_action_gate(self):
         """把"判定展示期间别开始下一个动作"装到当前这份动作队列上。
@@ -656,17 +676,26 @@ class Effects:
     # ---- 本机操作界面要不要让路 ----
 
     def interaction_hold(self):
-        """关键演出（技能发动提示）还在播：操作界面先不出现。
+        """关键演出（技能发动提示 / 判定结论）还在播：操作界面先不出现。
 
         玩家反馈的"两个窗口叠在一起"就出在这里：技能提示还没播完，选目标 /
         选牌的界面已经弹出来了。让路只是**延后界面**，不阻塞引擎——队列自己
         会走完，AI 与房主完全不受影响。
 
-        判定期间的输入压制不在这里：那是 ``JudgeGate`` 的职责（改判窗口开着
-        的时候必须放行，不能在这里一刀切）。
+        两条判据：
+
+        * 队列正在播"压界面的演出"（``holds_ui``）；
+        * 演出闸门开着（重要演出在飞），**且本机玩家没有被请求回答**。
+          后半句是关键：改判窗口就开在判定演出中间，压住它判定永远拿不到
+          结果（死锁）。判定期间的输入压制另由 ``JudgeGate`` 负责。
         """
 
-        return bool(self.storyboard.holds_interaction())
+        if self.storyboard.holds_interaction():
+            return True
+        gate = getattr(self.game, "presentation_gate", None)
+        if gate is None:
+            return False
+        return bool(gate.holds_local_input())
 
     # ---- 指向箭头 ----
 
@@ -933,14 +962,19 @@ class Effects:
         return self.storyboard.submit(TurnStep(player))
 
     def present_skill(self, player, skill_name, targets=(), *, skill_id="",
-                      kind_label="", text=""):
-        """技能提示：武将卡 + 技能名 + 类型 + 说明（同一个技能连续触发会合并）。"""
+                      kind_label="", text="", skill_kind=""):
+        """技能提示：武将卡 + 技能名 + 类型 + 说明（同一个技能连续触发会合并）。
+
+        ``text`` / ``kind_label`` / ``skill_kind`` 由**规则层**随事件给出
+        （``SkillDef`` 的说明与类型），UI 不查技能表、更不按技能名硬编码。
+        主动技（``skill_kind == "active"``）是重要演出：提示播完效果才发生。
+        """
 
         if player is None or not skill_name:
             return None
         return self.storyboard.submit(SkillStep(
             player, skill_id, skill_name, targets,
-            text=text, kind_label=kind_label))
+            text=text, kind_label=kind_label, skill_kind=skill_kind))
 
     def present_result(self, text, *, detail="", tone="", kind=STEP_RESULT,
                        min_duration=1.20):
@@ -1032,8 +1066,10 @@ class Effects:
                           kind_label="", text="", duration=None):
         """技能发动提示面板：武将卡 + 玩家名 + 技能名 / 类型 / 说明。
 
-        名称、类型、说明都由本地技能表（``SkillDef``）给出——房主只需要
-        下发 ``skill_id``，联网客户端不会因此多收一份说明文本。
+        名称、类型、说明都由**规则层**给出（``SKILL_TRIGGERED`` 载荷里就有
+        ``skill_name`` / ``kind_label`` / ``description``）：界面不查技能表，
+        因此联网客户端与房主显示的是同一份文案，也不会因为客户端缺某个
+        技能定义而显示成空白。
 
         ``duration`` 是**真实秒数**（演出队列按本机速度缩放过的那一份），
         面板自己只负责淡入 / 停留 / 淡出。
@@ -1041,16 +1077,12 @@ class Effects:
 
         if player is None or not skill_name:
             return None
-        definition = self._skill_definition(skill_id)
-        name = getattr(definition, "name", "") or skill_name
-        body = text or (getattr(definition, "description", "") or "")
-        kind = kind_label or self._skill_kind_label(definition)
         if duration is None:
             duration = timing().story_skill / self._speed_factor()
-        self.skill_banner.show(player, name, skill_id=skill_id, kind_label=kind,
-                               text=body, targets=targets, duration=duration)
+        self.skill_banner.show(player, skill_name, skill_id=skill_id, kind_label=kind_label,
+                               text=text, targets=targets, duration=duration)
         # 面板已经写明"谁发动了什么"，抖动感更强的浮字就不重复了。
-        self.show_skill(player, name, targets, float_text=False)
+        self.show_skill(player, skill_name, targets, float_text=False)
         return self.skill_banner
 
     def _speed_factor(self):
@@ -1059,20 +1091,17 @@ class Effects:
         return max(0.2, float(getattr(self.storyboard, "speed_factor", 1.0) or 1.0))
 
     def _skill_definition(self, skill_id):
+        """技能定义查询。
+
+        Phase 18 之后技能提示的文案**不再走这里**（类型与说明随事件下发）。
+        保留它是给绘制路径查"这个技能属于哪个武将"一类纯展示信息用的。
+        """
+
         game = self.game
         registry = getattr(game, "skill_registry", None)
         if registry is None or not skill_id:
             return None
         return registry.get(skill_id)
-
-    @staticmethod
-    def _skill_kind_label(definition):
-        if definition is None:
-            return ""
-        from .skill_bar import KIND_LABELS
-
-        kind = getattr(getattr(definition, "kind", None), "value", "")
-        return KIND_LABELS.get(kind, "")
 
     def show_story_banner(self, text, detail="", tone="", kind=STEP_RESULT):
         """结算提示条：结论必须停留到玩家看清（时长由演出队列决定）。"""
@@ -1430,9 +1459,11 @@ class Effects:
             event.source, payload.get("skill_name"),
             event.payload.get("targets"),
             skill_id=payload.get("skill_id", ""),
-            # 装备一类的锁定技没有 SkillDef：类型与说明由规则层随事件给出。
+            # 类型与说明**全部来自规则层**（Phase 18）：界面不查技能表、
+            # 不按技能名硬编码，装备一类的规则集合技没有说明也照样能显示。
             kind_label=str(payload.get("kind_label") or ""),
-            text=str(payload.get("text") or ""),
+            skill_kind=str(payload.get("kind") or ""),
+            text=str(payload.get("text") or payload.get("description") or ""),
         )
 
     def _on_phase_skip(self, _context, event):
@@ -1499,6 +1530,12 @@ class Effects:
         # 统一结算演出队列：它推进自己、推进正在播的判定面板（面板是队列里的
         # 一个项目），并且**按本机速度**消费。
         self.storyboard.update(dt, self.game)
+        # 演出闸门的让路计时**只在这里**推进：闸门是表现层开的租约，就由
+        # 表现层自己计时关闭。两处同时 tick 会让上限提前一倍触发（实测过）。
+        # 上限的意义：演出层出错 / 面板再也不关闭时，规则绝不会被永久拦住。
+        block_gate = getattr(self.game, "presentation_gate", None)
+        if block_gate is not None:
+            block_gate.tick(dt)
         step_dt = dt * self.storyboard.speed_factor
         if not self.storyboard.driving_judge():
             # 面板不在队列里（直接调用 judge_begin 的旧调用点 / 测试）时仍要推进它。

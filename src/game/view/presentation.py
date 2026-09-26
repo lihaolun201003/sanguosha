@@ -546,7 +546,11 @@ class PresentationBridge:
             "skill_name": str(payload.get("skill_name") or ""),
             # 装备一类的锁定技没有 SkillDef：类型与说明由规则层给出，
             # 客户端不需要为了显示它而多拿一份技能表。
+            # Phase 18 起武将技能同样随事件带说明：房主与客户端显示同一段文案，
+            # 客户端缺某个技能定义也不会显示成空白。
+            "kind": str(payload.get("kind") or ""),
             "kind_label": str(payload.get("kind_label") or ""),
+            "description": str(payload.get("description") or ""),
             "text": str(payload.get("text") or ""),
             "target_ids": [
                 self._player_id(item) for item in payload.get("targets") or ()

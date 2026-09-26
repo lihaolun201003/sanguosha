@@ -1,0 +1,53 @@
+{
+  "notes": [
+    "本机回合：判定演出起始帧=42 结束帧=234（共 480 帧）",
+    "判定演出期间出现过的阶段：['discard']",
+    "演完前就恢复本机输入的帧：[7.8]",
+    "演出结束后 3 帧：[{'t': 7.8, 'phase': 'discard', 'input': True, 'playing': 'phase_skip'}, {'t': 7.83, 'phase': 'discard', 'input': True, 'playing': 'phase_skip'}, {'t': 7.87, 'phase': 'discard', 'input': True, 'playing': 'phase_skip'}]",
+    "判定开始时的阶段=discard；判定演完时的阶段=discard",
+    "闪电（AI 回合）：判定演出期间动作队列峰值=1，决策请求帧数=0",
+    "闪电（AI 回合）：判定演出 192 帧；其中新的回合开始 0 次 （应为 0）；越过闸门的回合推进=0"
+  ],
+  "results": [
+    {
+      "ok": true,
+      "label": "判定结论演出（阶段跳过）期间界面层让路",
+      "detail": "让路帧数=48/246"
+    },
+    {
+      "ok": true,
+      "label": "演出排空后界面层恢复",
+      "detail": "恢复于 t=9.43"
+    },
+    {
+      "ok": true,
+      "label": "抓到判定面板开始的时刻",
+      "detail": "discard"
+    },
+    {
+      "ok": true,
+      "label": "判定演出结束时规则仍停在同一个阶段（未被演出门控超越）",
+      "detail": "discard → discard"
+    },
+    {
+      "ok": true,
+      "label": "AI 回合闪电：判定演出出现过",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "闪电（AI 回合）：判定面板出现过",
+      "detail": ""
+    },
+    {
+      "ok": true,
+      "label": "判定演出期间没有任何新的回合开始",
+      "detail": "判定演出中的 turn.start = 0 / 共 4"
+    },
+    {
+      "ok": true,
+      "label": "判定演出期间引擎没有唤醒过被推迟的回合推进",
+      "detail": "[]"
+    }
+  ]
+}

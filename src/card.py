@@ -60,6 +60,21 @@ DISPLAY_NAMES.update(BASIC_NAMES)
 DISPLAY_NAMES.update(TRICK_NAMES)
 DISPLAY_NAMES.update(EQUIPMENT_NAMES)
 
+#: 花色 → 中文名。规则层要用花色写文案时（火攻的"弃置一张红桃手牌"）从这里取，
+#: 界面层不许自己再抄一份。
+SUIT_NAMES = {
+    "spade": "黑桃",
+    "heart": "红桃",
+    "club": "梅花",
+    "diamond": "方块",
+}
+
+
+def suit_name(suit):
+    """花色 → 中文名；未知花色返回空串。"""
+
+    return SUIT_NAMES.get(str(suit or ""), "")
+
 
 def mark_card_flag(card, name, value=True):
     """给一张牌打上"本次结算用"的标记（铁骑的不可响应 / 烈弓的逐目标标记）。
@@ -156,17 +171,7 @@ class Card:
     @property
     def suit_name(self):
 
-        names = {
-            "spade": "黑桃",
-            "heart": "红桃",
-            "club": "梅花",
-            "diamond": "方块",
-        }
-
-        return names.get(
-            self.suit,
-            ""
-        )
+        return suit_name(self.suit)
 
 
     @property

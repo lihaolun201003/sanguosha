@@ -353,6 +353,19 @@ class SelectionView:
     #: 引擎给出的选择原因（``huogong_reveal`` / ``huogong_discard`` 一类）：
     #: UI 据此决定要不要显示专用界面。规则合法性仍只看 ``candidates``。
     reason: str = ""
+    # ---- 展示语义（Phase 18）：由规则层声明，客户端只消费 ----
+    #: 要用的专用面板名（空串 = 通用界面）。**客户端不再按 reason 白名单
+    #: 自己认领画面**：哪个请求用哪块面板是规则层 ``interaction_presentation``
+    #: 说了算，单机与联机读同一份声明。
+    panel: str = ""
+    #: 同一块面板内的阶段语义（火攻的 ``reveal`` / ``discard``）。
+    panel_stage: str = ""
+    title: str = ""
+    #: 规则层渲染好的说明文案（"受到 N 点火焰伤害"里的 N 来自规则本身）。
+    note: str = ""
+    required_suit_label: str = ""
+    #: 规则上允不允许放弃——与单机读的是同一个声明，客户端不再恒 True。
+    cancellable: bool = False
     #: 这次选择里已经**公开亮出**的牌（火攻的展示牌）。只发给正在做这个选择
     #: 的人，而且它在规则上本来就是公开信息。
     revealed: object = None
@@ -371,6 +384,12 @@ class SelectionView:
                 PoolEntryView.from_payload(item) for item in payload.get("candidates") or ()),
             selected_ids=tuple(str(item) for item in payload.get("selected_ids") or ()),
             reason=str(payload.get("reason") or ""),
+            panel=str(payload.get("panel") or ""),
+            panel_stage=str(payload.get("panel_stage") or ""),
+            title=str(payload.get("title") or ""),
+            note=str(payload.get("note") or ""),
+            required_suit_label=str(payload.get("required_suit_label") or ""),
+            cancellable=bool(payload.get("cancellable")),
             revealed=(ViewCard.from_payload(payload["revealed"])
                       if payload.get("revealed") else None),
             revealed_player_id=str(payload.get("revealed_player_id") or ""),
@@ -385,6 +404,12 @@ class SelectionView:
             "candidates": [item.to_payload() for item in self.candidates],
             "selected_ids": list(self.selected_ids),
             "reason": self.reason,
+            "panel": self.panel,
+            "panel_stage": self.panel_stage,
+            "title": self.title,
+            "note": self.note,
+            "required_suit_label": self.required_suit_label,
+            "cancellable": self.cancellable,
             "revealed": self.revealed.to_payload() if self.revealed is not None else None,
             "revealed_player_id": self.revealed_player_id,
             "caster_id": self.caster_id,

@@ -662,13 +662,38 @@ class HuogongEffect(CardEffect):
     min_targets = max_targets = 1
     cancellable_by_wuxie = True
 
+    #: 火攻造成的伤害（规则参数，不是界面文案）：展示阶段要给玩家看的规则
+    #: 说明由它渲染出来，改这里文案会跟着变。
+    DAMAGE = 1
+    NATURE = "fire"
+
     def can_use(self, game, action):
         valid, message = super().can_use(game, action)
         return (False, "目标没有手牌。") if valid and not list(action.targets)[0].hand else (valid, message)
 
     def begin(self, flow):
         target = flow.targets[0]
-        request = flow.engine.pending.create(PendingRequestType.SELECT_CARDS, source=flow.actor, target=target, prompt="【火攻】：展示一张手牌", owner_flow=flow, min_cards=1, max_cards=1, request_context={"reason": "huogong_reveal", "candidates": list(target.hand), "zone_owner": target})
+        # 交给界面层的东西全部在这里声明（Phase 18 交互契约）：
+        # ``reason`` 选规则层声明的展示语义，``revealed_card`` / ``caster``
+        # 一类是这次交互的**上下文事实**，界面不自己算也不自己写文案。
+        request = flow.engine.pending.create(
+            PendingRequestType.SELECT_CARDS,
+            source=flow.actor,
+            target=target,
+            prompt="【火攻】：展示一张手牌",
+            owner_flow=flow,
+            min_cards=1,
+            max_cards=1,
+            request_context={
+                "reason": "huogong_reveal",
+                "candidates": list(target.hand),
+                "zone": "hand",
+                "zone_owner": target,
+                "caster": flow.actor,
+                "damage": self.DAMAGE,
+                "nature": "火焰" if self.NATURE == "fire" else self.NATURE,
+            },
+        )
         flow.effect_state = {}; flow.stage = "effect_waiting"; flow.wait(request); flow.engine.present_or_auto_resolve(request)
         return flow.current_result()
 
@@ -687,12 +712,43 @@ class HuogongEffect(CardEffect):
             if not candidates:
                 flow.game.revealed_card = None
                 return flow.finish(cancelled=False)
-            request = flow.engine.pending.create(PendingRequestType.SELECT_CARDS, source=flow.actor, target=flow.actor, prompt="弃置一张与展示牌同花色的手牌", owner_flow=flow, min_cards=1, max_cards=1, request_context={"reason": "huogong_discard", "candidates": candidates, "zone_owner": flow.actor, "revealed_card": revealed, "revealed_by": flow.targets[0], "caster": flow.actor})
+            # 弃置阶段的约束由规则层给出：要什么花色（``required_suit``）
+            # 与它的显示名（``required_suit_label``）。界面只画，不判。
+            from src.card import suit_name as _suit_name
+
+            request = flow.engine.pending.create(
+                PendingRequestType.SELECT_CARDS,
+                source=flow.actor,
+                target=flow.actor,
+                prompt="弃置一张与展示牌同花色的手牌",
+                owner_flow=flow,
+                min_cards=1,
+                max_cards=1,
+                # ``cancellable``：规则上允许放弃（放弃 = 不弃牌、不受伤害）。
+                # 显式声明，好让本地与联机两侧给出同一个"放弃"按钮。
+                request_context={
+                    "reason": "huogong_discard",
+                    "candidates": candidates,
+                    "zone": "hand",
+                    "zone_owner": flow.actor,
+                    "revealed_card": revealed,
+                    "revealed_by": flow.targets[0],
+                    "caster": flow.actor,
+                    "required_suit": revealed.suit,
+                    "required_suit_label": _suit_name(revealed.suit),
+                    "cancellable": True,
+                },
+            )
             flow.stage = "effect_waiting"; flow.wait(request); flow.engine.present_or_auto_resolve(request)
             return flow.current_result()
+        if resolution.passed or not resolution.cards:
+            # 主动放弃：规则上就是"不弃牌、不受伤害"，与"手里没有同花色牌"
+            # 是同一条收尾路径。判定区/牌面都没动过，不需要任何回滚。
+            flow.game.revealed_card = None
+            return flow.finish(cancelled=False)
         flow.context.apply(MoveCardAtom(resolution.cards[0], source=flow.actor.hand, destination=flow.game.deck.discard_pile))
         flow.game.revealed_card = None
-        damage = DamageFlow(flow.engine, DamageContext(flow.actor, flow.targets[0], 1, nature="fire", card=flow.card), on_complete=lambda _: flow.finish(cancelled=False))
+        damage = DamageFlow(flow.engine, DamageContext(flow.actor, flow.targets[0], self.DAMAGE, nature=self.NATURE, card=flow.card), on_complete=lambda _: flow.finish(cancelled=False))
         result = damage.start()
         if result.status is FlowStatus.WAITING:
             return flow.wait(damage)

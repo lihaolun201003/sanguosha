@@ -35,6 +35,8 @@
 
 from collections import deque
 
+from src.game.contracts.presentation import KIND_BY_STEP, PresentationSchema
+
 # ==================================================
 # 演出种类（供测试与报告引用；不是规则事件）
 # ==================================================
@@ -163,6 +165,11 @@ class Step:
     #: 播放期间要不要让**操作界面**先别出现（技能提示 = 要；判定面板由
     #: ``JudgeGate`` 单独管——改判窗口开着时必须放行，不能在这里一刀切）。
     holds_ui = False
+    #: 重要演出：**规则推进要等它演完**（见 ``contracts.presentation`` 模块头
+    #: 对闸门的说明）。只有"玩家必须看清、否则看不懂刚才发生了什么"的演出
+    #: 才配设 True；飘字 / 摸牌 / 牌移动一律 False——让它们阻塞规则只会把
+    #: 节奏拖垮。
+    blocking = False
     #: 最短可读时间（秒，绝对时间，不再按速度倍率缩小）。
     min_duration = 0.0
 
@@ -192,6 +199,36 @@ class Step:
     def describe(self):
         return self.kind
 
+    def presentation(self):
+        """这条演出的**契约描述**（``contracts.PresentationSchema``）。
+
+        它只有一件事要回答："挡住规则的是什么"。表现层自己画什么、怎么画
+        不在契约里——那仍然是 ``Effects`` 的事。
+        """
+
+        schema = self.presentation_extra()
+        schema["kind"] = _presentation_kind(self.kind)
+        schema["blocking"] = bool(self.blocking)
+        schema["duration"] = float(getattr(self, "duration", 0.0) or 0.0)
+        schema.setdefault("tone", "")
+        schema.setdefault("detail", "")
+        return PresentationSchema(
+            kind=schema["kind"],
+            actor_id=str(schema.get("actor_id") or ""),
+            target_ids=tuple(schema.get("target_ids") or ()),
+            text=str(schema.get("text") or ""),
+            detail=str(schema.get("detail") or ""),
+            tone=str(schema.get("tone") or ""),
+            duration=schema["duration"],
+            blocking=schema["blocking"],
+            payload=dict(schema.get("payload") or {}),
+        )
+
+    def presentation_extra(self):
+        """子类补充的契约字段（各步骤自己最清楚演的是谁、什么文本）。"""
+
+        return {}
+
 
 class TimedStep(Step):
     """按固定时长占住画面的演出。"""
@@ -214,6 +251,9 @@ class JudgeStep(Step):
 
     kind = STEP_JUDGE
     key = True
+    #: 判定是"玩家必须看清否则看不懂刚才发生了什么"的典型：整段判定演出
+    #: （面板 + 排在其后的结论条）期间，房主的规则时间线让路。
+    blocking = True
     min_duration = 0.0
 
     def __init__(self, result=None):
@@ -258,16 +298,34 @@ class JudgeStep(Step):
         reason = getattr(self.result, "reason", "")
         return "judge:%s" % (reason or "?")
 
+    def presentation_extra(self):
+        result = self.final or self.result
+        outcome = getattr(result, "outcome", None)
+        owner = getattr(result, "target", None) or getattr(result, "source", None)
+        return {
+            "actor_id": _player_id(owner),
+            "text": str(getattr(outcome, "title", "") or ""),
+            "detail": str(getattr(outcome, "text", "") or ""),
+            "tone": str(getattr(getattr(outcome, "tone", None), "value", "") or ""),
+            "payload": {"reason": str(getattr(result, "reason", "") or "")},
+        }
+
 
 class SkillStep(TimedStep):
-    """技能发动提示（武将卡 + 技能名 + 类型 + 说明）。"""
+    """技能发动提示（武将卡 + 技能名 + 类型 + 说明）。
+
+    只有**主动技**阻塞规则推进：它是玩家刚刚做出的选择，效果必须等提示
+    播完再发生（否则"点了没反应"）。锁定技 / 触发技会在一局里反复触发，
+    让它们阻塞规则会让整局变成慢动作——那类演出只排队、不挡路。
+    """
 
     kind = STEP_SKILL
     key = True
     holds_ui = True
     min_duration = 1.10
 
-    def __init__(self, player, skill_id, skill_name, targets=(), text="", kind_label=""):
+    def __init__(self, player, skill_id, skill_name, targets=(), text="", kind_label="",
+                 skill_kind=""):
         super().__init__()
         self.player = player
         self.skill_id = str(skill_id or "")
@@ -275,12 +333,26 @@ class SkillStep(TimedStep):
         self.targets = tuple(targets or ())
         self.text = str(text or "")
         self.kind_label = str(kind_label or "")
+        #: 规则层声明的技能类型（``active`` / ``view_as`` / ``locked`` / ``passive``）。
+        #: UI 不猜：判定面板 / 技能条 / 提示面板读的是同一份声明。
+        self.skill_kind = str(skill_kind or "")
+        self.blocking = self.skill_kind == "active"
         self.duration = _timing().story_skill
 
     def start(self, effects):
         effects.show_skill_banner(
             self.player, self.skill_name, self.targets,
             skill_id=self.skill_id, kind_label=self.kind_label, text=self.text)
+
+    def presentation_extra(self):
+        return {
+            "actor_id": _player_id(self.player),
+            "target_ids": tuple(_player_id(item) for item in self.targets),
+            "text": self.skill_name,
+            "detail": self.text,
+            "tone": self.kind_label,
+            "payload": {"skill_id": self.skill_id, "skill_kind": self.skill_kind},
+        }
 
     #: 同一个技能连续触发时合并成一条，避免锁定技刷屏。
     def same_as(self, other):
@@ -328,13 +400,28 @@ class ResultStep(TimedStep):
         self.duration = _timing().story_result
         if kind == STEP_PHASE_SKIP:
             self.duration = _timing().story_phase_skip
+            # 阶段跳过是**判定的结论**（乐不思蜀 / 兵粮寸断），不是普通的提示条：
+            # 它和判定面板属于同一段演出，演完之前规则不该开始下一件事。
+            # 否则玩家看到的是"判定牌收走、规则已经换人、结论条孤零零飘着"。
+            self.blocking = True
 
     def start(self, effects):
         effects.show_story_banner(self.text, self.detail, self.tone, self.kind)
 
+    def presentation_extra(self):
+        return {
+            "text": self.text,
+            "detail": self.detail,
+            "tone": self.tone,
+            "payload": {"step_kind": self.kind},
+        }
+
 
 class DamageStep(TimedStep):
     kind = STEP_DAMAGE
+
+    def presentation_extra(self):
+        return {"actor_id": _player_id(self.player), "text": "-%d" % int(self.amount or 0)}
 
     def __init__(self, player, amount, *, hp_delta=None):
         super().__init__()
@@ -445,6 +532,27 @@ class TurnStep(TimedStep):
 # 队列
 # ==================================================
 
+def _presentation_gate(effects):
+    """取这份表现层所属对局的演出闸门；没有（纯 UI / 手工对象）返回 None。"""
+
+    game = getattr(effects, "game", None)
+    return getattr(game, "presentation_gate", None)
+
+
+def _presentation_kind(step_kind):
+    """表现层自己的步骤名 → 演出契约的种类（同一套词汇，见 contracts）。"""
+
+    return KIND_BY_STEP.get(str(step_kind or ""), str(step_kind or ""))
+
+
+def _player_id(player):
+    """演出契约里的角色标识：与网络侧一致，一律用 ``player_id`` 字符串。"""
+
+    if player is None:
+        return ""
+    return str(getattr(player, "player_id", "") or "")
+
+
 class PresentationQueue:
     """按顺序消费表现事件的队列；由 ``Effects`` 每帧推进。"""
 
@@ -469,7 +577,68 @@ class PresentationQueue:
         self.pending.append(step)
         self._reserve(step)
         self._trim()
+        # 重要演出**在排进来的这一瞬间**就开闸：它是在引擎的事件回调里被
+        # 提交的，而同一帧稍后引擎就可能唤醒"等在这条边界上的回合推进"
+        # （``defer_turn_resume``）。等下一帧 UI 轮询再开闸就已经晚了——
+        # 规则会先跑到下一个阶段，看起来就是判定一闪而过。
+        self._sync_block_gate()
         return step
+
+    # ---- 重要演出 → 规则让路 ----
+
+    @property
+    def blocking_busy(self):
+        """队列里还有重要演出（正在播或排着队）。"""
+
+        if self.current is not None and getattr(self.current, "blocking", False):
+            return True
+        return any(getattr(item, "blocking", False) for item in self.pending)
+
+    def _sync_block_gate(self):
+        gate = _presentation_gate(self.effects)
+        if gate is None:
+            return
+        gate.mark(self, self.blocking_busy, blocking=True,
+                  schemas=self.blocking_schemas())
+
+    def blocking_schemas(self):
+        """此刻挡路的重要演出的契约描述（正在播的 + 排着队的）。
+
+        闸门拿它报告"现在挡住规则的是什么"，日志与报告不必去猜是谁拦的。
+        """
+
+        schemas = []
+        if self.current is not None and getattr(self.current, "blocking", False):
+            schemas.append(self.current.presentation())
+        for item in self.pending:
+            if getattr(item, "blocking", False):
+                schemas.append(item.presentation())
+        return schemas
+
+    def update(self, dt, owner=None):
+        """推进队列；``owner`` 提供本机速度（座主 Game / 客户端视图）。"""
+
+        if owner is None:
+            owner = getattr(self.effects, "game", None)
+        self.speed_factor = self.speed_for(owner)
+        step_dt = max(0.0, float(dt)) * self.speed_factor
+
+        if self.current is None:
+            self._start_next()
+        if self.current is None:
+            self._sync_block_gate()
+            return
+        self.current.elapsed += step_dt
+        self.current.advance(self.effects, step_dt)
+        if self.current.finished(self.effects):
+            done = self.current
+            self._release(done)
+            self.current = None
+            self.played += 1
+            # 同一帧内继续消费"零时长 / 已完成"的演出：瞬时演出不会拖慢画面。
+            self._start_next()
+        # 队列排空（或只剩不重要的演出）→ 关闸，规则恢复推进。
+        self._sync_block_gate()
 
     def _merge(self, step):
         """连续两条**同一个技能**的提示合并成一条（锁定技不刷屏）。"""
@@ -528,6 +697,7 @@ class PresentationQueue:
             self.pending.remove(victim)
             self._release(victim)
             self.dropped += 1
+        self._sync_block_gate()
 
     # ---- 补充信息（判定改判 / 最终结果）----
 
@@ -577,6 +747,8 @@ class PresentationQueue:
             self.current.cancel(self.effects)
         self.current = None
         self.ledger.clear()
+        # 队列被整体清空（重开 / 场景切换）也要关闸，否则规则会永远让路。
+        self._sync_block_gate()
 
     def reset(self):
         self.clear()
@@ -615,28 +787,6 @@ class PresentationQueue:
         speed = _local_speed(owner)
         factor = speed / BASE_SPEED
         return max(MIN_SPEED_FACTOR, min(MAX_SPEED_FACTOR, factor))
-
-    def update(self, dt, owner=None):
-        """推进队列；``owner`` 提供本机速度（座主 Game / 客户端视图）。"""
-
-        if owner is None:
-            owner = getattr(self.effects, "game", None)
-        self.speed_factor = self.speed_for(owner)
-        step_dt = max(0.0, float(dt)) * self.speed_factor
-
-        if self.current is None:
-            self._start_next()
-        if self.current is None:
-            return
-        self.current.elapsed += step_dt
-        self.current.advance(self.effects, step_dt)
-        if self.current.finished(self.effects):
-            done = self.current
-            self._release(done)
-            self.current = None
-            self.played += 1
-            # 同一帧内继续消费"零时长 / 已完成"的演出：瞬时演出不会拖慢画面。
-            self._start_next()
 
     def _start_next(self):
         while self.pending:

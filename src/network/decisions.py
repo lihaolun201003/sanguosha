@@ -30,6 +30,8 @@ Phase 11.5 追加的两件事（都是"提交 ≠ 接受"的配套）：
 import os
 import time
 
+from src.game.contracts.interaction import InteractionKind
+
 # ==================================================
 # 拒绝原因（机器码）：debug / 日志 / 报告用它，UI 用中文文案
 # ==================================================
@@ -87,20 +89,26 @@ def reject_text(code, message=""):
 
 
 class DecisionKind:
-    """通用决策类型（按项目真实交互归纳，不按具体技能命名）。"""
+    """通用决策类型（按项目真实交互归纳，不按具体技能命名）。
 
+    Phase 18 起它就是规则层的 ``InteractionKind``：**只有一份定义**，网络协议
+    的值域一个字节没改，但"有哪几种交互"这件事不再有两个真相来源。
+    这里保留这个名字是因为它被大量按"网络协议常量"引用。
+    """
+
+    NONE = InteractionKind.NONE
     # 打出一张响应牌（闪 / 桃 / 无懈 / 杀）：对应 PendingRequestType.RESPOND_CARD
-    RESPOND_CARD = "respond_card"
+    RESPOND_CARD = InteractionKind.RESPOND_CARD
     # 是 / 否（装备技能、以及将来任何"是否发动"）：对应 CONFIRM
-    CONFIRM = "confirm"
+    CONFIRM = InteractionKind.CONFIRM
     # 多选一：对应 CHOOSE_OPTION
-    CHOOSE_OPTION = "choose_option"
+    CHOOSE_OPTION = InteractionKind.SELECT_OPTION
     # 选若干张牌（弃牌 / 制衡 / 五谷…）：对应 SELECT_CARDS
-    SELECT_CARDS = "select_cards"
+    SELECT_CARDS = InteractionKind.SELECT_CARDS
     # 选若干角色目标：对应 SELECT_TARGETS
-    SELECT_TARGETS = "select_targets"
+    SELECT_TARGETS = InteractionKind.SELECT_TARGETS
     # 出牌阶段：出一张牌（带目标）或结束阶段（回合流程，不是 PendingRequest）
-    PLAY_PHASE = "play_phase"
+    PLAY_PHASE = InteractionKind.PLAY_PHASE
 
 
 ALL_KINDS = (

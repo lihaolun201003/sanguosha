@@ -77,14 +77,24 @@ class Skill(ABC):
         try:
             if self.announces:
                 # 只读通知：UI 用它显示技能发动提示，不驱动任何规则。
+                #
+                # 说明与类型**由规则层随事件给出**（Phase 18）：界面层不再为了
+                # 显示一条提示去查技能表，"技能提示长什么样"因此在单机与联机
+                # 下是同一份数据。装备一类的规则集合技没有 SkillDef，两个字段
+                # 留空，界面按"没有说明"显示即可。
                 context.emit(Event(
                     EventType.SKILL_TRIGGERED,
                     source=self.owner,
-                    payload={"skill_id": self.id, "skill_name": self.name},
+                    payload=self._announce_payload(context),
                 ))
             self.resolve(context, event)
         finally:
             Skill._depth -= 1
+
+    def _announce_payload(self, context) -> dict:
+        from src.game.interaction_presentation import skill_payload
+
+        return skill_payload(getattr(context, "state", None), self.id, self.name)
 
     @classmethod
     def reset_depth(cls) -> None:

@@ -83,9 +83,23 @@ class GameEngine:
             self._deferred_resumes.append(callback)
 
     def _flush_deferred_resumes(self):
-        """没有任何待回答请求了：唤醒等在这条边界上的回合推进。"""
+        """没有任何待回答请求了：唤醒等在这条边界上的回合推进。
+
+        还要再等一件事：**重要演出演完**（Phase 18 演出闸门）。触发技在
+        ``JUDGE_RESULT`` 里取走判定牌、判定流程收尾、下一位角色开始回合——
+        这些都在同一个调用栈里连着发生，如果不等演出，"判定 → 下一个回合"
+        会在一帧里全部结算完，画面上一闪而过。
+
+        闸门由表现层汇报、有硬性上限，所以这里等的是"演出"，不是"UI 回执"：
+        没有 UI 的对局（无头演算 / 批量模拟）闸门永远不会打开，行为与之前
+        完全一致。
+        """
 
         if self.pending.active or not self._deferred_resumes:
+            return
+        gate = getattr(self.game, "presentation_gate", None)
+        if gate is not None and gate.presenting:
+            # 演出还在飞：这一批回调原地留着，等演出结束后的那一帧再唤醒。
             return
         callbacks, self._deferred_resumes = self._deferred_resumes, []
         for callback in callbacks:
@@ -368,11 +382,15 @@ class GameEngine:
         if action.actor is not request.target:
             raise ValueError("action actor is not the requested responder")
         if request.request_type is not PendingRequestType.RESPOND_CARD:
-            # 选牌请求只有在「至少选 0 张」时才可以放弃（例如改判窗口里
-            # 选择不替换）；其余选牌 / 选项 / 确认必须给出具体内容，
-            # 放弃会让流程收到空结果（例如五谷拿不到牌），这里显式拒绝。
+            # 选牌请求只有在「规则允许放弃」时才可以放弃：判据是
+            # ``min_cards == 0``（改判窗口那种"不选就是维持原样"），或者请求
+            # 自己在 context 里显式声明了 ``cancellable``（火攻的"弃置可放弃"：
+            # 规则上放弃 = 不弃牌也不受伤害，是合法收尾）。其余选牌 / 选项 /
+            # 确认必须给出具体内容，放弃会让流程收到空结果（例如五谷拿不到牌）。
             # 选目标请求允许放弃：它的语义是"这次技能不发动"。
-            if request.request_type is PendingRequestType.SELECT_CARDS and request.min_cards == 0:
+            cancellable = bool(request.context.get("cancellable"))
+            if request.request_type is PendingRequestType.SELECT_CARDS and (
+                    request.min_cards == 0 or cancellable):
                 pass
             elif request.request_type is PendingRequestType.SELECT_TARGETS:
                 pass
