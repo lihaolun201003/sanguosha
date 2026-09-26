@@ -1,0 +1,4114 @@
+{
+  "summary": {
+    "rounds": 100,
+    "clicks": 9975,
+    "ineffective": 6840,
+    "finished": 41,
+    "stalled": 57,
+    "crashed": 0,
+    "frames": 187725,
+    "problem_kinds": {
+      "点击无效": 460,
+      "僵局": 52,
+      "卡住": 41,
+      "等待超时": 5
+    },
+    "blocked_by": {
+      "hold=yes": 200,
+      "busy=True": 227,
+      "hold=no busy=False": 33
+    }
+  },
+  "rounds": [
+    {
+      "seed": 1,
+      "frames": 6000,
+      "clicks": 1221,
+      "ineffective": 741,
+      "over": false,
+      "stalled": false,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (639, 573) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/4 hand_rects=4"
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "frames": 1489,
+      "clicks": 81,
+      "ineffective": 45,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 1",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "frames": 1475,
+      "clicks": 22,
+      "ineffective": 2,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 306 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "frames": 1374,
+      "clicks": 41,
+      "ineffective": 24,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "frames": 732,
+      "clicks": 64,
+      "ineffective": 34,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "frames": 2048,
+      "clicks": 125,
+      "ineffective": 105,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=yes busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=respond_card/wuxie_chain+response 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 7,
+      "frames": 3180,
+      "clicks": 147,
+      "ineffective": 96,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=respond_card/sha+response 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=request=respond_card/sha+response 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 8,
+      "frames": 1079,
+      "clicks": 61,
+      "ineffective": 42,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        }
+      ]
+    },
+    {
+      "seed": 9,
+      "frames": 1514,
+      "clicks": 74,
+      "ineffective": 41,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 10,
+      "frames": 2553,
+      "clicks": 88,
+      "ineffective": 54,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (1161, 244) 无变化 consumed=False phase=prepare pending=request=select_targets/shensu+target_selection 原因=hold=yes busy=False slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 11,
+      "frames": 265,
+      "clicks": 61,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (366, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/6 hand_rects=6"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=6"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=6"
+        }
+      ]
+    },
+    {
+      "seed": 12,
+      "frames": 307,
+      "clicks": 2,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 281 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 13,
+      "frames": 2167,
+      "clicks": 75,
+      "ineffective": 39,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=select_cards/pindian+selection 原因=hold=yes busy=False slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=prepare pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=select_cards/pindian+selection 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=prepare pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        }
+      ]
+    },
+    {
+      "seed": 14,
+      "frames": 594,
+      "clicks": 79,
+      "ineffective": 69,
+      "over": false,
+      "stalled": true,
+      "phase_end": "judge",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=no busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=judge pending=request=respond_card/dying_rescue+response 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 15,
+      "frames": 5273,
+      "clicks": 31,
+      "ineffective": 6,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 16,
+      "frames": 2482,
+      "clicks": 50,
+      "ineffective": 32,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (600, 222) 无变化 consumed=False phase=play pending=request=select_cards/wugu+selection 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 17,
+      "frames": 4148,
+      "clicks": 61,
+      "ineffective": 15,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 18,
+      "frames": 1442,
+      "clicks": 99,
+      "ineffective": 83,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 19,
+      "frames": 736,
+      "clicks": 36,
+      "ineffective": 20,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 150 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 225 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=select_cards/beige+selection 手牌=0"
+        }
+      ]
+    },
+    {
+      "seed": 20,
+      "frames": 812,
+      "clicks": 59,
+      "ineffective": 43,
+      "over": true,
+      "stalled": false,
+      "phase_end": "finish",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 21,
+      "frames": 3130,
+      "clicks": 136,
+      "ineffective": 97,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 22,
+      "frames": 1411,
+      "clicks": 40,
+      "ineffective": 18,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 23,
+      "frames": 366,
+      "clicks": 68,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=select_cards/ganglie+selection 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=select_cards/ganglie+selection 原因=hold=no busy=False slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=select_cards/ganglie+selection 原因=hold=yes busy=False slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=select_cards/ganglie+selection 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=request=select_cards/ganglie+selection 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 24,
+      "frames": 3058,
+      "clicks": 111,
+      "ineffective": 65,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 25,
+      "frames": 2732,
+      "clicks": 129,
+      "ineffective": 76,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 26,
+      "frames": 2136,
+      "clicks": 124,
+      "ineffective": 72,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=False slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 27,
+      "frames": 2134,
+      "clicks": 168,
+      "ineffective": 111,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=True slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 28,
+      "frames": 3667,
+      "clicks": 48,
+      "ineffective": 23,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "等待超时",
+          "label": "wait",
+          "detail": "等别人 900 帧仍未推进 phase=play pending=- busy=True"
+        }
+      ]
+    },
+    {
+      "seed": 29,
+      "frames": 2736,
+      "clicks": 150,
+      "ineffective": 111,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (366, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=0/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (366, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=0/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=3/7 hand_rects=7"
+        },
+        {
+          "kind": "点击无效",
+          "label": "弃牌",
+          "detail": "弃牌 点 (857, 717) 无变化 consumed=False phase=discard pending=- 原因=hold=yes busy=False slot=False hand_hit=4/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 30,
+      "frames": 1400,
+      "clicks": 34,
+      "ineffective": 10,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        }
+      ]
+    },
+    {
+      "seed": 31,
+      "frames": 2482,
+      "clicks": 103,
+      "ineffective": 64,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (522, 222) 无变化 consumed=False phase=play pending=request=select_cards/guohe+selection 原因=hold=yes busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (522, 222) 无变化 consumed=False phase=play pending=request=select_cards/guohe+selection 原因=hold=yes busy=False slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (747, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 32,
+      "frames": 878,
+      "clicks": 15,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 325 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 33,
+      "frames": 5465,
+      "clicks": 150,
+      "ineffective": 70,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 34,
+      "frames": 2685,
+      "clicks": 49,
+      "ineffective": 17,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 414 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 35,
+      "frames": 1855,
+      "clicks": 94,
+      "ineffective": 49,
+      "over": true,
+      "stalled": false,
+      "phase_end": "play",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (118, 244) 无变化 consumed=False phase=prepare pending=request=select_targets/shensu+target_selection 原因=hold=yes busy=False slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (640, 222) 无变化 consumed=False phase=play pending=request=select_cards/wugu+selection 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (1161, 244) 无变化 consumed=False phase=prepare pending=request=select_targets/shensu+target_selection 原因=hold=yes busy=False slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 36,
+      "frames": 2488,
+      "clicks": 39,
+      "ineffective": 14,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 282 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 37,
+      "frames": 1594,
+      "clicks": 80,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=False slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=respond_card/sha+response 手牌=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=request=respond_card/sha+response 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 38,
+      "frames": 307,
+      "clicks": 2,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 281 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 39,
+      "frames": 4068,
+      "clicks": 147,
+      "ineffective": 73,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/7 hand_rects=7"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (911, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=5/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "弃牌",
+          "detail": "弃牌 点 (639, 717) 无变化 consumed=False phase=discard pending=- 原因=hold=yes busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "确认目标",
+          "detail": "确认目标 点 (1168, 698) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "等待超时",
+          "label": "wait",
+          "detail": "等别人 900 帧仍未推进 phase=play pending=- busy=True"
+        }
+      ]
+    },
+    {
+      "seed": 40,
+      "frames": 796,
+      "clicks": 31,
+      "ineffective": 21,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 41,
+      "frames": 2920,
+      "clicks": 130,
+      "ineffective": 88,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 42,
+      "frames": 2815,
+      "clicks": 191,
+      "ineffective": 136,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 43,
+      "frames": 1550,
+      "clicks": 40,
+      "ineffective": 26,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=False slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 44,
+      "frames": 1003,
+      "clicks": 29,
+      "ineffective": 16,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 45,
+      "frames": 971,
+      "clicks": 94,
+      "ineffective": 74,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (366, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 46,
+      "frames": 704,
+      "clicks": 24,
+      "ineffective": 11,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=True slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=True slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 47,
+      "frames": 3638,
+      "clicks": 105,
+      "ineffective": 67,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/5 hand_rects=5"
+        }
+      ]
+    },
+    {
+      "seed": 48,
+      "frames": 2013,
+      "clicks": 98,
+      "ineffective": 53,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 49,
+      "frames": 1654,
+      "clicks": 91,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/wanjian+response 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=respond_card/wanjian+response 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 50,
+      "frames": 4126,
+      "clicks": 95,
+      "ineffective": 40,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/5 hand_rects=5"
+        }
+      ]
+    },
+    {
+      "seed": 51,
+      "frames": 362,
+      "clicks": 8,
+      "ineffective": 2,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 287 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 52,
+      "frames": 1225,
+      "clicks": 80,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 53,
+      "frames": 381,
+      "clicks": 7,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 319 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 54,
+      "frames": 2347,
+      "clicks": 112,
+      "ineffective": 79,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "AI 2",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (1161, 244) 无变化 consumed=False phase=prepare pending=request=select_targets/shensu+target_selection 原因=hold=yes busy=False slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 55,
+      "frames": 317,
+      "clicks": 68,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 56,
+      "frames": 277,
+      "clicks": 62,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 57,
+      "frames": 1026,
+      "clicks": 51,
+      "ineffective": 31,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 58,
+      "frames": 4279,
+      "clicks": 154,
+      "ineffective": 96,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 59,
+      "frames": 3092,
+      "clicks": 72,
+      "ineffective": 36,
+      "over": true,
+      "stalled": false,
+      "phase_end": "play",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (640, 222) 无变化 consumed=False phase=play pending=request=select_cards/wugu+selection 原因=hold=yes busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (640, 222) 无变化 consumed=False phase=play pending=request=select_cards/wugu+selection 原因=hold=yes busy=False slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=select_cards/pindian+selection 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        }
+      ]
+    },
+    {
+      "seed": 60,
+      "frames": 281,
+      "clicks": 63,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 61,
+      "frames": 367,
+      "clicks": 13,
+      "ineffective": 7,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 281 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 62,
+      "frames": 2620,
+      "clicks": 28,
+      "ineffective": 7,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "等待超时",
+          "label": "wait",
+          "detail": "等别人 900 帧仍未推进 phase=play pending=- busy=True"
+        }
+      ]
+    },
+    {
+      "seed": 63,
+      "frames": 1218,
+      "clicks": 80,
+      "ineffective": 69,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 64,
+      "frames": 2165,
+      "clicks": 62,
+      "ineffective": 35,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 300 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 300 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 65,
+      "frames": 2025,
+      "clicks": 33,
+      "ineffective": 9,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 282 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 66,
+      "frames": 3985,
+      "clicks": 145,
+      "ineffective": 90,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "确认目标",
+          "detail": "确认目标 点 (1168, 698) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=True slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 67,
+      "frames": 285,
+      "clicks": 63,
+      "ineffective": 59,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 68,
+      "frames": 281,
+      "clicks": 63,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 69,
+      "frames": 4574,
+      "clicks": 85,
+      "ineffective": 31,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 70,
+      "frames": 3748,
+      "clicks": 53,
+      "ineffective": 28,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 71,
+      "frames": 3255,
+      "clicks": 114,
+      "ineffective": 70,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=False slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=respond_card/sha+response 手牌=0"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=request=respond_card/sha+response 手牌=0"
+        }
+      ]
+    },
+    {
+      "seed": 72,
+      "frames": 281,
+      "clicks": 65,
+      "ineffective": 62,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=False slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=respond_card/wuxie_chain+response 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=request=respond_card/wuxie_chain+response 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 73,
+      "frames": 277,
+      "clicks": 62,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (421, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=5"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 74,
+      "frames": 1203,
+      "clicks": 47,
+      "ineffective": 25,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (747, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=select_cards/huogong_reveal+selection 原因=hold=yes busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=2/5 hand_rects=5"
+        }
+      ]
+    },
+    {
+      "seed": 75,
+      "frames": 1190,
+      "clicks": 75,
+      "ineffective": 43,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        }
+      ]
+    },
+    {
+      "seed": 76,
+      "frames": 2544,
+      "clicks": 110,
+      "ineffective": 81,
+      "over": false,
+      "stalled": true,
+      "phase_end": "judge",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=no busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=judge pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=judge pending=request=respond_card/dying_rescue+response 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=judge pending=request=respond_card/dying_rescue+response 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 77,
+      "frames": 660,
+      "clicks": 78,
+      "ineffective": 48,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=False slot=True hand_hit=None/4 hand_rects=4"
+        }
+      ]
+    },
+    {
+      "seed": 78,
+      "frames": 389,
+      "clicks": 73,
+      "ineffective": 68,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (421, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 79,
+      "frames": 6000,
+      "clicks": 1484,
+      "ineffective": 1314,
+      "over": false,
+      "stalled": false,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=respond_card/wuxie_chain+response 手牌=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=3/4 hand_rects=4"
+        }
+      ]
+    },
+    {
+      "seed": 80,
+      "frames": 1116,
+      "clicks": 116,
+      "ineffective": 88,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/wanjian+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 81,
+      "frames": 1771,
+      "clicks": 75,
+      "ineffective": 29,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选牌",
+          "detail": "选牌 点 (640, 222) 无变化 consumed=False phase=play pending=request=select_cards/wugu+selection 原因=hold=yes busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=True slot=False hand_hit=1/3 hand_rects=3"
+        }
+      ]
+    },
+    {
+      "seed": 82,
+      "frames": 365,
+      "clicks": 71,
+      "ineffective": 62,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 83,
+      "frames": 3646,
+      "clicks": 163,
+      "ineffective": 112,
+      "over": false,
+      "stalled": true,
+      "phase_end": "discard",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (747, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "等待超时",
+          "label": "wait",
+          "detail": "等别人 900 帧仍未推进 phase=discard pending=- busy=True"
+        }
+      ]
+    },
+    {
+      "seed": 84,
+      "frames": 1832,
+      "clicks": 66,
+      "ineffective": 38,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/1 hand_rects=1"
+        }
+      ]
+    },
+    {
+      "seed": 85,
+      "frames": 2299,
+      "clicks": 135,
+      "ineffective": 110,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=False phase=play pending=request=respond_card/duel+response 原因=hold=no busy=False slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=1"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=1"
+        }
+      ]
+    },
+    {
+      "seed": 86,
+      "frames": 1132,
+      "clicks": 78,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=no busy=False slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=respond_card/sha+response 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 87,
+      "frames": 365,
+      "clicks": 5,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 287 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 88,
+      "frames": 265,
+      "clicks": 61,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (366, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/6 hand_rects=6"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=6"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=6"
+        }
+      ]
+    },
+    {
+      "seed": 89,
+      "frames": 2325,
+      "clicks": 60,
+      "ineffective": 30,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "确认目标",
+          "detail": "确认目标 点 (1168, 698) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (529, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=1/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "等待超时",
+          "label": "wait",
+          "detail": "等别人 900 帧仍未推进 phase=play pending=- busy=True"
+        }
+      ]
+    },
+    {
+      "seed": 90,
+      "frames": 2152,
+      "clicks": 76,
+      "ineffective": 47,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (639, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (529, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=None/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (584, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (747, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (587, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=3/8 hand_rects=8"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (118, 244) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/3 hand_rects=3"
+        }
+      ]
+    },
+    {
+      "seed": 91,
+      "frames": 5154,
+      "clicks": 124,
+      "ineffective": 91,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 2,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=3/6 hand_rects=6"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (475, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 92,
+      "frames": 1513,
+      "clicks": 21,
+      "ineffective": 6,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=1/4 hand_rects=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 353 帧推不动（不是在等别人）phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 93,
+      "frames": 297,
+      "clicks": 64,
+      "ineffective": 59,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (693, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 94,
+      "frames": 317,
+      "clicks": 66,
+      "ineffective": 60,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (584, 717) 无变化 consumed=True phase=play pending=- 原因=hold=no busy=False slot=False hand_hit=0/2 hand_rects=2"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=2"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 243 帧推不动（不是在等别人）phase=play pending=- 手牌=2"
+        }
+      ]
+    },
+    {
+      "seed": 95,
+      "frames": 2171,
+      "clicks": 130,
+      "ineffective": 113,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "结束回合",
+          "detail": "结束回合 点 (1168, 698) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=None/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (693, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=2/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (747, 717) 无变化 consumed=True phase=play pending=request=respond_card/nanman+response 原因=hold=no busy=True slot=True hand_hit=2/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=True phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=no busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=True slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (802, 717) 无变化 consumed=False phase=play pending=request=respond_card/wuxie_chain+response 原因=hold=yes busy=False slot=True hand_hit=3/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=False slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=respond_card/dying_rescue+response 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 96,
+      "frames": 307,
+      "clicks": 2,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 281 帧推不动（不是在等别人）phase=play pending=- 手牌=5"
+        }
+      ]
+    },
+    {
+      "seed": 97,
+      "frames": 1215,
+      "clicks": 21,
+      "ineffective": 7,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 225 帧无变化 phase=play pending=- 手牌=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=None/3 hand_rects=3"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 295 帧推不动（不是在等别人）phase=play pending=- 手牌=3"
+        }
+      ]
+    },
+    {
+      "seed": 98,
+      "frames": 1080,
+      "clicks": 87,
+      "ineffective": 51,
+      "over": true,
+      "stalled": false,
+      "phase_end": "over",
+      "winner": "玩家",
+      "survivors": 1,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (587, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=3/8 hand_rects=8"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=- 手牌=8"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (639, 573) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/7 hand_rects=7"
+        },
+        {
+          "kind": "点击无效",
+          "label": "选目标",
+          "detail": "选目标 点 (118, 244) 无变化 consumed=False phase=play pending=target_selection 原因=hold=yes busy=False slot=True hand_hit=None/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (747, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=3/5 hand_rects=5"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=True phase=play pending=request=respond_card/dying_rescue+response 原因=hold=no busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=True slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (475, 717) 无变化 consumed=False phase=play pending=request=respond_card/dying_rescue+response 原因=hold=yes busy=False slot=True hand_hit=0/4 hand_rects=4"
+        },
+        {
+          "kind": "点击无效",
+          "label": "出牌",
+          "detail": "出牌 点 (802, 717) 无变化 consumed=False phase=play pending=- 原因=hold=yes busy=False slot=False hand_hit=3/4 hand_rects=4"
+        }
+      ]
+    },
+    {
+      "seed": 99,
+      "frames": 327,
+      "clicks": 3,
+      "ineffective": 0,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 289 帧推不动（不是在等别人）phase=play pending=- 手牌=4"
+        }
+      ]
+    },
+    {
+      "seed": 100,
+      "frames": 970,
+      "clicks": 49,
+      "ineffective": 34,
+      "over": false,
+      "stalled": true,
+      "phase_end": "play",
+      "winner": "",
+      "survivors": 3,
+      "problems": [
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=True slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/nanman+response 原因=hold=yes busy=False slot=True hand_hit=1/3 hand_rects=3"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=True phase=play pending=request=respond_card/sha+response 原因=hold=no busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=True slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "响应出牌",
+          "detail": "响应出牌 点 (639, 717) 无变化 consumed=False phase=play pending=request=respond_card/sha+response 原因=hold=yes busy=False slot=True hand_hit=0/1 hand_rects=1"
+        },
+        {
+          "kind": "点击无效",
+          "label": "不出",
+          "detail": "不出 点 (1168, 749) 无变化 consumed=True phase=play pending=request=respond_card/duel+response 原因=hold=no busy=True slot=True hand_hit=None/0 hand_rects=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 75 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 150 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "卡住",
+          "label": "stuck",
+          "detail": "连续 225 帧无变化 phase=play pending=request=select_cards/beige+selection 手牌=0"
+        },
+        {
+          "kind": "僵局",
+          "label": "deadlock",
+          "detail": "连续 240 帧推不动（不是在等别人）phase=play pending=request=select_cards/beige+selection 手牌=0"
+        }
+      ]
+    }
+  ]
+}
