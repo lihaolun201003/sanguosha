@@ -138,8 +138,8 @@ class UseCardFlow(Flow):
             )
 
         # 技能转化出来的虚拟牌：真正移动的是它的实体源牌。
-        material_sources = list(getattr(self.card, "source_cards", ()) or ())
-        if material_sources:
+        material_sources = self.material_cards
+        if material_sources and material_sources != [self.card]:
             for source_card in material_sources:
                 self.game.move_source_card_to_processing(self.actor, source_card)
         elif not getattr(self.card, "_virtual", False):
@@ -179,6 +179,19 @@ class UseCardFlow(Flow):
             return self.finish(cancelled=True)
         self.stage = "effect"
         return self.effect.begin(self)
+
+    @property
+    def material_cards(self):
+        """这次使用真正动过的**实体牌**。
+
+        View-As（武圣 / 断粮一类）用的是虚拟牌，它在任何区域里都不存在——
+        进处理区、进判定区、进弃牌堆的都是它的**实体素材**。任何需要"移动
+        这次打出的牌"的组件都必须走这个查询，直接动 ``self.card`` 会在
+        虚拟牌上抛 "card is no longer in the expected source zone"。
+        """
+
+        sources = list(getattr(self.card, "source_cards", ()) or ())
+        return sources or [self.card]
 
     def emit_card_event(self, event_type, target=None, **payload):
         return self.context.emit(
@@ -223,7 +236,7 @@ class UseCardFlow(Flow):
         if original_nature is not None:
             self.card.nature = original_nature
             self.card._original_nature = None
-        material_sources = list(getattr(self.card, "source_cards", ()) or ())
+        material_sources = self.material_cards
         self.cancelled = cancelled
         self.context.emit(
             Event(

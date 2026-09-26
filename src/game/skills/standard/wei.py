@@ -479,9 +479,13 @@ class TuxiFlow(Flow):
         return self._finish(True)
 
     def _finish(self, applied):
-        self.complete({"applied": applied})
-        self.notify_on_complete({"applied": applied})
-        return self.current_result()
+        return self.complete({"applied": applied})
+
+    def on_settled(self, result):
+        # 同 WuxieResponseChain：调用方要的是 {"applied": bool} 这个业务值，
+        # 不是包着它的 FlowResult。在这里声明一次，基类那次被幂等挡掉。
+        self.notify_on_complete({"applied": bool(self.result and
+                                                 self.result.get("applied"))})
 
 
 def tuxi_flow(game, player):

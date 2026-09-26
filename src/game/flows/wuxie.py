@@ -136,9 +136,19 @@ class WuxieResponseChain(Flow):
             "被抵消" if self.nullified else "重新生效")
 
     def _finish(self):
-        result = self.complete({
+        return self.complete({
             "nullified": self.nullified,
             "wuxie_count": self.wuxie_count,
         })
+
+    def on_settled(self, result):
+        """这个阶段对外只交付一件事：**锦囊最终有没有被抵消**（bool）。
+
+        必须在这里显式声明，不能只靠 ``_finish`` 里调一次：``complete()``
+        的兜底会用 ``FlowResult`` 再触发一次 ``on_complete``，而调用方
+        （``UseCardFlow._after_wuxie``）拿到的是**布尔**语义——收到一个
+        恒为真的对象就会把每一张锦囊都判成"被无懈抵消"。
+        ``notify_on_complete`` 是幂等的，所以这里先声明、基类那次自动跳过。
+        """
+
         self.notify_on_complete(self.nullified)
-        return result

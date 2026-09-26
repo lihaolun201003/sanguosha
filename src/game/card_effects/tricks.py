@@ -349,7 +349,22 @@ class _DelayedTrickEffect(CardEffect):
         return True, ""
 
     def begin(self, flow):
-        flow.context.apply(MoveCardAtom(flow.card, source=flow.game.processing_zone, destination=flow.targets[0].judgement_zone))
+        # 进判定区的是**实体牌**：View-As 用出来的延时锦囊（徐晃【断粮】
+        # 把黑色装备牌当【兵粮寸断】）本身是虚拟牌，它在任何区域里都不存在，
+        # 直接移它会在原子层抛 "card is no longer in the expected source zone"。
+        moved = False
+        for card in flow.material_cards:
+            if not any(item is card for item in flow.game.processing_zone):
+                continue
+            flow.context.apply(MoveCardAtom(
+                card, source=flow.game.processing_zone,
+                destination=flow.targets[0].judgement_zone))
+            moved = True
+        if not moved:
+            # 素材已经不在处理区（被技能取走一类）：这张延时锦囊不落区，
+            # 按普通锦囊收尾，不制造半截状态。
+            flow.game.add_log("【%s】没有可用的实体牌，未置入判定区。" % flow.card.display_name)
+            return flow.finish(cancelled=False)
         flow.keep_processing_card = True
         # 牌已经真实进入判定区：出牌动画留在桌面上的展示副本必须收掉，
         # 否则它会一直停在中央（同一张牌不允许有两个视觉位置）。出牌动画
