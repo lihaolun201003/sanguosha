@@ -541,9 +541,44 @@ OUTCOME_HOLD → FADE_OUT），本轮**没有重写它**，做的是：
 | 20 | LAN Host | ✅ probe_lan 26/26 + probe_schema 53/53（含真实 socket） |
 | 21 | LAN Guest | ⚠️ 同上，探针覆盖 HTTP 但**没有真实窗口截图** |
 
-**没做到的**：真实鼠标手玩（人手点击）——这一步必须你来做。我的事件注入能证明
-"真实窗口 + 真实事件路径下界面正确"，证明不了手感（按钮好不好找、动画快不快、
-字号在真实显示器上累不累眼睛）。
+### Computer Use：本轮尝试过，但本实例不可用
+
+我按官方 skill 引导了 Computer Use（``computer-use`` 插件的
+``setupComputerUseRuntime``），**加载成功但运行时直接拒绝**：
+
+```text
+setupComputerUseRuntime(...)              → 成功
+agent.computerUse.listApps()              → Computer Use is unavailable for this node_repl session
+agent.computerUse.requestAccess(...)      → 同上（连申请权限都被拒）
+```
+
+原因查清了，不是用法问题：
+
+| 事实 | 证据 |
+| --- | --- |
+| 官方市场里**有**这个插件 | ``marketplace.json``（40 条）里有 ``computer-use``："automate desktop apps with mouse, keyboard, and UI element control" |
+| 但它**没有安装到本实例** | ``~/.zcode/cli/plugins/data/`` 只有 ``browser-use`` 等 11 个，**没有** ``computer-use@zcode-plugins-official`` |
+| 提供 ``mcp__node_repl__js`` 的 MCP server 因此没加载该能力 | 任何 Computer Use 调用都返回 "unavailable for this node_repl session" |
+
+**怎么解决**：在 ZCode 里安装并启用 ``computer-use@zcode-plugins-official``
+（插件市场里能搜到），然后**重开会话**（能力在会话启动时装载）。之后我就能
+用真实鼠标 + 键盘玩这一局。
+
+**已经准备好的脚手架**：``tools/handplay_scene.py``。它把真实窗口从主菜单推进到
+"轮到你出牌"，然后停住等真人操作：
+
+```bash
+set SGS_RUNTIME_SCRIPT=handplay_scene
+.venv\Scripts\python.exe main.py
+# 就绪后打印：handplay: 就绪 scene=game phase=play turn=玩家 hp=4/4
+```
+
+窗口一直开着（不返回 ``quit``）。它只用事件注入把人送到牌桌前，**不代替人做
+任何游戏决策**——牌桌上的每一步都留给真鼠标。
+
+**没做到的**：真实鼠标手玩（人手点击）。事件注入能证明"真实窗口 + 真实事件路径
+下界面正确"，证明不了手感（按钮好不好找、动画快不快、字号在真实显示器上累不累
+眼睛）。Computer Use 一旦启用，这条缺口就能补上。
 
 ---
 
