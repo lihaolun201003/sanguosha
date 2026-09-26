@@ -14,10 +14,13 @@ from .widgets import (
     draw_hp_pips,
     draw_panel,
     draw_state_border,
+    draw_state_dim,
     draw_state_label,
     ellipsize_text,
 )
 
+#: 判定区里的延时锦囊 → 短标签。**这只是一个显示缩写表**：它不参与任何规则
+#: 判断（谁是延时锦囊、谁要判定，都由规则层给）。未登记的牌退化成卡面首字。
 JUDGE_SHORT = {
     "LEBU": "乐",
     "BINGLIANG": "粮",
@@ -25,8 +28,6 @@ JUDGE_SHORT = {
 }
 
 STATUS_CHAIN = "横置"
-STATUS_DEAD = "阵亡"
-STATUS_RESPONDING = "响应中"
 
 PAD = 14
 
@@ -109,15 +110,34 @@ def draw_seat(
     shake=0,
     alive=None,
     hp=None,
+    dying=False,
+    skill_acting=False,
 ):
     """Draw one seat panel.
 
     高亮统一走 ``theme.resolve_state``：整个 seat 面板（武将缩略 + 名字 +
-    血量 + 身份 + 手牌数 + 装备 + 判定）作为一个完整的可选目标区域一起高亮，
-    描边与发光由 ``draw_state_border`` 一次画完。
+    血量 + 身份 + 手牌数 + 装备 + 判定）作为**一个完整区域**一起高亮。
+
+    # 三层绘制顺序（本轮修正）
+
+        ① 底板 + 内容（头像 / 名字 / 血量 / 装备 / 判定 / 手牌数）
+        ② 压暗层      ← 必须盖在内容之上
+        ③ 描边 + 悬停叠加 + 角标
+
+    原来压暗与描边一起画在①之前，于是"非法目标"和"阵亡"只让底板变暗，
+    头像与血量原样亮着——看起来像没生效。现在整块面板一起暗。
+
+    # 两处角标（互不抢占）
+
+    左上：角色状态（当前回合 / 响应中 / 濒死 / 阵亡）——回答"这个人怎么了"。
+    右上：操作态（可选 / 目标）——回答"我现在能不能点他"。
+
+    分开之后，目标选择期间仍然能一眼看出"谁在行动、谁快死了"，不会再因为
+    状态归并把回合信息挤掉。
 
     ``alive`` / ``hp`` 是**表现值**（允许落后于权威状态，见
     ``ui.storyboard`` 的视觉账本）：不传时按角色对象自己的字段画。
+    ``dying`` 由调用方从引擎的濒死状态推出来（表现层不自己判断规则）。
     """
 
     fonts = metrics.fonts
@@ -129,38 +149,45 @@ def draw_seat(
     hp = int(max(0, player.hp)) if hp is None else int(max(0, hp))
     fill = theme.PANEL if alive else theme.PANEL_DEEP
 
+    # 语义状态（互斥）：悬停**不**参与，它走下面的叠加层。
     state = theme.resolve_state(
         None if alive else "dead",
+        "dying" if (dying and alive) else None,
         "selected_target" if selected else None,
-        "valid_target_hover" if (candidate and hovered) else None,
+        "skill_acting" if (skill_acting and alive) else None,
         "valid_target" if candidate else None,
         "pending_response" if is_responding else None,
         "current_turn" if is_current else None,
-        "hover" if hovered else None,
         "invalid_target" if (in_target_mode and alive and not candidate) else None,
     )
+    # 角色状态角标与操作态角标分开：前者常驻、后者只在目标选择时出现。
+    role_state = theme.resolve_state(
+        None if alive else "dead",
+        "dying" if (dying and alive) else None,
+        "pending_response" if is_responding else None,
+        "skill_acting" if (skill_acting and alive) else None,
+        "current_turn" if is_current else None,
+    )
+    aim_state = theme.resolve_state(
+        "selected_target" if selected else None,
+        "valid_target_hover" if (candidate and hovered) else None,
+        "valid_target" if candidate else None,
+    )
 
-    # 面板本体：底色 + 阴影，边框与发光交给状态层统一画。
+    # ---- ① 底板 + 内容 ----
     draw_panel(
         surface, rect, fill=fill, border=theme.GOLD_DIM, border_width=0,
         radius=theme.RADIUS_PANEL,
     )
 
-    if flash is not None and flash > 0:
-        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
-        veil.fill((*flash_color, int(150 * flash)))
-        surface.blit(veil, rect.topleft)
-
-    draw_state_border(surface, rect, state, radius=metrics.px(theme.RADIUS_PANEL))
-
     pad = metrics.px(PAD)
 
-    # ---- 头像 / 武将牌缩略 ----
+    # 头像 / 武将牌缩略
     avatar_box = avatar_rect(rect, metrics)
     _avatar(surface, avatar_box, player, alive=alive, current=is_current,
             metrics=metrics, general=general)
 
-    # ---- 名字 / 座次（按实际宽度省略）----
+    # 名字 / 座次（按实际宽度省略）
     info_x = avatar_box.right + metrics.px(10)
     right_limit = rect.right - pad - metrics.px(66)   # 给状态徽章留位置
     name_color = theme.TEXT if alive else theme.TEXT_MUTED
@@ -178,11 +205,41 @@ def draw_seat(
     subtitle_text = ellipsize_text(subtitle, seat_font, max(1, right_limit - info_x + metrics.px(60)))
     surface.blit(seat_font.render(subtitle_text, True, theme.TEXT_MUTED), (info_x, rect.y + metrics.px(41)))
 
-    # ---- 状态角标：当前回合 / 目标 / 可选 / 响应中 / 阵亡 ----
+    # ---- ② 压暗层：盖在内容之上，整块面板一起暗 ----
+    if flash is not None and flash > 0:
+        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
+        veil.fill((*flash_color, int(150 * flash)))
+        surface.blit(veil, rect.topleft)
+    draw_state_dim(surface, rect, state)
+
+    # ---- ③ 描边 + 悬停叠加 ----
+    draw_state_border(
+        surface, rect, state, radius=metrics.px(theme.RADIUS_PANEL),
+        hovered=bool(hovered), label=False,
+    )
+
+    # ---- 角标（从右往左依次排：角色状态 → 操作态 → 横置）----
+    #
+    # 角色状态与操作态是**两类**信息：前者回答"这个人怎么了"（当前回合 /
+    # 响应中 / 濒死 / 阵亡），后者回答"我现在能不能点他"（可选 / 目标）。
+    # 原来只有一处角标，目标选择一开始「当前回合」就被顶掉了。
     badge_font = fonts.get("seat_small")
-    marker = draw_state_label(surface, rect, state, fonts, metrics, inset=metrics.px(7))
-    anchor_right = (marker.left - metrics.px(6)) if marker is not None \
-        else (rect.right - metrics.px(7))
+    inset = metrics.px(7)
+    cursor_right = rect.right - inset
+    role_badge = None
+    if theme.visual_state(role_state).get("label"):
+        role_badge = draw_state_label(surface, rect, role_state, fonts, metrics,
+                                      inset=inset, right=cursor_right)
+        if role_badge is not None:
+            cursor_right = role_badge.left - metrics.px(6)
+    aim_badge = None
+    if theme.visual_state(aim_state).get("label"):
+        aim_badge = draw_state_label(surface, rect, aim_state, fonts, metrics,
+                                     inset=inset, right=cursor_right)
+        if aim_badge is not None:
+            cursor_right = aim_badge.left - metrics.px(6)
+    marker = role_badge or aim_badge
+    anchor_right = cursor_right
     anchor_y = marker.centery if marker is not None else rect.y + metrics.px(16)
     if player.chained:
         text = badge_font.render(STATUS_CHAIN, True, theme.CHAIN)

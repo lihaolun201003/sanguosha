@@ -13,6 +13,7 @@ import pygame
 
 from . import assets as assets_module
 from . import theme
+from . import widgets
 
 
 SLOT_LABELS = {
@@ -103,6 +104,9 @@ def draw_card(
     disabled=False,
     dimmed=False,
     hovered=False,
+    legal=False,
+    response_candidate=False,
+    discardable=False,
     compact=None,
     alpha=255,
     registry=None,
@@ -114,6 +118,15 @@ def draw_card(
 
     状态描边与发光统一走 ``theme`` 的视觉状态表，且画在**目标 surface** 上，
     所以发光可以溢出卡片边界而不会被卡面裁掉。
+
+    四类"这张牌现在是什么角色"（可以同时是别的状态，按优先级归并）：
+
+    * ``legal``              本回合可以打出（正向高亮，不再只靠"别的变灰"来暗示）
+    * ``response_candidate`` 响应窗口里许可打出的牌（闪 / 桃 / 无懈）
+    * ``discardable``        弃牌阶段可以弃掉的牌
+    * ``candidate``          技能转化 / 选牌窗口里的合法来源牌
+
+    ``hovered`` 是**正交**的叠加层：任何状态之上都能再叠一圈悬停柔光。
     """
 
     rect = pygame.Rect(rect)
@@ -152,27 +165,32 @@ def draw_card(
 
     surface.blit(face, rect.topleft)
 
+    # 语义状态（互斥）：**悬停不参与归并**，它走下面的叠加层。
+    # 这样"候选牌 + 鼠标在上面"不会退化成普通 hover、"已选 + 鼠标在上面"
+    # 也不会丢掉「已选」角标。
     state_name = theme.resolve_state(
         "disabled" if (disabled or dimmed) else None,
         "selected" if selected else None,
+        "response_candidate" if response_candidate else None,
         "view_as_candidate" if candidate else None,
-        "hover" if hovered else None,
+        "legal_card" if legal else None,
+        "discard_candidate" if discardable else None,
     )
-    _draw_state_border(surface, rect, state_name)
+    _draw_state_border(surface, rect, state_name, hovered=bool(hovered))
     return rect
 
 
-def _draw_state_border(surface, rect, state_name):
-    """按视觉状态在卡牌外沿画描边 + 外发光（画在卡面之上，发光可溢出）。"""
+def _draw_state_border(surface, rect, state_name, *, hovered=False):
+    """按视觉状态在卡牌外沿画描边 + 外发光（画在卡面之上，发光可溢出）。
 
-    stroke = int(theme.visual_state(state_name).get("width") or 0)
-    if stroke <= 0:
-        return
-    state = theme.visual_state(state_name)
-    halo = int(state.get("glow_width") or 0)
-    border = theme.glow_border(
-        rect.size, state["border"], stroke, halo, theme.RADIUS_CARD, 150)
-    surface.blit(border, (rect.x - halo, rect.y - halo))
+    统一走 ``widgets.draw_state_border``：卡牌与座位从此**共用同一套**状态
+    绘制（含悬停叠加层），不再各有一份私有复制——原来那份不读 ``dim``、
+    也不画角标，于是手牌上的「已选」角标永远不会出现。
+    """
+
+    widgets.draw_state_border(
+        surface, rect, state_name, radius=theme.RADIUS_CARD, alpha=150,
+        hovered=hovered)
 
 
 def _draw_suit_rank_badge(face, card, body, font_set, *, muted=False):

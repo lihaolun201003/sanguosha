@@ -899,6 +899,38 @@ class Game(
             return getattr(armor, "name", None) == name
         return self.virtual_armor(player) == name
 
+    def dying_state(self):
+        """谁在濒死、现在轮到谁救。**只读查询**，表现层用它画座位的危险状态。
+
+        返回 ``(濒死角色, 当前被问的救援者)``；没有濒死时 ``(None, None)``。
+
+        界面需要这个信息才能让玩家"一眼看到谁快死了、该谁救"——以前只能从
+        提示条与战报里读。这里只读活着的 ``DyingFlow``，不判断任何规则
+        （能不能救、要几张桃，都由流程发出的请求给出）。
+        """
+
+        from .flows.dying import DyingFlow
+
+        # 濒死流程**不在** ``engine.active_flows`` 里：它挂在当前待回答请求的
+        # ``owner_flow`` 上（这是所有可恢复流程的统一写法）。所以先看栈顶请求，
+        # 再看引擎那两份登记表兜底。
+        candidates = []
+        request = getattr(self, "pending_request", None)
+        owner = getattr(request, "owner_flow", None)
+        if owner is not None:
+            candidates.append(owner)
+        engine = getattr(self, "engine", None)
+        if engine is not None:
+            candidates.extend(getattr(engine, "active_flows", ()) or ())
+            candidates.extend(getattr(engine, "_flow_stack", ()) or ())
+        for flow in candidates:
+            if not isinstance(flow, DyingFlow):
+                continue
+            status = getattr(getattr(flow, "status", None), "value", "")
+            if status in ("running", "waiting"):
+                return flow.dying_player, flow.current_rescuer
+        return None, None
+
     def hand_limit(self, player):
         base = max(0, player.hp)
         if not hasattr(self, "modifiers"):

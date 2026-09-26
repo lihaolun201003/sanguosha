@@ -122,11 +122,41 @@ def place_tooltip(anchor, size, viewport, *, avoid=(), gap=None, margin=None):
     )
 
 
-def draw_state_border(surface, rect, state_name, *, radius=None, alpha=132):
+def draw_state_dim(surface, rect, state_name):
+    """按视觉状态画"压暗层"（``dim`` 非 0 时才有内容）。
+
+    **必须画在元素内容之上**：原来压暗与描边一起画在内容之前，于是座位变暗
+    只暗了底板——头像、名字、血量、装备原封不动，"非法目标"与"阵亡"看起来
+    只暗了一半。拆成两个函数之后顺序由调用方决定：
+
+        底板 → 内容 → draw_state_dim → draw_state_border → 角标
+
+    返回是否真的画了东西。
+    """
+
+    state = theme.visual_state(state_name)
+    dim = int(state.get("dim") or 0)
+    if dim <= 0:
+        return False
+    rect = pygame.Rect(rect)
+    veil = pygame.Surface(rect.size, pygame.SRCALPHA)
+    veil.fill((*theme.VEIL, dim))
+    surface.blit(veil, rect.topleft)
+    return True
+
+
+def draw_state_border(surface, rect, state_name, *, radius=None, alpha=132,
+                      hovered=False, label=False, metrics=None, inset=None):
     """按视觉状态画描边 + 外发光（唯一入口，组件不再自己配颜色与宽度）。
 
     ``rect`` 是元素的实际边界：发光向外扩散，但点击区域仍以 ``rect`` 为准，
     所以更亮更大的高亮不会改变真实的可点范围。
+
+    * ``hovered`` —— 叠加**悬停层**。悬停与语义状态正交：鼠标停在"当前回合"
+      角色上时金边与角标都保留、外面再多一圈柔光；停在"非法目标"上时压暗
+      照旧。这修掉了原来 hover 把语义状态洗掉的问题。
+    * ``label`` —— 是否画状态角标（座位要，小卡牌不要）。
+    * ``inset`` —— 角标离右上角的距离（默认 ``metrics.px(7)``）。
     """
 
     state = theme.visual_state(state_name)
@@ -134,24 +164,90 @@ def draw_state_border(surface, rect, state_name, *, radius=None, alpha=132):
     if radius is None:
         radius = theme.RADIUS_PANEL
 
-    dim = int(state.get("dim") or 0)
-    if dim > 0:
-        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, dim))
-        surface.blit(veil, rect.topleft)
+    # 悬停层先画：它更外圈、更柔，语义描边压在上面才清晰。
+    if hovered:
+        layer = theme.HOVER_LAYER
+        halo = int(layer.get("glow_width") or 0)
+        border = theme.glow_border(
+            rect.size, layer["border"], int(layer["width"]), halo, radius, alpha)
+        surface.blit(border, (rect.x - halo, rect.y - halo))
 
     stroke = int(state.get("width") or 0)
-    if stroke <= 0:
-        return rect
-    halo = int(state.get("glow_width") or 0)
-    border = theme.glow_border(
-        rect.size, state["border"], stroke, halo, radius, alpha)
-    surface.blit(border, (rect.x - halo, rect.y - halo))
+    if stroke > 0:
+        halo = int(state.get("glow_width") or 0)
+        border = theme.glow_border(
+            rect.size, state["border"], stroke, halo, radius, alpha)
+        surface.blit(border, (rect.x - halo, rect.y - halo))
+
+    if label and metrics is not None:
+        draw_state_label(surface, rect, state_name, metrics.fonts, metrics,
+                         inset=inset)
     return rect
 
 
-def draw_state_label(surface, rect, state_name, font_set, metrics, *, inset=None):
-    """在元素右上角画状态角标（如「当前回合」「目标」「已选」）。"""
+# ==================================================
+# 模态框 / 演出面板的统一外观
+#
+# 原来 14 个弹层各写各的：遮罩 alpha 有 168/170/172/176/190 五档、填充有
+# PANEL 与 PANEL_DEEP 两套、圆角有 10/12/16/18/22 五种。全部收到这里。
+# ==================================================
+
+
+def draw_modal_veil(surface, metrics, *, alpha=None):
+    """全屏压暗遮罩（模态框专用）。``alpha`` 不给就用统一值。"""
+
+    veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
+    veil.fill((*theme.OVERLAY_DIM, theme.MODAL_VEIL_ALPHA if alpha is None else int(alpha)))
+    surface.blit(veil, (0, 0))
+    return veil
+
+
+def draw_modal_panel(surface, rect, metrics, *, radius=None, width=None,
+                     fill=None, border=None, glow=None):
+    """模态框 / picker 的面板外观（统一填充、描边、圆角、投影）。"""
+
+    rect = pygame.Rect(rect)
+    return draw_panel(
+        surface, rect,
+        fill=theme.MODAL_FILL if fill is None else fill,
+        border=theme.MODAL_BORDER if border is None else border,
+        radius=theme.MODAL_RADIUS if radius is None else radius,
+        border_width=theme.MODAL_WIDTH if width is None else width,
+        glow=glow,
+    )
+
+
+def draw_demo_panel(surface, rect, *, tone=None, radius=None, alpha=244,
+                    metrics=None):
+    """演出面板（判定 / 技能提示 / 火攻）的统一外观。
+
+    与模态框的区别：**不铺全屏遮罩**（演出不该把牌桌整个压黑），面板自身
+    带一点透明、金色描边、内圈语义色细线。``tone`` 给语义色（判定 tone /
+    技能类型色）时画内圈。
+    """
+
+    rect = pygame.Rect(rect)
+    layer = pygame.Surface(rect.size, pygame.SRCALPHA)
+    local = layer.get_rect()
+    radius = theme.RADIUS_LARGE if radius is None else radius
+    fill = (*theme.PANEL_DEEP, alpha)
+    pygame.draw.rect(layer, fill, local, border_radius=radius)
+    if tone is not None:
+        pygame.draw.rect(layer, (*tone, 150), local.inflate(-6, -6),
+                         theme.BORDER_THIN, border_radius=max(2, radius - 4))
+    pygame.draw.rect(layer, theme.MODAL_BORDER, local, theme.BORDER_MODAL,
+                     border_radius=radius)
+    surface.blit(layer, rect.topleft)
+    return rect
+
+
+def draw_state_label(surface, rect, state_name, font_set, metrics, *, inset=None,
+                     right=None, top=None):
+    """在元素右上角画状态角标（如「当前回合」「目标」「已选」）。
+
+    ``right`` 给定时用它作为角标右边界、``top`` 作为上边界——座位顶部要并排
+    挂两三个角标（角色状态 / 操作态 / 横置）时，调用方依次向左排。
+    """
 
     state = theme.visual_state(state_name)
     label = state.get("label")
@@ -166,7 +262,8 @@ def draw_state_label(surface, rect, state_name, font_set, metrics, *, inset=None
         rendered.get_width() + metrics.px(16),
         rendered.get_height() + metrics.px(8),
     )
-    badge.topright = (rect.right - offset, rect.y + offset)
+    badge.topright = (rect.right - offset if right is None else right,
+                      rect.y + offset if top is None else top)
     pygame.draw.rect(surface, state["border"], badge, border_radius=metrics.px(7))
     surface.blit(rendered, rendered.get_rect(center=badge.center))
     return badge

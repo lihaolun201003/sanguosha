@@ -5,7 +5,13 @@ import pygame
 from . import assets as assets_module
 from . import cards as card_draw
 from . import theme
-from .widgets import Button, draw_panel, ellipsize_text
+from .widgets import (
+    Button,
+    draw_modal_panel,
+    draw_modal_veil,
+    draw_panel,
+    ellipsize_text,
+)
 
 WIN_TITLE = "胜 利"
 LOSE_TITLE = "战 败"
@@ -97,13 +103,32 @@ class GameOverOverlay:
         return LOSE_TITLE, winner_text, theme.TEXT_DIM
 
     def identity_rows(self, game):
-        """结算面板要列出的每位玩家身份 / 武将 / 存活情况。"""
+        """结算面板要列出的每位玩家：武将 / （身份）/ 存活情况。
+
+        身份模式用模式自己的 ``result_lines``（含阵营归属）。**非身份模式也
+        要有列表**——原来它只显示最后一条战报，玩家看不到"这局都有谁、谁活着"，
+        结算信息严重不足。这里按同一张表格的字段从 ``game.players`` 现取，
+        没有身份字段就留空，渲染层会自动少画一张身份牌。
+        """
 
         mode = getattr(game, "mode", None)
-        if mode is None or not getattr(mode, "uses_identities", False):
-            return ()
-        if hasattr(mode, "result_lines"):
-            return mode.result_lines()
+        if mode is not None and getattr(mode, "uses_identities", False):
+            if hasattr(mode, "result_lines"):
+                return mode.result_lines()
+        rows = []
+        for player in getattr(game, "players", ()) or ():
+            general = None
+            generals = getattr(game, "generals", None)
+            if generals is not None:
+                general = generals.get(getattr(player, "general_id", None))
+            rows.append({
+                "name": str(getattr(player, "name", "") or ""),
+                "identity": "",
+                "general": str(getattr(general, "name", "") or ""),
+                "alive": bool(getattr(player, "alive", False) and player.hp > 0),
+                "is_human": player is getattr(game, "player", None),
+            })
+        return tuple(rows)
         return ()
 
     def handle_click(self, position):
@@ -120,14 +145,12 @@ class GameOverOverlay:
             self.layout(metrics)
             metrics = self.metrics
 
-        veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, 190))
-        surface.blit(veil, (0, 0))
+        # 结算框与其它模态共用同一套遮罩/面板外观（不再单独一档更黑的遮罩）。
+        draw_modal_veil(surface, metrics)
 
         fonts = metrics.fonts
         rect = self.panel_rect
-        draw_panel(surface, rect, fill=theme.PANEL, border=theme.GOLD,
-                   border_width=theme.BORDER_THICK, radius=metrics.px(16))
+        draw_modal_panel(surface, rect, metrics)
 
         title, subtitle, color = self.result_texts(game)
 
@@ -182,31 +205,41 @@ class GameOverOverlay:
             general_thumb = pygame.Rect(0, 0, thumb_width, thumb_height)
             identity_thumb = pygame.Rect(0, 0, thumb_width, thumb_height)
 
-            label = "%s　%s　%s" % (
-                row.get("name", ""),
-                row.get("identity", ""),
-                row.get("general", ""),
-            )
+            parts = [str(row.get("name", "") or "")]
+            if row.get("identity"):
+                parts.append(str(row["identity"]))
+            if row.get("general"):
+                parts.append(str(row["general"]))
+            label = "　".join(parts)
             mark = "存活" if alive else "阵亡"
             mark_color = theme.HEAL if alive else theme.DANGER
 
             label_width = name_font.size(label)[0]
             mark_width = small.size(mark)[0]
             gap = metrics.px(10)
-            total = thumb_width * 2 + gap * 3 + label_width + metrics.px(16) + mark_width
+            # 非身份模式没有身份牌：不占位、不画空框，整行左移半张牌宽。
+            has_identity = bool(row.get("identity_id") or row.get("identity"))
+            thumbs = 2 if has_identity else 1
+            total = (thumb_width * thumbs + gap * (thumbs + 1)
+                     + label_width + metrics.px(16) + mark_width)
             start_x = max(rect.x + metrics.px(24), rect.centerx - total // 2)
 
             self._blit_thumb(
-                surface, registry, assets_module.general_asset_id(row.get("general_id") or ""),
-                general_thumb.move(start_x, center_y - thumb_height // 2), metrics, alive)
-
-            identity_x = start_x + thumb_width + gap
-            self._blit_thumb(
                 surface, registry,
-                assets_module.identity_asset_id(row.get("identity_id") or "") if row.get("identity_id") else None,
-                identity_thumb.move(identity_x, center_y - thumb_height // 2), metrics, alive)
+                assets_module.general_asset_id(row.get("general_id") or ""),
+                general_thumb.move(start_x, center_y - thumb_height // 2), metrics,
+                alive, label=str(row.get("general", "")))
 
-            text_x = identity_x + thumb_width + gap
+            text_x = start_x + thumb_width + gap
+            if has_identity:
+                identity_x = text_x
+                self._blit_thumb(
+                    surface, registry,
+                    assets_module.identity_asset_id(row.get("identity_id") or "")
+                    if row.get("identity_id") else None,
+                    identity_thumb.move(identity_x, center_y - thumb_height // 2),
+                    metrics, alive, label=str(row.get("identity", "")))
+                text_x = identity_x + thumb_width + gap
             rendered = name_font.render(
                 ellipsize_text(label, name_font, rect.right - text_x - metrics.px(90)),
                 True, color)
@@ -217,8 +250,12 @@ class GameOverOverlay:
                 midleft=(text_x + rendered.get_width() + metrics.px(16), center_y)))
 
     @staticmethod
-    def _blit_thumb(surface, registry, asset_id, rect, metrics, alive):
-        """画一个小缩略图；没有素材就画一个中性的空框（不显示错误信息）。"""
+    def _blit_thumb(surface, registry, asset_id, rect, metrics, alive, label=""):
+        """画一个小缩略图。
+
+        没有素材（或没有 asset_id）时**不留空框**：在框里画这个位置代表谁的
+        一个字（武将名的首字 / "身份"），否则整行看起来像少了东西。
+        """
 
         if asset_id:
             source = registry.surface(asset_id)
@@ -237,3 +274,9 @@ class GameOverOverlay:
                     return
         pygame.draw.rect(surface, theme.PANEL_SUNKEN, rect, border_radius=metrics.px(4))
         pygame.draw.rect(surface, theme.GOLD_DIM, rect, 1, border_radius=metrics.px(4))
+        # 没有素材也要让人看出这一格代表谁：画一个字，而不是留空框。
+        text = str(label or "").strip()
+        if text and rect.width >= metrics.px(10) and rect.height >= metrics.px(12):
+            font = metrics.fonts.get(theme.FONT_FALLBACK_MICRO)
+            glyph = font.render(text[0], True, theme.TEXT_SECONDARY if alive else theme.TEXT_MUTED)
+            surface.blit(glyph, glyph.get_rect(center=rect.center))

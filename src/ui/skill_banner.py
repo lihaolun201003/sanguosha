@@ -39,6 +39,17 @@ KIND_TONES = {
     "触发技": theme.RESPONDING,
 }
 
+#: MINOR（轻量）提示条的尺寸与位置：给锁定技 / 高频触发技用。
+#: 它**不铺面板、不带武将卡**，只是一条贴着顶边的小横条——郭嘉一类技能
+#: 会连续触发，用大横幅会让玩家一直被弹窗打断。
+MINOR_WIDTH = 460
+MINOR_HEIGHT = 58
+MINOR_TOP_RATIO = 0.055
+
+#: 哪些技能类型算"重要"（用大横幅）。主动技与视为技是玩家**自己点出来**的，
+#: 必须看清；锁定技 / 触发技是被动发生的，用轻量条。
+MAJOR_KINDS = ("主动技", "视为技")
+
 
 class SkillBanner:
     """一次技能发动提示的展示状态（同一时刻只展示一条：队列保证了顺序）。"""
@@ -54,6 +65,8 @@ class SkillBanner:
         self.kind_label = ""
         self.text = ""
         self.targets = ()
+        #: 重要技能（主动技 / 视为技）用大横幅；其余用轻量条。
+        self.major = True
         #: 最近一次算出来的面板矩形（tooltip 避让用）。
         self._rect = None
 
@@ -62,9 +75,12 @@ class SkillBanner:
     # ==================================================
 
     def show(self, player, skill_name, *, skill_id="", kind_label="", text="",
-             targets=(), duration=2.0):
+             targets=(), duration=2.0, major=None):
         if player is None or not skill_name:
             return self
+        if major is None:
+            major = str(kind_label or "") in MAJOR_KINDS or not kind_label
+        self.major = bool(major)
         self.active = True
         self.total = max(0.4, float(duration))
         self.timer = self.total
@@ -126,7 +142,18 @@ class SkillBanner:
         return lines or [""]
 
     def rect(self, metrics, game=None):
-        """面板矩形（设计坐标经 metrics 缩放；高度按真实文字行数算）。"""
+        """面板矩形（设计坐标经 metrics 缩放；高度按真实文字行数算）。
+
+        MINOR 档走另一套尺寸：一条贴着顶边的小横条，只够放"【技能名】+ 类型"。
+        """
+
+        if not self.major:
+            width = min(metrics.px(MINOR_WIDTH), int(metrics.screen_w * 0.46))
+            height = metrics.px(MINOR_HEIGHT)
+            rect = pygame.Rect(0, 0, width, height)
+            # 贴顶：与大横幅（0.16 屏高）拉开距离，同时不压中央战场。
+            rect.midtop = (metrics.screen_w // 2, int(metrics.screen_h * MINOR_TOP_RATIO))
+            return rect
 
         width = min(metrics.px(PANEL_WIDTH), int(metrics.screen_w * 0.86))
         pad = metrics.px(PANEL_PAD)
@@ -155,6 +182,8 @@ class SkillBanner:
             return None
         panel = self.rect(metrics, game)
         self._rect = panel
+        if not self.major:
+            return self._draw_minor(surface, panel, metrics)
         pad = metrics.px(PANEL_PAD)
         gap = metrics.px(COLUMN_GAP)
         art_w = metrics.px(ART_WIDTH)
@@ -176,6 +205,41 @@ class SkillBanner:
         text_x = pad + art_w + gap
         text_w = panel.width - text_x - pad
         self._draw_text(layer, text_x, body_top, text_w, metrics, tone)
+
+        if self.alpha < 255:
+            layer.set_alpha(self.alpha)
+        surface.blit(layer, panel.topleft)
+        return panel
+
+    def _draw_minor(self, surface, panel, metrics):
+        """轻量技能条：`【技能名】  类型 · 角色名`，一条细横条。
+
+        锁定技与高频触发技走这里。它不是"小号的大横幅"——不铺面板、不带
+        武将卡、不遮牌桌中央，只是让玩家知道"刚刚发生了什么、是谁的"。
+        """
+
+        layer = pygame.Surface(panel.size, pygame.SRCALPHA)
+        local = layer.get_rect()
+        tone = KIND_TONES.get(self.kind_label, theme.GOLD_BRIGHT)
+        pygame.draw.rect(layer, (*theme.PANEL_DEEP, 232), local,
+                         border_radius=metrics.px(theme.RADIUS_SMALL))
+        pygame.draw.rect(layer, theme.GOLD_DIM, local, metrics.px(2),
+                         border_radius=metrics.px(theme.RADIUS_SMALL))
+        pygame.draw.rect(layer, (*tone, 170), local.inflate(-metrics.px(5), -metrics.px(5)),
+                         metrics.px(2), border_radius=metrics.px(theme.RADIUS_SMALL))
+
+        name_font = metrics.fonts.get(theme.FONT_SECTION)
+        meta_font = metrics.fonts.get(theme.FONT_SMALL)
+        name = name_font.render("【" + self.skill_name + "】", True, tone)
+        meta_bits = [bit for bit in (self.kind_label, self.player.name) if bit]
+        meta = meta_font.render("  ·  ".join(meta_bits), True, theme.TEXT_SECONDARY)
+        gap = metrics.px(14)
+        total = name.get_width() + (gap + meta.get_width() if meta_bits else 0)
+        x = max(metrics.px(12), (panel.width - total) // 2)
+        layer.blit(name, name.get_rect(midleft=(x, panel.centery)))
+        if meta_bits:
+            layer.blit(meta, meta.get_rect(midleft=(x + name.get_width() + gap,
+                                                    panel.centery)))
 
         if self.alpha < 255:
             layer.set_alpha(self.alpha)

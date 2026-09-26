@@ -58,6 +58,8 @@ DANGER = (196, 78, 62)
 DANGER_DEEP = (112, 44, 38)
 HEAL = (108, 186, 152)
 CHAIN = (146, 176, 232)
+CHAIN_DIM = (104, 126, 168)
+CHAIN_BRIGHT = (188, 212, 252)
 DEAD_TINT = (78, 72, 64)
 DISABLED_FILL = (74, 66, 58)
 DISABLED_TEXT = (132, 122, 106)
@@ -232,6 +234,76 @@ RADIUS_CARD = 9
 RADIUS_PANEL = 12
 RADIUS_BUTTON = 9
 
+# ==================================================
+# 尺寸 token（语义名）
+#
+# 组件不再写 magic number：圆角只有三档，边框只有两档，间距只有四档。
+# 旧的 ``RADIUS_*`` / ``BORDER_*`` 保留为别名，免得改一堆调用点。
+# ==================================================
+
+RADIUS_SMALL = 8          # 小徽章 / 装备格 / 内层小框
+RADIUS_MEDIUM = RADIUS_CARD   # 卡牌 / 按钮 / 输入框
+RADIUS_LARGE = 18         # 演出面板 / 专用交互面板
+RADIUS_MODAL = 16         # 模态框与 picker
+
+BORDER_NORMAL = 3
+BORDER_STRONG = 4
+#: 模态框 / 演出面板的描边
+BORDER_MODAL = 3
+
+PANEL_PADDING = 16        # 面板内边距
+MODAL_PADDING = 24        # 模态框内边距
+CARD_GAP = 10             # 卡牌之间的间距
+SECTION_GAP = 18          # 面板内的分区间距
+
+# ---- 语义色别名：写代码时用"用途"而不是"颜色" ----
+#
+# 这些与上面的颜色是同一个值。新增界面请优先用语义名（``TEXT_SECONDARY``
+# 比 ``TEXT_DIM`` 更说明问题），旧名字继续可用。
+BACKGROUND = BG_DEEP
+TABLE_SURFACE = BG_TABLE
+PANEL_ELEVATED = PANEL_ALT
+OVERLAY_DIM = VEIL
+
+TEXT_PRIMARY = TEXT
+TEXT_SECONDARY = TEXT_DIM
+
+ACCENT = GOLD
+WARNING = TARGET_YELLOW
+SUCCESS = JADE
+DANGER_SOFT = BLOOD
+
+LEGAL = TARGET_BLUE        # 可点 / 合法
+ILLEGAL = CARD_MUTED_TEXT  # 不可点 / 非法
+SELECTED = TARGET_YELLOW   # 已选中
+HOVER = (146, 200, 232)    # 鼠标悬停（见下面的 HOVER_LAYER）
+CURRENT_TURN = GOLD_BRIGHT
+CURRENT_RESPONDER = RESPONDING
+SKILL_ACTIVE = JADE_BRIGHT
+#: 判定语义色见 JUDGE_TONE_COLORS
+
+# ---- 字体档位（对应 FONT_SIZES 的键，界面按"用途"取 ----
+
+FONT_TITLE = "title"       # 页面级标题
+FONT_MODAL = "large"       # 模态框标题
+FONT_SECTION = "normal"    # 面板小标题 / 正文强调
+FONT_BODY = "small"        # 正文
+FONT_SMALL = "tiny"        # 次要说明
+FONT_STATUS = "seat_small"  # 角色状态数字（与 micro 同值）
+FONT_CARD = "card"         # 卡面文字
+FONT_SKILL = "small"       # 技能说明
+FONT_BADGE = "micro"       # 角标
+FONT_FALLBACK_MICRO = "micro"  # 缩略图/占位字
+
+# ---- 模态框的统一视觉（所有 picker / 确认框 / 结算框共用）----
+
+MODAL_VEIL_ALPHA = 176     # 遮罩浓度（原来有 168/170/172/176/190 五档）
+MODAL_FILL = PANEL
+MODAL_BORDER = GOLD
+MODAL_WIDTH = BORDER_MODAL
+MODAL_RADIUS = RADIUS_MODAL
+DEMO_PANEL_VEIL_ALPHA = 150  # 演出面板的遮罩（比模态轻，不全屏压暗）
+
 # 边框
 BORDER_THIN = 2
 BORDER = 3
@@ -252,7 +324,21 @@ BORDER_THICK = 4
 #     dim           整体压暗的 alpha（0 = 不压暗）
 #     label         状态角标文案（None = 不显示）
 #
-# 强度层次刻意拉开：合法目标 < hover < 选中，保证一眼能分辨。
+# # 两件必须分开的事：语义状态（互斥）与悬停（正交）
+#
+# 原来的做法把 hover 也塞进状态归并，于是鼠标一扫就出事：
+#
+#   * hover(46) 优先级高于 current_turn(44) —— 移到当前回合角色上，
+#     金色描边被换成蓝色，**「当前回合」角标直接消失**；
+#   * hover(46) 高于 invalid_target(20) —— 移到非法目标上，压暗被取消，
+#     那个座位看起来反而像能点。
+#
+# 现在 hover **不参与归并**：它是一个独立的叠加层（``HOVER_LAYER``），
+# 由绘制方用 ``hovered=`` 参数叠在语义状态之上。这样"当前回合 + 鼠标在上面"
+# 和"非法目标 + 鼠标在上面"都能同时表达，不再互相洗掉。
+#
+# 强度层次（从弱到强）：普通 < 悬停叠加 < 合法目标 < 已选目标 < 响应中
+#                     < 技能发动 < 濒死 < 阵亡
 
 VISUAL_STATES = {
     # 中性：什么都没发生
@@ -260,9 +346,10 @@ VISUAL_STATES = {
         "border": GOLD_DIM, "width": BORDER, "glow": None, "glow_width": 0,
         "dim": 0, "label": None,
     },
-    # 鼠标悬停：亮边 + 轻微发光
+    # 中性悬停：**只在没有任何语义状态时**才会被 resolve 选中（优先级最低档）。
+    # 真正的悬停反馈由 HOVER_LAYER 叠加，见上面的说明。
     "hover": {
-        "border": (146, 200, 232), "width": 4, "glow": TARGET_BLUE,
+        "border": HOVER, "width": 4, "glow": TARGET_BLUE,
         "glow_width": 4, "dim": 0, "label": None,
     },
     # 已选中（手牌 / source / 费用牌）：最粗 + 双层发光 + 角标
@@ -336,11 +423,51 @@ VISUAL_STATES = {
         "border": BRONZE, "width": 3, "glow": None, "glow_width": 0,
         "dim": 0, "label": None,
     },
+    # ---- 角色级：濒死与技能发动 ----
+
+    # 濒死：危险色描边 + 外发光 + 角标。比"响应中"更紧急（人快没了），
+    # 但比"阵亡"弱一档（还在救）。
+    "dying": {
+        "border": DANGER, "width": 6, "glow": DANGER, "glow_width": 12,
+        "dim": 0, "label": "濒死",
+    },
+    # 技能发动：这名角色刚刚发动了技能，武将区短暂高亮。
+    # 与"目标/血线"无关，只是让玩家看清"是谁发动了什么"。
+    "skill_acting": {
+        "border": SKILL_ACTIVE, "width": 5, "glow": JADE, "glow_width": 9,
+        "dim": 0, "label": None,
+    },
+
+    # ---- 卡牌级：出牌许可与各种候选 ----
+
+    # 本回合**可以打出**的牌：正向强调（以前只有"不能出的变灰"，
+    # 玩家得靠排除法才知道哪些能出）。
+    "legal_card": {
+        "border": JADE_BRIGHT, "width": BORDER, "glow": JADE_DIM,
+        "glow_width": 4, "dim": 0, "label": None,
+    },
+    # 响应窗口里许可打出的牌（闪 / 桃 / 无懈）
+    "response_candidate": {
+        "border": JADE_BRIGHT, "width": 4, "glow": HEAL,
+        "glow_width": 5, "dim": 0, "label": None,
+    },
+    # 弃牌阶段可按手牌上限弃掉的牌
+    "discard_candidate": {
+        "border": BRONZE_BRIGHT, "width": 3, "glow": None,
+        "glow_width": 0, "dim": 0, "label": None,
+    },
+
     # 阵亡
     "dead": {
         "border": (88, 82, 74), "width": BORDER_THIN, "glow": None,
         "glow_width": 0, "dim": 150, "label": "阵亡",
     },
+}
+
+#: 悬停叠加层：与语义状态**正交**，画在语义描边之外再补一圈柔光。
+#: 任何元素（座位 / 卡牌 / 技能按钮）都可以叠它，语义状态不受影响。
+HOVER_LAYER = {
+    "border": HOVER, "width": 3, "glow": TARGET_BLUE, "glow_width": 6,
 }
 
 # 状态归并优先级：数字越大越优先。
@@ -351,19 +478,27 @@ STATE_PRIORITY = {
     "pool_selected": 92,
     "draft_focus": 60,
     "pool_hover": 42,
+    # 濒死：比任何"操作态"都紧急（这个人马上要死了），但低于阵亡。
+    "dying": 118,
     "selected": 90,
     "selected_target": 90,
     "view_as_source": 88,
-    # Phase 10.5 统一优先级：
-    # selected > 正在响应 > 合法目标 > hover > 当前回合 > 普通
+    # 技能发动：短暂高亮，盖过操作态，好让玩家看清是谁在发动。
+    "skill_acting": 86,
     # "引擎正在等这个人回答"比"他可以被选"更紧急，所以排在合法目标之前。
-    "pending_response": 80,
-    "valid_target_hover": 74,
-    "valid_target": 72,
-    "hover": 46,
-    "current_turn": 44,
-    "view_as_candidate": 40,
-    "invalid_target": 20,
+    "pending_response": 84,
+    # 当前回合 > 合法目标：目标选择期间也要能看出"谁在行动"，所以
+    # 「当前回合」的描边不会被目标高亮顶掉（两者同时需要时以回合为准，
+    # 目标信息由角标补足）。
+    "current_turn": 82,
+    "valid_target_hover": 76,
+    "valid_target": 74,
+    "legal_card": 62,
+    "response_candidate": 60,
+    "view_as_candidate": 56,
+    "discard_candidate": 54,
+    "hover": 50,
+    "invalid_target": 30,
     "playable": 30,
     "disabled": 15,
     "none": 0,

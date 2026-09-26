@@ -324,6 +324,9 @@ class SkillStep(TimedStep):
     holds_ui = True
     min_duration = 1.10
 
+    #: 用大横幅的技能类型（玩家自己点出来的，必须看清）。其余走轻量条。
+    MAJOR_KINDS = ("active", "view_as")
+
     def __init__(self, player, skill_id, skill_name, targets=(), text="", kind_label="",
                  skill_kind=""):
         super().__init__()
@@ -336,13 +339,18 @@ class SkillStep(TimedStep):
         #: 规则层声明的技能类型（``active`` / ``view_as`` / ``locked`` / ``passive``）。
         #: UI 不猜：判定面板 / 技能条 / 提示面板读的是同一份声明。
         self.skill_kind = str(skill_kind or "")
+        #: 两级演出：主动技 / 视为技是大横幅，锁定技 / 触发技是轻量条。
+        #: 高频触发技（郭嘉一类）用大横幅会让玩家一直被弹窗打断。
+        self.major = self.skill_kind in self.MAJOR_KINDS
         self.blocking = self.skill_kind == "active"
-        self.duration = _timing().story_skill
+        self.duration = (_timing().story_skill if self.major
+                         else _timing().story_skill_minor)
 
     def start(self, effects):
         effects.show_skill_banner(
             self.player, self.skill_name, self.targets,
-            skill_id=self.skill_id, kind_label=self.kind_label, text=self.text)
+            skill_id=self.skill_id, kind_label=self.kind_label, text=self.text,
+            major=self.major, duration=self.duration)
 
     def presentation_extra(self):
         return {

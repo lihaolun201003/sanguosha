@@ -14,6 +14,7 @@ from src.game.engine import EventType
 from . import layout as layout_module
 from . import theme
 from .judge import JudgePanel
+from .identity_flash import IdentityFlash
 from .skill_banner import SkillBanner
 from .storyboard import (
     CardStep,
@@ -240,6 +241,22 @@ class FXTiming:
         """
 
         return self._t(1.55)
+
+    @property
+    def story_skill_minor(self):
+        """轻量技能条（锁定技 / 高频触发技）的停留时间。
+
+        它只回答"刚刚发生了什么、是谁的"，不要求玩家看清说明，所以比大横幅
+        短得多——连续触发的技能不会把玩家按在提示条上。
+        """
+
+        return self._t(0.85)
+
+    @property
+    def story_identity(self):
+        """身份揭示演出的停留时间（阵亡后翻开身份）。"""
+
+        return self._t(2.10)
 
     @property
     def story_damage(self):
@@ -592,6 +609,8 @@ class Effects:
         self.storyboard = PresentationQueue(self)
         # 技能发动提示（武将与技能名 / 类型 / 说明）。
         self.skill_banner = SkillBanner()
+        # 身份揭示演出（身份模式下阵亡时翻开身份）。
+        self.identity_flash = IdentityFlash()
         # 结算提示条（判定结果 / 阶段跳过）的当前内容。
         self.story_banner = None
         self.story_timer = 0.0
@@ -600,6 +619,10 @@ class Effects:
         self.story_errors = []
         #: 已经结束的出牌（CARD_USE_FINISHED）：迟到的出牌演出不再长期挂箭头。
         self._finished_cards = set()
+        #: 技能发动高亮：这名角色的武将区短暂亮起，让玩家看清"是谁发动了什么"。
+        #: 存 (角色, 剩余秒数)；同一角色重复发动会刷新而不是叠加。
+        self._skill_actor = None
+        self._skill_actor_left = 0.0
         #: 判定展示期间压住动作队列的开关（绑定方法只取一次，便于身份比较）。
         self._action_gate = self._holds_actions
         self.turn_banner = None
@@ -1053,6 +1076,10 @@ class Effects:
 
         if player is None or not skill_name:
             return
+        # 座位上的武将区高亮：与浮动文字/横幅是三种不同强度的提示，
+        # 一起出现才不会"技能发动了但不知道是谁"。
+        self._skill_actor = player
+        self._skill_actor_left = timing().skill_float
         if float_text:
             x, y = self._anchor(player)
             self.floats.append(FloatText("【" + str(skill_name) + "】", (x, y),
@@ -1063,7 +1090,7 @@ class Effects:
                            label=str(skill_name))
 
     def show_skill_banner(self, player, skill_name, targets=(), *, skill_id="",
-                          kind_label="", text="", duration=None):
+                          kind_label="", text="", duration=None, major=True):
         """技能发动提示面板：武将卡 + 玩家名 + 技能名 / 类型 / 说明。
 
         名称、类型、说明都由**规则层**给出（``SKILL_TRIGGERED`` 载荷里就有
@@ -1078,9 +1105,11 @@ class Effects:
         if player is None or not skill_name:
             return None
         if duration is None:
-            duration = timing().story_skill / self._speed_factor()
+            base = timing().story_skill if major else timing().story_skill_minor
+            duration = base / self._speed_factor()
         self.skill_banner.show(player, skill_name, skill_id=skill_id, kind_label=kind_label,
-                               text=text, targets=targets, duration=duration)
+                               text=text, targets=targets, duration=duration,
+                               major=major)
         # 面板已经写明"谁发动了什么"，抖动感更强的浮字就不重复了。
         self.show_skill(player, skill_name, targets, float_text=False)
         return self.skill_banner
@@ -1102,6 +1131,16 @@ class Effects:
         if registry is None or not skill_id:
             return None
         return registry.get(skill_id)
+
+    def show_identity(self, player, label, *, general=None, duration=None):
+        """身份揭示：阵亡后把身份正式翻开给全场看。"""
+
+        if player is None or not label:
+            return None
+        if duration is None:
+            duration = timing().story_identity / self._speed_factor()
+        return self.identity_flash.show(player, label, general=general,
+                                        duration=duration)
 
     def show_story_banner(self, text, detail="", tone="", kind=STEP_RESULT):
         """结算提示条：结论必须停留到玩家看清（时长由演出队列决定）。"""
@@ -1206,6 +1245,12 @@ class Effects:
     #
     # 快照可以立刻把体力改成 0、把 alive 改成 False，但画面必须等判定 /
     # 伤害演完再变。三个查询是 UI 读"该显示什么"的唯一入口。
+
+    def skill_acting(self, player):
+        """这名角色此刻是不是"正在发动技能"（座位武将区短暂高亮）。"""
+
+        return (player is not None and self._skill_actor is player
+                and self._skill_actor_left > 0)
 
     def display_hp(self, player, base=None):
         if player is None:
@@ -1400,6 +1445,32 @@ class Effects:
 
     def _on_death(self, _context, event):
         self.present_death(event.target)
+        self._maybe_reveal_identity(event.target)
+
+    def _maybe_reveal_identity(self, player):
+        """阵亡后如果这名角色的身份现在**已经公开**，就演一次"身份翻开"。
+
+        可见性判断走规则层（``visible_identity``）：身份模式下阵亡即公开，
+        非身份模式没有身份可翻——界面不自己决定谁能看。
+        """
+
+        game = self.game
+        if player is None or game is None:
+            return
+        mode = getattr(game, "mode", None)
+        if mode is None or not getattr(mode, "uses_identities", False):
+            return
+        from src.game.identity import identity_name
+        from src.game.view.visibility import visible_identity
+
+        label = identity_name(visible_identity(player, viewer=game.player))
+        if not label:
+            return
+        self.show_identity(
+            player, label,
+            general=getattr(game, "generals", None).get(
+                getattr(player, "general_id", None))
+            if getattr(game, "generals", None) is not None else None)
 
     def _on_chain(self, _context, event):
         self.present_chain(event.target, event.payload.get("chained"))
@@ -1541,6 +1612,7 @@ class Effects:
             # 面板不在队列里（直接调用 judge_begin 的旧调用点 / 测试）时仍要推进它。
             self.judge_panel.update(step_dt, self.game)
         self.skill_banner.update(step_dt)
+        self.identity_flash.update(dt, self.storyboard.speed_factor)
         if self.story_timer > 0:
             self.story_timer -= step_dt
             if self.story_timer <= 0:
@@ -1556,6 +1628,11 @@ class Effects:
             self.action_timer -= dt
             if self.action_timer <= 0:
                 self.action_banner = None
+
+        if self._skill_actor_left > 0:
+            self._skill_actor_left = max(0.0, self._skill_actor_left - dt)
+            if self._skill_actor_left <= 0:
+                self._skill_actor = None
 
         for name in ("last_draw_pulse", "last_discard_pulse", "last_play_pulse"):
             value = getattr(self, name, 0.0)

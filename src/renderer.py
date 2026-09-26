@@ -13,6 +13,7 @@ from src.ui import fx as effects_module
 from src.game.conversion import EQUIPMENT_ZONE
 from src.game.identity import identity_name, visible_identity
 from src.ui import layout, player, prompt, seats, table, theme, tooltip
+from src.ui import wuxie_chain
 from src.ui.overlay import GameOverOverlay
 from src.ui.action_picker import CardActionPicker
 from src.ui.huogong import HuogongPanel
@@ -148,6 +149,10 @@ class Renderer:
         # 界面层让路，避免"提示还没看完就已经能点牌了"。
         self.playable = ([] if self.effects.interaction_hold()
                          else player.playable_hand_indices(game))
+        # 响应窗口（求桃 / 出闪 / 无懈）里哪些手牌能打：出牌阶段它是 None，
+        # 两个集合互斥，分别决定"许可绿"的两种语义。
+        self.respondable = (set() if self.effects.interaction_hold()
+                            else player.respondable_hand_indices(game))
 
         # 引擎动画落点跟随当前布局（不再依赖固定的 1000×700 坐标）。
         game.ui_rects = self.table_layout.animation_rects()
@@ -709,6 +714,12 @@ class Renderer:
         )
         in_target_mode = bool(selection) or bool(
             skill_input is not None and skill_input["needs_target"])
+        # 濒死状态与"该谁救"：座位的危险高亮与救援者标记都由它驱动。
+        # 只读引擎的活 DyingFlow，界面不自己判断规则。
+        dying_player, dying_rescuer = (None, None)
+        if hasattr(game, "dying_state"):
+            dying_player, dying_rescuer = game.dying_state()
+
         for player_obj, rect in table_layout.seat_rects.items():
             candidate = bool(selection and player_obj in selection["candidates"])
             selected = bool(selection and player_obj in selection["selected"])
@@ -738,7 +749,12 @@ class Renderer:
                 general=game.generals.get(player_obj.general_id),
                 identity=identity,
                 is_current=player_obj is game.current_turn_player,
-                is_responding=player_obj is responding,
+                # 濒死优先于"正在响应"：正在救人的那位也要被标出来，
+                # 所以两者分开传（座位会把它们排成两个角标）。
+                is_responding=(player_obj is responding
+                               or player_obj is dying_rescuer),
+                dying=player_obj is dying_player,
+                skill_acting=self.effects.skill_acting(player_obj),
                 hovered=player_obj is hovered_player,
                 in_target_mode=in_target_mode,
                 distance_hint=distance_hint,
@@ -776,6 +792,8 @@ class Renderer:
             hidden_ids=owned_ids,
             # 顺手牵羊 / 过河拆桥看到的对方手牌：只画牌背，不泄露内容。
             face_down_ids=game.selection_face_down_ids(),
+            # 公共牌区的当前挑选者（五谷丰登这类公开的集体流程）。
+            chooser=(game.pending_selection or {}).get("owner"),
         )
         table.draw_phase_strip(self.screen, game, metrics, self.get_phase_name(game.phase))
         table.draw_turn_banner(self.screen, metrics, self.effects.turn_display())
@@ -802,6 +820,7 @@ class Renderer:
             game,
             table_layout,
             playable=self.playable,
+            respondable=self.respondable,
             hover_index=table_layout.hand_hover,
             # 开局发牌飞行中的牌 + 正在被移动动画表现的牌，手牌区都不再画。
             skip_card_ids=set(self.effects.dealing_card_ids(game.player)) | owned_ids,
@@ -857,7 +876,14 @@ class Renderer:
         # 动作横幅之上，判定面板之下——判定面板永远是最高层级。
         table.draw_story_banner(
             self.screen, metrics, self.effects.story_display())
+        # 无懈链：多层无懈正在发生时，让玩家看清"哪张牌在被无懈、轮到第几层"。
+        # 它只在链存在时出现，不占常驻画面。
+        wuxie_chain.draw_chain(
+            self.screen, game, metrics,
+            resolve_card=lambda entry: self.resolve_view_card(entry))
         self.effects.skill_banner.draw(self.screen, game, metrics)
+        # 身份揭示：阵亡后翻开身份，与技能横幅同层、判定面板之下。
+        self.effects.identity_flash.draw(self.screen, metrics)
 
         # 悬停提示最后画，保证盖在其他面板之上。
         self._draw_general_tooltip(game, metrics)
@@ -903,6 +929,21 @@ class Renderer:
         panel = self.effects.judge_panel
         if panel.active:
             rects.append(panel.rect(metrics))
+        # 以下区域原来不在名单里，提示框会压在上面：技能条（最常被盖，
+        # 因为它的锚点就在提示框默认弹出的方向）、战报、速度控件、公共牌池、
+        # 技能横幅——盖住任何一处都会让玩家"看不到自己正要用的东西"。
+        for extra in (getattr(metrics, "log_rect", None),
+                      getattr(metrics, "speed_rect", None),
+                      getattr(metrics, "public_pool_rect", None)):
+            if extra is not None:
+                rects.append(extra)
+        bar = getattr(self, "skill_bar", None)
+        button = getattr(bar, "button", None) if bar is not None else None
+        if button is not None and getattr(button, "label", ""):
+            rects.append(pygame.Rect(button.rect))
+        banner_rect = getattr(self.effects.skill_banner, "_rect", None)
+        if banner_rect is not None:
+            rects.append(pygame.Rect(banner_rect))
         return rects
 
     def _equipment_source_slots(self, game):
@@ -971,7 +1012,27 @@ class Renderer:
             if not avatar.collidepoint(position):
                 return False
         return tooltip.draw_general_tooltip(
-            self.screen, game, hovered, position, metrics)
+            self.screen, game, hovered, position, metrics,
+            avoid=self._tooltip_avoid_rects(metrics))
+
+    def resolve_view_card(self, entry):
+        """把网络载荷里的牌解析成展示用卡。
+
+        联网客户端有一份卡缓存（``RemoteGameView.cards``），单机没有也不需要
+        ——单机侧拿到的是实体牌。解析失败时返回 None，界面退化成"一张底板"，
+        绝不因为一张牌查不到就整帧画不出来。
+        """
+
+        if entry is None:
+            return None
+        cache = getattr(self.game, "cards", None)
+        getter = getattr(cache, "get", None)
+        if not callable(getter):
+            return None
+        try:
+            return getter(entry)
+        except Exception:                             # noqa: BLE001
+            return None
 
     def player_hand_hover(self, game):
         """鼠标是否正停在自己的某张手牌上。"""

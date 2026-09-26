@@ -7,9 +7,11 @@
 import pygame
 
 from . import theme
-from .widgets import draw_panel
+from .widgets import draw_panel, place_tooltip
 
 MAX_WIDTH_DESIGN = 380
+#: 正文档位：与卡牌提示框、技能提示框保持同一档字号
+FONT_BODY_NAME = "small"
 PAD = 14
 LINE_GAP = 6
 
@@ -79,15 +81,26 @@ def build_lines(game, player, font, max_width):
     return lines, header
 
 
-def draw_general_tooltip(surface, game, player, position, metrics):
-    """在鼠标附近画出该角色的武将与技能；没有武将时返回 False。"""
+def draw_general_tooltip(surface, game, player, position, metrics, *, avoid=()):
+    """在鼠标附近画出该角色的武将与技能；没有武将时返回 False。
+
+    # 位置算法统一到 ``widgets.place_tooltip``
+
+    这里原来自己算位置（贴鼠标右下、越界就翻面、夹进屏幕），**没有任何避让
+    名单**：武将提示框会盖住座位面板、装备区、公共牌池，而且内容高于屏幕时
+    直接画到画面外。现在与卡牌 / 技能提示框走同一个函数：右侧 → 左侧 → 下方
+    → 上方 → 四个角，取第一个"完整在视口内且与 avoid 不相交"的位置。
+
+    ``avoid`` 由调用方给（座位 / 手牌 / 提示条 / 判定面板……），与卡牌提示框
+    用的是同一份名单，见 ``Renderer._tooltip_avoid_rects``。
+    """
 
     screen_rect = surface.get_rect()
     width = min(metrics.px(MAX_WIDTH_DESIGN), int(screen_rect.width * 0.34))
     pad = metrics.px(PAD)
     text_width = width - pad * 2
 
-    font = metrics.fonts.get("small")
+    font = metrics.fonts.get(FONT_BODY_NAME)
     lines, _header = build_lines(game, player, font, text_width)
     if not lines:
         return False
@@ -102,21 +115,11 @@ def draw_general_tooltip(surface, game, player, position, metrics):
     line_heights = [font.get_height() for _text, _font, _color, _indent in lines]
     height = pad * 2 + sum(line_heights) + gap * (len(lines) - 1)
 
-    x, y = position
-    # 默认贴在鼠标右下；靠近边缘时翻到另一侧。
-    left = x + metrics.px(18)
-    if left + width > screen_rect.right - metrics.px(8):
-        left = x - width - metrics.px(18)
-    top = y + metrics.px(18)
-    if top + height > screen_rect.bottom - metrics.px(8):
-        top = y - height - metrics.px(18)
-    left = max(screen_rect.left + metrics.px(8), left)
-    top = max(screen_rect.top + metrics.px(8), top)
-
-    rect = pygame.Rect(left, top, width, height)
+    anchor = pygame.Rect(position[0], position[1], 1, 1)
+    rect = place_tooltip(anchor, (width, height), screen_rect, avoid=avoid)
     draw_panel(
         surface, rect, fill=theme.PANEL_DEEP, border=theme.GOLD,
-        border_width=theme.BORDER, radius=metrics.px(12),
+        border_width=theme.BORDER, radius=metrics.px(theme.RADIUS_MEDIUM),
     )
 
     cursor_y = rect.y + pad

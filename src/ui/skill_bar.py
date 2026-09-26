@@ -7,7 +7,14 @@ UI 不认识任何具体武将或技能。加武将 / 改技能说明都不需�
 import pygame
 
 from . import layout, theme
-from .widgets import Button, draw_panel, draw_state_border, ellipsize_text
+from .widgets import (
+    Button,
+    draw_modal_panel,
+    draw_modal_veil,
+    draw_panel,
+    draw_state_border,
+    ellipsize_text,
+)
 
 PICKER_WIDTH = 820
 PICKER_ROW_HEIGHT = 92
@@ -357,14 +364,12 @@ class SkillPicker:
         metrics = self.metrics
         fonts = metrics.fonts
 
-        veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, 168))
-        surface.blit(veil, (0, 0))
+        # 模态外观统一走 widgets（遮罩浓度 / 填充 / 描边 / 圆角只有一处定义）。
+        draw_modal_veil(surface, metrics)
+        draw_modal_panel(surface, self.panel_rect, metrics)
 
-        draw_panel(surface, self.panel_rect, fill=theme.PANEL, border=theme.GOLD,
-                   border_width=theme.BORDER_THICK, radius=metrics.px(16))
-
-        title = fonts.get("large").render("选择要发动的技能", True, theme.GOLD_BRIGHT)
+        title = fonts.get(theme.FONT_MODAL).render(
+            "选择要发动的技能", True, theme.GOLD_BRIGHT)
         surface.blit(title, title.get_rect(
             center=(self.panel_rect.centerx, self.panel_rect.y + metrics.px(48))))
 

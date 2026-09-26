@@ -25,7 +25,15 @@ import pygame
 from src.game.generals import MIN_POOL
 
 from . import general_cards, layout, theme
-from .widgets import Button, draw_panel, draw_state_border, ellipsize_text, wrap_text
+from .widgets import (
+    Button,
+    draw_modal_panel,
+    draw_modal_veil,
+    draw_panel,
+    draw_state_border,
+    ellipsize_text,
+    wrap_text,
+)
 
 #: 设计尺寸下的网格参数。
 CARD_WIDTH = 140
@@ -601,16 +609,14 @@ class FavoriteGeneralsScreen:
     # ---- 确认框 ----
 
     def _draw_confirm(self, metrics):
-        veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, 170))
-        self.screen.blit(veil, (0, 0))
-
+        # 确认框与其它模态同一套外观：原来这块用的是另一套暖色参数
+        # （PANEL_WARM + BRONZE_BRIGHT + px18），与牌桌上的模态明显不同。
+        draw_modal_veil(self.screen, metrics)
         rect = self._modal_rect(metrics)
-        draw_panel(self.screen, rect, fill=theme.PANEL_WARM,
-                   border=theme.BRONZE_BRIGHT, border_width=3,
-                   radius=metrics.px(18))
+        draw_modal_panel(self.screen, rect, metrics)
         fonts = metrics.fonts
-        title = fonts.get("large").render(self.confirm["title"], True, theme.GOLD_BRIGHT)
+        title = fonts.get(theme.FONT_MODAL).render(
+            self.confirm["title"], True, theme.GOLD_BRIGHT)
         self.screen.blit(title, title.get_rect(
             midtop=(rect.centerx, rect.y + metrics.px(28))))
         body_font = fonts.get("small")

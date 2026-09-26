@@ -220,11 +220,21 @@ def build_response_window(game, viewer_id):
         return None
     viewer = _find(game, viewer_id)
     status = request.member_status(viewer) if viewer is not None else ""
+    context = dict(getattr(request, "context", None) or {})
+    # 被无懈的那张牌、它的使用者与目标：这些**在桌上已经公开**（牌已经打出来，
+    # 全场都看见了）。原先不下发，于是客户端只能显示"窗口 2 · 第 1 轮"这种
+    # 玩家看不懂的话；界面要能说出"哪张牌正在被无懈、谁在用"。
+    card = context.get("card")
+    caster = context.get("caster")
     return {
-        "window_id": int(request.context.get("window_id") or 0),
-        "round_id": int(request.context.get("round_id") or 0),
-        "reason": str(request.context.get("reason") or ""),
+        "window_id": int(context.get("window_id") or 0),
+        "round_id": int(context.get("round_id") or 0),
+        "reason": str(context.get("reason") or ""),
         "status": status,
+        "card": (card_to_payload(card) if card is not None else None),
+        "caster_id": str(getattr(caster, "player_id", "") or ""),
+        "caster_name": str(getattr(caster, "name", "") or ""),
+        "target_count": len(context.get("targets") or ()),
     }
 
 

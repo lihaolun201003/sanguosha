@@ -8,7 +8,13 @@
 import pygame
 
 from . import layout, theme
-from .widgets import Button, draw_panel, ellipsize_text
+from .widgets import (
+    Button,
+    draw_modal_panel,
+    draw_modal_veil,
+    draw_panel,
+    ellipsize_text,
+)
 
 PICKER_WIDTH = 880
 PICKER_ROW_HEIGHT = 96
@@ -82,14 +88,12 @@ class CardActionPicker:
         metrics = self.metrics
         fonts = metrics.fonts
 
-        veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, 172))
-        surface.blit(veil, (0, 0))
+        # 模态外观统一走 widgets（与技能选择面板、确认框、结算框同一套）。
+        draw_modal_veil(surface, metrics)
+        draw_modal_panel(surface, self.panel_rect, metrics)
 
-        draw_panel(surface, self.panel_rect, fill=theme.PANEL, border=theme.GOLD,
-                   border_width=theme.BORDER_THICK, radius=metrics.px(16))
-
-        title = fonts.get("large").render("选择操作", True, theme.GOLD_BRIGHT)
+        title = fonts.get(theme.FONT_MODAL).render(
+            "选择操作", True, theme.GOLD_BRIGHT)
         surface.blit(title, title.get_rect(
             center=(self.panel_rect.centerx, self.panel_rect.y + metrics.px(46))))
 

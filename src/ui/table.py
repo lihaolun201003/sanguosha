@@ -514,7 +514,7 @@ def pool_hover_rect(rect, metrics=None):
 
 
 def draw_pool(surface, game, entries, rects, *, is_candidate, is_selected, metrics=None,
-              mouse_pos=None, hidden_ids=(), face_down_ids=()):
+              mouse_pos=None, hidden_ids=(), face_down_ids=(), chooser=None):
     """Public card area used by Wugu and 'pick a card from another player'.
 
     ``entries`` is a ``[(card, key)]`` list; the key carries the equipment slot
@@ -534,6 +534,13 @@ def draw_pool(surface, game, entries, rects, *, is_candidate, is_selected, metri
     if not entries or not rects:
         return
     fonts = metrics.fonts if metrics is not None else theme.fonts()
+    # "谁正在从这个公共牌区挑牌"：五谷丰登是**公开的集体流程**，不标出当前
+    # 挑选者的话，其他人只看到牌池在闪而不知道轮到了谁。
+    if chooser is not None and metrics is not None:
+        label = fonts.get(theme.FONT_SMALL).render(
+            str(getattr(chooser, "name", "") or "") + " 正在挑选", True, theme.GOLD_BRIGHT)
+        head = pygame.Rect(rects[0]).move(0, -label.get_height() - metrics.px(6))
+        surface.blit(label, label.get_rect(center=(head.centerx, head.centery)))
     count = min(len(entries), len(rects))
     hidden = hidden_ids or ()
     face_down = face_down_ids or ()

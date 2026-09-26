@@ -89,6 +89,50 @@ def playable_hand_indices(game):
     return playable
 
 
+def respondable_hand_indices(game):
+    """响应窗口里**这些手牌能不能打出去**（实体牌或技能转化）。
+
+    返回下标集合；不在响应窗口 / 查不到时返回 ``None``（表示"不要灰任何牌"）。
+
+    修的是一个真实缺陷：单机响应窗口（濒死求桃、出闪、无懈）以前**没有任何
+    手牌高亮**——`playable_hand_indices` 在响应窗口直接返回 None，于是玩家
+    只能靠猜自己手上哪张是【桃】。规则判据仍然只来自引擎的
+    ``CardActionDiscovery``（含龙胆这类转化），界面不自己算。
+    """
+
+    remote = getattr(game, "network_playable_indices", None)
+    if callable(remote):
+        # 联网客户端：集合完全由房主下发，不查任何规则。
+        return remote()
+    response = getattr(game, "response", None)
+    if response is None or not getattr(response, "active", False):
+        return None
+    current = getattr(response, "current", None)
+    actor = game.player
+    if current is None or getattr(current, "responder", None) is not actor:
+        return None
+    allowed = tuple(getattr(current, "allowed_cards", ()) or ())
+    discovery = getattr(game, "card_actions", None)
+    if discovery is None:
+        return None
+    try:
+        context = discovery.response_context(actor, allowed_names=allowed)
+        options = discovery.respondable_options(actor, context)
+    except Exception:                                 # noqa: BLE001
+        # 查询失败时不灰任何牌：宁可"都能点、由引擎拒绝"，也不能让玩家
+        # 以为手上没有可用的牌。
+        return None
+    usable = set()
+    for option in options or ():
+        if not getattr(option, "enabled", True):
+            continue
+        for card in getattr(option, "source_cards", ()) or ():
+            usable.add(id(card))
+    if not usable:
+        return set()
+    return {index for index, card in enumerate(actor.hand) if id(card) in usable}
+
+
 def own_identity_label(game, player):
     """自己的身份文案（身份局之外返回空串）。
 
@@ -320,8 +364,8 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     return rect, judge_rects
 
 
-def draw_hand(surface, game, table_layout, *, playable=None, hover_index=None,
-              skip_card_ids=()):
+def draw_hand(surface, game, table_layout, *, playable=None, respondable=None,
+              hover_index=None, skip_card_ids=()):
     metrics = table_layout.metrics
     fonts = metrics.fonts
     hand = list(game.player.hand)
@@ -337,6 +381,15 @@ def draw_hand(surface, game, table_layout, *, playable=None, hover_index=None,
         selection is not None
         and selection.get("zone") in ("hand", "player_hand")
     )
+    # 弃牌阶段：手牌全部可以弃（本地弃牌走 game.player_discard）。
+    # 以前这个阶段既不高亮也不灰化，玩家不知道"现在该点什么"。
+    discard_phase = bool(
+        playable is None and respondable is None
+        and not selection_discard
+        and game.current_turn_player is game.player
+        and getattr(game, "phase", "") == "discard"
+    )
+    in_hand_selection = selection_discard
 
     skip = skip_card_ids or ()
     for index, card in enumerate(hand):
@@ -347,8 +400,18 @@ def draw_hand(surface, game, table_layout, *, playable=None, hover_index=None,
         if rect is None:
             continue
         selected = index in table_layout.selected_hand_keys
-        candidate = selection_discard and game.is_selection_candidate(card)
-        disabled = playable is not None and index not in playable and not candidate
+        candidate = in_hand_selection and game.is_selection_candidate(card)
+        # 这张牌此刻能不能用：出牌阶段看 playable，响应窗口看 respondable。
+        # 两个集合互斥（引擎只在其中一个窗口给集合），所以要分别传语义。
+        if respondable is not None:
+            usable = index in respondable
+            response_candidate = usable and not candidate
+            legal = False
+        else:
+            usable = playable is not None and index in playable
+            response_candidate = False
+            legal = usable and not candidate
+        disabled = (playable is not None or respondable is not None)             and not usable and not candidate
         card_draw.draw_card(
             surface,
             card,
@@ -356,6 +419,9 @@ def draw_hand(surface, game, table_layout, *, playable=None, hover_index=None,
             fonts,
             selected=selected,
             candidate=candidate,
+            legal=legal,
+            response_candidate=response_candidate,
+            discardable=discard_phase,
             disabled=disabled,
             dimmed=disabled,
             hovered=index == hover_index,

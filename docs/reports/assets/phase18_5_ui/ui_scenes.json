@@ -1,0 +1,111 @@
+{
+  "shots": [
+    "01_main_menu.png",
+    "02_general_select.png",
+    "03_general_chosen.png",
+    "04_dealing.png",
+    "05_table_play.png",
+    "06_hand_hover.png",
+    "07_ai_turn.png",
+    "08_table_late.png",
+    "res_1280x800.png",
+    "res_1366x768.png",
+    "res_1600x900.png",
+    "res_1920x1080.png",
+    "res_2560x1440.png"
+  ],
+  "records": [
+    {
+      "label": "截图 01_main_menu",
+      "detail": "docs/reports/assets/phase18_5_ui\\01_main_menu.png"
+    },
+    {
+      "label": "模式已选",
+      "detail": "ffa"
+    },
+    {
+      "label": "人数",
+      "detail": "3"
+    },
+    {
+      "label": "截图 02_general_select",
+      "detail": "docs/reports/assets/phase18_5_ui\\02_general_select.png"
+    },
+    {
+      "label": "截图 03_general_chosen",
+      "detail": "docs/reports/assets/phase18_5_ui\\03_general_chosen.png"
+    },
+    {
+      "label": "截图 04_dealing",
+      "detail": "docs/reports/assets/phase18_5_ui\\04_dealing.png"
+    },
+    {
+      "label": "进入牌桌",
+      "detail": "scene=game phase=play"
+    },
+    {
+      "label": "截图 05_table_play",
+      "detail": "docs/reports/assets/phase18_5_ui\\05_table_play.png"
+    },
+    {
+      "label": "截图 06_hand_hover",
+      "detail": "docs/reports/assets/phase18_5_ui\\06_hand_hover.png"
+    },
+    {
+      "label": "截图 07_ai_turn",
+      "detail": "docs/reports/assets/phase18_5_ui\\07_ai_turn.png"
+    },
+    {
+      "label": "AI 回合",
+      "detail": "turn=玩家 phase=discard"
+    },
+    {
+      "label": "截图 08_table_late",
+      "detail": "docs/reports/assets/phase18_5_ui\\08_table_late.png"
+    },
+    {
+      "label": "分辨率 1280x800",
+      "detail": "实际 1280x800"
+    },
+    {
+      "label": "截图 res_1280x800",
+      "detail": "docs/reports/assets/phase18_5_ui\\res_1280x800.png"
+    },
+    {
+      "label": "分辨率 1366x768",
+      "detail": "实际 1366x768"
+    },
+    {
+      "label": "截图 res_1366x768",
+      "detail": "docs/reports/assets/phase18_5_ui\\res_1366x768.png"
+    },
+    {
+      "label": "分辨率 1600x900",
+      "detail": "实际 1600x900"
+    },
+    {
+      "label": "截图 res_1600x900",
+      "detail": "docs/reports/assets/phase18_5_ui\\res_1600x900.png"
+    },
+    {
+      "label": "分辨率 1920x1080",
+      "detail": "实际 1920x1080"
+    },
+    {
+      "label": "截图 res_1920x1080",
+      "detail": "docs/reports/assets/phase18_5_ui\\res_1920x1080.png"
+    },
+    {
+      "label": "分辨率 2560x1440",
+      "detail": "实际 2560x1440"
+    },
+    {
+      "label": "截图 res_2560x1440",
+      "detail": "docs/reports/assets/phase18_5_ui\\res_2560x1440.png"
+    },
+    {
+      "label": "真实窗口场景跑完",
+      "detail": ""
+    }
+  ]
+}

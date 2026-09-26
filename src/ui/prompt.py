@@ -190,7 +190,7 @@ def describe(game):
             if allowed else "使用合法响应牌，或点击「不出」"
         )
         body = str(current.prompt or "").strip() or hint
-        return PromptInfo("response", _response_title(current), body, hint, theme.DANGER)
+        return PromptInfo("response", _response_title(current, game), body, hint, theme.DANGER)
 
     # 共享响应阶段（无懈）等待提示：客户端看房主给的"我自己的状态"，
     # 单机看自己引擎里那条待回答请求的成员状态。
@@ -214,9 +214,21 @@ def describe(game):
 
 
 #: 这些牌名在提示里的写法（响应标题用）。
-def _response_title(current):
+def _response_title(current, game=None):
     if getattr(current, "reason", "") == "wuxie_chain":
         return "使用【无懈可击】／不出"
+    if getattr(current, "reason", "") == "dying_rescue":
+        # 濒死救援是全桌最紧急的事件：标题必须写出"谁快死了"。谁濒死由引擎
+        # 的濒死流程给出（``Game.dying_state``），不靠界面猜。
+        who = ""
+        getter = getattr(game, "dying_state", None)
+        if callable(getter):
+            try:
+                dying, _rescuer = getter()
+            except Exception:                         # noqa: BLE001
+                dying = None
+            who = str(getattr(dying, "name", "") or "")
+        return (who + " 濒死，请出【桃】") if who else "有角色濒死，请出【桃】"
     return "需要你的响应"
 
 

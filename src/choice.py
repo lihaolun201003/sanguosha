@@ -2,7 +2,7 @@ import pygame
 
 from src.ui import layout as ui_layout
 from src.ui import theme
-from src.ui.widgets import Button, draw_panel
+from src.ui.widgets import Button, draw_modal_panel, draw_modal_veil, draw_panel
 
 
 class ChoiceRequest:
@@ -249,20 +249,12 @@ class ChoiceOverlay:
         request = choice_system.current
         fonts = metrics.fonts
 
-        veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
-        veil.fill((*theme.VEIL, 176))
-        self.screen.blit(veil, (0, 0))
+        # 模态外观统一走 widgets（与技能/操作选择面板同一套视觉）。
+        draw_modal_veil(self.screen, metrics)
+        draw_modal_panel(self.screen, self.panel_rect, metrics)
 
-        draw_panel(
-            self.screen,
-            self.panel_rect,
-            fill=theme.PANEL,
-            border=theme.GOLD,
-            border_width=theme.BORDER_THICK,
-            radius=metrics.px(16),
-        )
-
-        title = fonts.get("large").render(request.title, True, theme.GOLD_BRIGHT)
+        title = fonts.get(theme.FONT_MODAL).render(
+            request.title, True, theme.GOLD_BRIGHT)
         self.screen.blit(title, title.get_rect(center=(self.panel_rect.centerx, self.panel_rect.y + metrics.px(56))))
 
         pygame.draw.line(
