@@ -12,6 +12,11 @@ from .engine.events import Event, EventType
 #: 后者。规则的差异全部由这个字符串承载，不由目的地承载。
 DISCARD_REASON = "discard"
 
+#: "被拿走 / 被转移"这一个：牌离开了原拥有者的区域，但没有进弃牌堆（进了
+#: 别人的手牌，或者被装到别人身上）。对原拥有者来说这是**失去牌**，
+#: 【屯田】一类技能认的是它；它和"弃置"不是一回事。
+TAKE_REASON = "lose"
+
 
 def _remove_identity(items, value):
     for index, item in enumerate(items):

@@ -8,6 +8,7 @@
 
 from src.game.atoms_v2 import (
     DISCARD_REASON,
+    TAKE_REASON,
     DrawCardsAtom,
     MoveCardAtom,
     RecoverHpAtom,
@@ -59,19 +60,27 @@ def _cards_of(player):
     return cards
 
 
-def _move_anywhere(game, context, owner, card, destination):
-    """把 owner 的任意区域里的一张牌移到 destination（装备区按槽位处理）。"""
+def _move_anywhere(game, context, owner, card, destination, *, reason=""):
+    """把 owner 的任意区域里的一张牌移到 destination（装备区按槽位处理）。
+
+    ``reason`` 是这次移动的规则原因（见 ``atoms_v2`` 的原因词汇表）：装备区
+    的牌不会因为"最终到了别处"就自动带上语义，调用方要说明白这是弃置、被拿走
+    还是别的什么。留空的路径保持原状（不发牌移动通知）。
+    """
 
     if any(item is card for item in owner.hand):
-        context.apply(MoveCardAtom(card, source=owner.hand, destination=destination))
+        context.apply(MoveCardAtom(
+            card, source=owner.hand, destination=destination,
+            reason=reason or None))
         return True
     if any(item is card for item in owner.judgement_zone):
         context.apply(MoveCardAtom(
-            card, source=owner.judgement_zone, destination=destination))
+            card, source=owner.judgement_zone, destination=destination,
+            reason=reason or None))
         return True
     for slot, equipped in (owner.equipment or {}).items():
         if equipped is card:
-            context.apply(UnequipAtom(owner, slot, destination))
+            context.apply(UnequipAtom(owner, slot, destination, reason=reason))
             return True
     for zone in (owner.placed_cards or {}).values():
         if any(item is card for item in zone):
@@ -308,10 +317,13 @@ class GanluFlow(Flow):
         second_cards = [card for card in (self.second.equipment or {}).values() if card]
         for slot in list(self.first.equipment):
             if self.first.get_equipment(slot) is not None:
-                self.context.apply(UnequipAtom(self.first, slot))
+                # 交换装备：对本人来说装备是**被换走**（失去牌），不是弃置。
+                self.context.apply(UnequipAtom(
+                    self.first, slot, reason=TAKE_REASON))
         for slot in list(self.second.equipment):
             if self.second.get_equipment(slot) is not None:
-                self.context.apply(UnequipAtom(self.second, slot))
+                self.context.apply(UnequipAtom(
+                    self.second, slot, reason=TAKE_REASON))
         from src.game.atoms_v2 import EquipCardAtom
 
         for card in first_cards:
@@ -890,7 +902,7 @@ class XuanhuoFlow(Flow):
             return self.complete({"applied": False})
         self.card = cards[0]
         if not _move_anywhere(self.game, self.context, self.target, self.card,
-                              self.owner.hand):
+                              self.owner.hand, reason=TAKE_REASON):
             return self.complete({"applied": False})
         others = [other for other in other_alive_players(self.game, self.owner)
                   if other is not self.target]

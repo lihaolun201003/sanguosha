@@ -827,9 +827,13 @@ def take_card_from_zone(context, game, taker, player, option, *,
         card = player.get_equipment(slot)
         if card is None:
             return None
-        from src.game.atoms_v2 import UnequipAtom
+        from src.game.atoms_v2 import TAKE_REASON, UnequipAtom
 
-        context.apply(UnequipAtom(player, slot, taker.hand))
+        # 装备被拿走了：对原拥有者来说是**失去牌**（进的是 taker 的手牌，
+        # 不是弃牌堆），所以按 "lose" 声明原因——【屯田】一类"失去牌"的技能
+        # 靠这条通知工作。不声明原因时 UnequipAtom 不发任何牌移动通知。
+        context.apply(UnequipAtom(
+            player, slot, taker.hand, reason=TAKE_REASON))
         return card
     if option.startswith("judge:"):
         if "judgement" not in zones:

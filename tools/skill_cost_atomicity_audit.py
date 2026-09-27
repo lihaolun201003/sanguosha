@@ -280,6 +280,107 @@ def group_jujian():
 
 
 # ==================================================
+# 2b. 固定张数必须**恰好**（多一张也不行）
+# ==================================================
+
+def group_exact_count():
+    """固定费用是"恰好几张"，不是"至少几张"。
+
+    旧实现只查下限，然后 ``cards[:cost_cards]`` 把多余的静默截掉：引擎收下
+    一份与输入契约不符的载荷还照常发动，多出来的牌留在手里、谁也不知道它
+    曾经被提交过。
+    """
+
+    # 2b.1 授予型（黄天 cost_cards=1）提交两张【闪】
+    game = make_game(general="lvbu", seed=11)
+    actor = game.player
+    owner = [item for item in game.players if item is not actor][0]
+    game.skills.bind(owner, "huangtian")
+    s1, s2 = card("SHAN", "diamond", "2"), card("SHAN", "heart", "3")
+    actor.hand[:] = [s1, s2]
+    ok, detail = submit_expecting_refusal(
+        game, ActivateSkillAction(actor, "huangtian", target=owner,
+                                  cards=[s1, s2]),
+        "too many for fixed cost")
+    check("2b.1 固定 1 张的技能提交 2 张 → 拒绝且两张都还在手里", ok, detail)
+    check("2b.1b 那两张【闪】都没动、次数也没消耗",
+          len(actor.hand) == 2 and not actor.skill_state.get("huangtian", "used", 0),
+          "hand=%s used=%s" % ([c.name for c in actor.hand],
+                               actor.skill_state.get("huangtian", "used", 0)))
+
+    # 2b.2 无费用技能（神愤，spec 没有 cost_cards）提交一张牌
+    game = make_game(general="shen_lvbu", seed=17)
+    player = game.player
+    add_mark(game, player, "kuangbao", 6, "rage")
+    sha = card("SHA")
+    player.hand[:] = [sha]
+    ok, detail = submit_expecting_refusal(
+        game, ActivateSkillAction(player, "shenfen", cards=[sha]),
+        "extra card for free skill")
+    check("2b.2 无费用技能提交一张牌 → 拒绝且牌还在手里", ok, detail)
+
+    # 2b.3 正面对照：恰好一张时正常发动
+    game = make_game(general="lvbu", seed=11)
+    actor = game.player
+    owner = [item for item in game.players if item is not actor][0]
+    game.skills.bind(owner, "huangtian")
+    shan = card("SHAN", "diamond", "2")
+    actor.hand[:] = [shan]
+    ok = game.engine.submit(ActivateSkillAction(
+        actor, "huangtian", target=owner, cards=[shan]))
+    check("2b.3 恰好一张 → 正常发动（正面对照）",
+          bool(ok[0] if isinstance(ok, tuple) else ok)
+          and any(item is shan for item in owner.hand),
+          "owner.hand=%s" % [c.name for c in owner.hand])
+
+
+# ==================================================
+# 2c. keep_cards 素材同样受引擎边界约束
+# ==================================================
+
+def group_keep_cards():
+    """素材不代付 ≠ 素材不校验（【乱击】就是从这里漏的）。"""
+
+    game = make_game(general="yuanshao", seed=19)
+    actor = game.player
+    foe = [item for item in game.players if item is not actor][0]
+    mine = [card("SHA", "spade", "7"), card("TAO", "spade", "8")]
+    his = [card("SHAN", "club", "3"), card("JIU", "club", "4")]
+    actor.hand[:] = list(mine)
+    foe.hand[:] = list(his)
+
+    ok, detail = submit_expecting_refusal(
+        game, ActivateSkillAction(actor, "luanji", cards=his),
+        "luanji with other player's cards")
+    check("2c.1 【乱击】拿别人的牌当素材 → 拒绝", ok, detail)
+    check("2c.1b 对方的牌一张都没被动",
+          all(any(item is c for item in foe.hand) for c in his),
+          "foe.hand=%s" % [c.name for c in foe.hand])
+
+    ok, detail = submit_expecting_refusal(
+        game, ActivateSkillAction(actor, "luanji", cards=[mine[0], mine[0]]),
+        "luanji duplicate material")
+    check("2c.2 【乱击】同一张素材提交两次 → 拒绝", ok, detail)
+
+    ok, detail = submit_expecting_refusal(
+        game, ActivateSkillAction(actor, "luanji",
+                                  cards=[mine[0], mine[1], his[0]]),
+        "luanji too many materials")
+    check("2c.3 【乱击】提交 3 张素材（恰好两张）→ 拒绝", ok, detail)
+
+    # 正面对照：自己的两张同花色手牌
+    game.deck.draw_pile.extend([card("TAO"), card("TAO")])
+    before = len(game.deck.discard_pile)
+    ok = game.engine.submit(ActivateSkillAction(actor, "luanji", cards=mine))
+    check("2c.4 自己的两张同花色手牌 → 正常结算",
+          bool(ok[0] if isinstance(ok, tuple) else ok)
+          and not actor.hand
+          and len(game.deck.discard_pile) > before,
+          "hand=%s 弃牌堆=%d" % ([c.name for c in actor.hand],
+                                 len(game.deck.discard_pile)))
+
+
+# ==================================================
 # 3. 授予型（黄天形态）：费用区域与目标
 # ==================================================
 
@@ -310,11 +411,14 @@ def group_grant_shape():
     game.skills.bind(owner, "huangtian")
     shan = card("SHAN", "diamond", "2")
     actor.hand[:] = [shan]
+    # 复核 P1 的原始复现：固定 1 张的技能收到 2 张。张数校验比"实体唯一"
+    # 更早命中（2 张本来就不合契约），所以这里断言的是"张数不符 → 拒绝"；
+    # "同一张牌重复提交"由可变费用的 1.1 / 1.3 覆盖。
     ok, detail = submit_expecting_refusal(
         game, ActivateSkillAction(actor, "huangtian", target=owner,
                                   cards=[shan, shan]),
-        "granted duplicate with real relation")
-    check("3.2 真授予关系下重复费用 → 拒绝且【闪】还在手里", ok, detail)
+        "granted too many with real relation")
+    check("3.2 真授予关系下提交两张【闪】→ 拒绝且牌还在手里", ok, detail)
 
     # 3.3 候选之外的费用（黄天只吃【闪】/【闪电】）
     game = make_game(general="lvbu", seed=11)
@@ -409,6 +513,8 @@ def main():
     groups = (
         ("制衡：重复 / stale / 数量", group_zhiheng),
         ("举荐：上限 / 目标 / 次数", group_jujian),
+        ("固定张数必须恰好", group_exact_count),
+        ("keep_cards 素材校验", group_keep_cards),
         ("授予型：入口校验", group_grant_shape),
         ("资源标记不被偷偷消耗", group_marks),
         ("未知技能 id", group_unknown_skill),

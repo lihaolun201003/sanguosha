@@ -259,50 +259,66 @@ def plan_activation(engine, action):
     ):
         return None, "目标不合法"
 
-    # ---- 3) 费用：张数 ----
+    # ---- 3) 张数：固定张数必须**恰好**，可变费用给区间 ----
     cards = list(action.cards or ())
     spec = spec_of(definition)
     variable = bool(getattr(spec, "variable_cost", False)) if spec else False
     transfer = bool(getattr(spec, "transfer_cards", False)) if spec else False
     keep = bool(getattr(spec, "keep_cards", False)) if spec else False
+    cost_cards = int(inputs["cost_cards"] or 0)
 
     if variable:
         if not cards:
             return None, "至少选择一张牌"
-    elif inputs["cost_cards"] and len(cards) < inputs["cost_cards"]:
-        return None, (spec.cost_prompt if spec is not None else "需要支付更多牌")
+    elif len(cards) != cost_cards:
+        if len(cards) < cost_cards:
+            return None, (spec.cost_prompt if spec is not None else "需要支付更多牌")
+        # 多出来的牌以前被 ``cards[:cost_cards]`` 静默截掉：引擎收下了一份
+        # 与输入契约不符的载荷，还照常发动。宁可拒绝。
+        return None, ("这次发动需要恰好 %d 张牌" % cost_cards
+                      if cost_cards else "这次发动不需要选择牌")
 
     cap = int(getattr(spec, "max_cost_cards", 0) or 0) if spec else 0
     if variable and cap and len(cards) > cap:
         return None, "最多只能选择 %d 张牌" % cap
 
     payable = [] if keep else (
-        list(cards) if variable else list(cards[: inputs["cost_cards"]]))
+        list(cards) if variable else list(cards[: cost_cards]))
 
-    # ---- 4) 费用：实体唯一（在任何移动之前）----
+    # ---- 4) 实体唯一（在任何移动之前）----
     repeated = duplicate_cost_card(cards)
     if repeated is not None:
         return None, "同一张牌不能重复作为费用"
 
-    # ---- 5) 费用：每张牌的对象、归属、区域、候选资格 ----
+    # ---- 5) 每一张提交的牌：对象、归属、区域、候选资格 ----
+    #
+    # 审的是 ``cards``（玩家/客户端提交的**全部**牌），不是 ``payable``：
+    # ``keep_cards`` 的技能不代付（去向由技能自己决定），但那不等于它的
+    # 素材可以不过规则——【乱击】以前就是从这里漏的：提交别人的两张手牌
+    # 也能结算出一张【万箭齐发】，引擎还顺手把对方的牌当素材用掉了。
     zones = tuple(inputs["allowed_zones"])
     candidates = inputs.get("cost_candidates")
-    entries = []
-    for card in payable:
+    check_candidates = candidates is not None and (cost_cards or variable or keep)
+    placements = {}
+    for card in cards:
         if card is None:
             return None, "选择的牌不存在"
         placement = cost_placement(player, card, zones)
         if placement is None:
             return None, "选择的牌已经不在可以支付的区域"
-        if candidates is not None and (inputs["cost_cards"] or variable or keep):
-            if not any(card is item for item in candidates):
-                return None, "这张牌不能用于这次发动"
-        entries.append((card, placement[0], placement[1]))
+        if check_candidates and not any(card is item for item in candidates):
+            return None, "这张牌不能用于这次发动"
+        placements[id(card)] = placement
+
+    # 真正要代付的那些牌（keep_cards 为空）：位置已经在上一步查过，这里只取。
+    entries = tuple((card, placements[id(card)][0], placements[id(card)][1])
+                    for card in payable)
 
     # ---- 6) 组合约束（技能自己声明的费用组合校验，可选）----
     validator = getattr(spec, "cost_validator", None) if spec is not None else None
     if callable(validator):
-        ok, reason = _as_result(validator(game, player, [item[0] for item in entries]))
+        checked = [item[0] for item in entries] or list(cards)
+        ok, reason = _as_result(validator(game, player, checked))
         if not ok:
             return None, reason
 
@@ -321,7 +337,7 @@ def plan_activation(engine, action):
         target=action.target,
         zones=zones,
         cards=tuple(cards),
-        entries=tuple(entries),
+        entries=entries,
         destination=destination,
         keep_cards=keep,
     ), ""
