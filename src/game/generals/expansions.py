@@ -138,13 +138,13 @@ PANGTONG = GeneralDef(
 XUNYU = GeneralDef(
     id="xunyu", name="荀彧", kingdom="wei", gender="male", max_hp=3,
     skill_ids=("quhu", "jieming"), title="王佐之才", pack="火",
-    description="【驱虎】：出牌阶段限一次，可以与体力比你多的一名角色拼点，赢了令其对其攻击范围内由你指定的一名角色造成 1 点伤害，没赢则他对你造成 1 点伤害。【节命】：受到 1 点伤害后，可令一名角色将手牌补至其体力上限（至多五张）。",
+    description="【驱虎】：出牌阶段限一次，可以与体力比你多的一名角色拼点，赢了令其对其攻击范围内由你指定的另一名角色造成 1 点伤害，没赢则他对你造成 1 点伤害。【节命】：受到 1 点伤害后，可令一名角色将手牌补至其体力上限（至多五张）。",
 )
 
 YUANSHAO = GeneralDef(
     id="yuanshao", name="袁绍", kingdom="qun", gender="male", max_hp=4,
     skill_ids=("luanji", "xueyi"), title="高贵的名门", pack="火",
-    description="【乱击】：出牌阶段，可以将两张相同花色的手牌当【万箭齐发】使用。【血裔】：主公技，锁定技，每有一名其他群势力角色存活，你的手牌上限加二。",
+    description="【乱击】：出牌阶段，可以将两张花色相同的手牌当【万箭齐发】使用。【血裔】：主公技，锁定技，每有一名其他群势力角色存活，你的手牌上限加二。",
 )
 
 YANLIANGWENCHOU = GeneralDef(
@@ -184,7 +184,7 @@ XUHUANG = GeneralDef(
 CAOPI = GeneralDef(
     id="caopi", name="曹丕", kingdom="wei", gender="male", max_hp=3,
     skill_ids=("xingshang", "fangzhu", "songwei"), title="魏文帝", pack="林",
-    description="【行殇】：你可以立即获得死亡角色的所有牌。【放逐】：你每受到一次伤害，可令一名其他角色摸 X 张牌（X 为你已损失的体力值），然后其武将牌翻面。【颂威】：主公技，其他魏势力角色的判定牌为黑色且生效后，可以让你摸一张牌。",
+    description="【行殇】：你可以立即获得死亡角色的所有牌。【放逐】：你每受到一次伤害，可令一名其他角色摸 X 张牌（X 为你已损失的体力值），然后其武将牌翻面。【颂威】：主公技，其他魏势力角色的判定牌生效后，若判定牌为黑色，其可以令你摸一张牌。",
 )
 
 ZHURONG = GeneralDef(
@@ -196,7 +196,7 @@ ZHURONG = GeneralDef(
 DONGZHUO = GeneralDef(
     id="dongzhuo", name="董卓", kingdom="qun", gender="male", max_hp=8,
     skill_ids=("jiuchi", "roulin", "benguai", "baonue"), title="魔王", pack="林",
-    description="【酒池】：可将黑色手牌当【酒】使用。【肉林】：锁定技，对女性角色或女性角色对你使用【杀】时，都需连续使用两张【闪】。【崩坏】：锁定技，结束阶段若你的体力不是全场最少，你须减 1 点体力或体力上限。【暴虐】：主公技，其他群势力角色造成伤害后可判定，黑色则你回复 1 点体力。",
+    description="【酒池】：可将黑色手牌当【酒】使用。【肉林】：锁定技，对女性角色或女性角色对你使用【杀】时，都需连续使用两张【闪】。【崩坏】：锁定技，结束阶段若你的体力不是全场最少，你须减 1 点体力或体力上限。【暴虐】：主公技，其他群势力角色造成伤害后，其可以令你进行一次判定，若结果为黑桃则你回复 1 点体力。",
 )
 
 JIAXU = GeneralDef(
@@ -208,7 +208,7 @@ JIAXU = GeneralDef(
 LUSU = GeneralDef(
     id="lusu", name="鲁肃", kingdom="wu", gender="male", max_hp=3,
     skill_ids=("haoshi", "dimeng"), title="独断的外交家", pack="林",
-    description="【好施】：摸牌阶段你可以额外摸两张牌；若此时手牌多于五张，须将一半（向下取整）交给手牌最少的一名其他角色。【缔盟】：出牌阶段限一次，你可以弃置等同于两名角色手牌数差的牌，然后交换他们的手牌。",
+    description="【好施】：摸牌阶段你可以额外摸两张牌；若此时手牌多于五张，须将一半（向下取整）交给手牌最少的一名其他角色。【缔盟】：出牌阶段限一次，你可以弃置 X 张牌并选择两名其他角色（X 为这两名角色手牌数之差），然后交换他们的手牌。",
 )
 
 FOREST_GENERALS = (
@@ -233,13 +233,13 @@ LIUSHAN = GeneralDef(
 JIANGWEI = GeneralDef(
     id="jiangwei", name="姜维", kingdom="shu", gender="male", max_hp=4,
     skill_ids=("tiaoxin", "zhiji"), title="龙的衣钵", pack="山",
-    description="【挑衅】：出牌阶段限一次，你可以指定一名能攻击到你的角色，其须对你使用一张【杀】，否则你弃置其一张牌。【志继】：觉醒技，回合开始阶段若你没有手牌，你回复 1 点体力或摸两张牌，然后减 1 点体力上限并永久获得【观星】。",
+    description="【挑衅】：出牌阶段限一次，你可以选择一名攻击范围内含有你的其他角色，令其选择一项：对你使用一张【杀】，或令你弃置其一张牌。【志继】：觉醒技，回合开始阶段若你没有手牌，你回复 1 点体力或摸两张牌，然后减 1 点体力上限并永久获得【观星】。",
 )
 
 SUNCE = GeneralDef(
     id="sunce", name="孙策", kingdom="wu", gender="male", max_hp=4,
     skill_ids=("jiang", "hunzi", "zhiba"), title="江东的小霸王", pack="山",
-    description="【激昂】：当你使用或被使用【决斗】或红色【杀】时，可以摸一张牌。【魂姿】：觉醒技，回合开始阶段若你的体力为 1，须减 1 点体力上限并永久获得【英姿】与【英魂】。【制霸】：主公技，其他吴势力角色出牌阶段可与你拼点，没赢时你可以获得双方的拼点牌。",
+    description="【激昂】：当你使用或被使用【决斗】或红色【杀】时，可以摸一张牌。【魂姿】：觉醒技，回合开始阶段若你的体力为 1，须减 1 点体力上限并永久获得【英姿】与【英魂】。【制霸】：主公技，其他吴势力角色的出牌阶段限一次，该角色可以与你拼点（若你已觉醒，你可以拒绝此拼点）；若其没赢，你可以获得两张拼点牌。",
 )
 
 ZUOCI = GeneralDef(

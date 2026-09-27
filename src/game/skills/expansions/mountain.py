@@ -10,12 +10,14 @@ from src.game.atoms_v2 import (
     MoveCardAtom,
     UnequipAtom,
 )
+from src.game.conversion import EQUIPMENT_ZONE
 from src.game.engine import EventType, Flow
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
 from ..definitions import (
     ActiveSkillSpec,
+    GrantedSpec,
     ModifierSpec,
     SkillDef,
     SkillKind,
@@ -40,6 +42,7 @@ from ..mechanics import (
     lose_hp,
     other_alive_players,
     set_kingdom,
+    sha_use_options,
     start_pindian,
     use_virtual,
 )
@@ -47,12 +50,19 @@ from ..modifiers import ModifierKind
 from ..state import ResetScope
 
 
-def _cards_of(player):
+def _discardable_cards(player):
+    """一名角色身上"可以弃置一张牌"的候选：**手牌 + 装备区**，不含判定区。
+
+    判定区里的延时锦囊不是"这名角色可以弃置的牌"（官方口径：判定区的牌只能
+    被【无懈可击】抵消或被【过河拆桥】一类拆走，不能被自己弃置），所以"弃置
+    其一张牌"的候选必须与结算走同一份区域口径——候选里列出判定区的牌，结算
+    又只处理手牌 / 装备区，选中就会**空过**：牌没动，技能却算发动过了。
+    """
+
     cards = list(getattr(player, "hand", ()) or ())
     for card in (getattr(player, "equipment", None) or {}).values():
         if card is not None:
             cards.append(card)
-    cards.extend(list(getattr(player, "judgement_zone", ()) or ()))
     return cards
 
 
@@ -94,7 +104,20 @@ def _activate_tiaoxin(game, player, target=None, cards=None):
 
 
 class TiaoxinFlow(Flow):
-    """挑衅：目标须对你使用一张【杀】，否则你弃置其一张牌。"""
+    """挑衅：目标须对你使用一张【杀】，否则你弃置其一张牌。
+
+    官方（山包）：出牌阶段限一次，你可以选择一名攻击范围内含有你的其他角色，
+    令其选择一项——对你使用一张【杀】，或令你弃置其一张牌。
+
+    因此"用不用【杀】"与"用哪一张【杀】"都是**目标自己**的选择：
+
+    * 候选来自规则层的"可使用的【杀】"查询（``sha_use_options``），
+      【武圣】【龙胆】一类转化、火杀 / 雷杀都在里面，不按牌名自己判断；
+    * 只有他**拒绝**、或确实没有可用的【杀】时，才进入弃牌分支。
+    """
+
+    SHA = "sha"
+    REFUSE = "refuse"
 
     def __init__(self, engine, owner, target):
         super().__init__(engine.context)
@@ -102,33 +125,100 @@ class TiaoxinFlow(Flow):
         self.game = engine.game
         self.owner = owner
         self.target = target
-        self.stage = "confirm"
+        self.options = []
+        self.stage = "choose"
 
     def begin(self):
-        ask_confirm(self.engine, self, source=self.owner, target=self.target,
-                    prompt="【挑衅】：%s 要求你对%s使用一张【杀】。是否使用？"
-                           % (self.owner.name, self.owner.name),
-                    reason="tiaoxin")
+        self.options = self._usable_options()
+        if not self.options:
+            # 确实没有可用的【杀】：直接进入弃牌分支，不弹一个只能点"不使用"的假入口。
+            self.game.add_log("%s 没有可用的【杀】，【挑衅】改为弃牌"
+                              % self.target.name)
+            return self._punish()
+        ask_option(self.engine, self, source=self.owner, target=self.target,
+                   prompt="【挑衅】：%s 要求你对%s使用一张【杀】。是否使用？"
+                          % (self.owner.name, self.owner.name),
+                   reason="tiaoxin",
+                   options=((self.SHA, "对 %s 使用一张【杀】" % self.owner.name),
+                            (self.REFUSE, "不使用【杀】")))
         return self.current_result()
 
     def advance(self, response=None):
         if self.stage == "punish":
             return self._after_punish(response)
-        sha = next((card for card in getattr(self.target, "hand", ())
-                    if getattr(card, "name", None) == "SHA"), None)
-        if response is not None and response.confirmed and sha is not None:
-            from src.game.engine import UseCardAction
+        if self.stage == "source":
+            return self._after_source(response)
+        option = str(getattr(response, "option", "") or "")
+        if option != self.SHA:
+            self.game.add_log("%s 不响应【挑衅】" % self.target.name)
+            return self._punish()
+        return self._ask_source()
 
-            self.game.add_log("%s 响应【挑衅】，对 %s 使用【杀】"
-                              % (self.target.name, self.owner.name))
-            self.engine.submit(UseCardAction(
-                self.target, sha, [self.owner], ignore_usage_limit=True))
-            return self.complete({"applied": True})
-        return self._punish()
+    # ---- 用哪一张【杀】（规则层查询，含转化）----
+
+    def _usable_options(self):
+        """目标现在真的能对挑衅者使用的【杀】使用方式（含技能转化）。"""
+
+        return sha_use_options(self.game, self.target, self.owner)
+
+    def _source_cards(self):
+        cards = []
+        for option in self.options:
+            for card in option.source_cards:
+                if not any(card is other for other in cards):
+                    cards.append(card)
+        return cards
+
+    def _ask_source(self):
+        if len(self.options) == 1:
+            return self._use(self.options[0])
+        cards = self._source_cards()
+        if len(cards) <= 1:
+            return self._use(self.options[0])
+        self.stage = "source"
+        ask_cards(self.engine, self, source=self.owner, target=self.target,
+                  prompt="【挑衅】：请选择要对%s使用的【杀】" % self.owner.name,
+                  reason="tiaoxin", candidates=cards, min_cards=1, max_cards=1)
+        return self.current_result()
+
+    def _after_source(self, response):
+        cards = list(getattr(response, "cards", ()) or ())
+        if not cards:
+            return self._punish()
+        chosen = cards[0]
+        option = next((item for item in self.options
+                       if any(card is chosen for card in item.source_cards)), None)
+        if option is None:
+            # 素材在询问期间被移走：按"确实没有可用的【杀】"处理，不硬来。
+            return self._punish()
+        return self._use(option)
+
+    def _use(self, option):
+        """真正使用（走正常 UseCardFlow，闪 / 伤害 / 濒死全由它负责）。"""
+
+        from src.game.engine import UseCardAction
+
+        actions = self.game.card_actions
+        virtual = actions.effective_card(option)
+        if (virtual is None or not getattr(self.target, "alive", True)
+                or not getattr(self.owner, "alive", True)):
+            return self._punish()
+        for card in option.source_cards:
+            if not any(item is card for item in self.target.hand):
+                return self._punish()
+        self.game.add_log("%s 响应【挑衅】，对 %s 使用【%s】"
+                          % (self.target.name, self.owner.name,
+                             getattr(virtual, "display_name", "杀")))
+        self.engine.submit(UseCardAction(
+            self.target, virtual, [self.owner], ignore_usage_limit=True))
+        return self.complete({"applied": True})
+
+    # ---- 弃牌分支（候选与结算同一区域口径：手牌 + 装备区）----
 
     def _punish(self):
-        candidates = _cards_of(self.target)
+        candidates = _discardable_cards(self.target)
         if not candidates:
+            self.game.add_log("%s 没有牌可弃，【挑衅】结束" % self.target.name)
             return self.complete({"applied": True})
         self.stage = "punish"
         ask_cards(self.engine, self, source=self.owner, target=self.owner,
@@ -141,23 +231,31 @@ class TiaoxinFlow(Flow):
 
     def _after_punish(self, response):
         cards = list(getattr(response, "cards", ()) or ())
-        if cards:
-            card = cards[0]
-            if any(item is card for item in self.target.hand):
-                self.context.apply(MoveCardAtom(
-                    card, source=self.target.hand,
-                    destination=self.game.deck.discard_pile))
+        if not cards:
+            return self.complete({"applied": True})
+        card = cards[0]
+        if any(item is card for item in self.target.hand):
+            self.context.apply(MoveCardAtom(
+                card, source=self.target.hand,
+                destination=self.game.deck.discard_pile))
+        else:
+            for slot, equipped in (self.target.equipment or {}).items():
+                if equipped is card:
+                    # 挑衅：文本就是"弃置其一张牌"，装备按弃置语义离场。
+                    self.context.apply(UnequipAtom(
+                        self.target, slot, self.game.deck.discard_pile,
+                        reason=DISCARD_REASON))
+                    break
             else:
-                for slot, equipped in (self.target.equipment or {}).items():
-                    if equipped is card:
-                        # 挑衅：文本就是"弃置其一张牌"，装备按弃置语义离场。
-                        self.context.apply(UnequipAtom(
-                            self.target, slot, self.game.deck.discard_pile,
-                            reason=DISCARD_REASON))
-                        break
-            self.game.add_log("%s 的【挑衅】弃置了 %s 的一张牌"
-                              % (self.owner.name, self.target.name))
+                # 候选与结算同口径（手牌 + 装备区），走到这里说明牌在询问期间
+                # 已经被别的结算移走了：如实记一笔，不假装弃过牌。
+                self.game.add_log("【挑衅】：%s 的那张牌已经不在原区域，未弃置"
+                                  % self.target.name)
+                return self.complete({"applied": True})
+        self.game.add_log("%s 的【挑衅】弃置了 %s 的一张牌"
+                          % (self.owner.name, self.target.name))
         return self.complete({"applied": True})
+
 
 
 class Zhiji(Skill):
@@ -280,68 +378,166 @@ class Hunzi(Skill):
                note="体力为 1，减 1 点体力上限并获得【英姿】【英魂】。")
 
 
-def _zhiba_targets(game, player):
-    """可以与你拼点的其他吴势力角色。"""
+def _zhiba_can_refuse(game, owner):
+    """孙策现在能不能拒绝拼点：已觉醒（【魂姿】在 skill_state 里记了账）。
 
-    return [
-        other for other in other_alive_players(game, player)
-        if getattr(other, "kingdom", None) == "wu"
-    ]
+    觉醒状态只认这一份记录（``awaken`` 写的 ``limited_used``），不按"有没有
+    【英姿】"推断——英姿还可能来自别处。
+    """
+
+    return bool(limited_used(owner, "hunzi"))
 
 
-def _can_zhiba(game, player):
-    if game.game_over or not player.alive:
+def _zhiba_can_offer(game, owner, actor):
+    """这名角色现在能不能发动持有【制霸】的 ``owner`` 的制霸。
+
+    官方（山包）：主公技，其他吴势力角色的出牌阶段限一次，该角色可以与你拼点。
+    所以判据全部落在**发起者**身上：只有在自己的出牌阶段、是吴势力、本阶段
+    还没拼过、手里有牌，并且拼点对手（技能拥有者）也还有手牌时才成立。
+    技能栏 / AvailableActions / AI / 远程下发读的都是这一份。
+    """
+
+    if game.game_over or not getattr(actor, "alive", True) or int(actor.hp) <= 0:
         return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "play":
+    if actor is owner:
+        return False, "不能与自己拼点"
+    if not getattr(owner, "alive", True):
+        return False, "对方已阵亡"
+    if game.current_turn_player is not actor or getattr(game, "phase", "") != "play":
         return False, "只能在你的出牌阶段发动"
-    if not player.hand:
+    if getattr(actor, "kingdom", None) != "wu":
+        return False, "只有吴势力角色可以发动"
+    if actor.skill_state.get("zhiba", "used", 0):
+        return False, "本出牌阶段已经拼过一次"
+    if not getattr(actor, "hand", ()):
         return False, "需要一张手牌拼点"
-    if not _zhiba_targets(game, player):
-        return False, "没有其他吴势力角色"
+    if not getattr(owner, "hand", ()):
+        return False, "对方没有手牌，拼点无法进行"
     return True, ""
 
 
+def _zhiba_candidate(game, player, card):
+    """用于拼点的牌：发起者的一张手牌（拼点牌由拼点流程自己移动）。"""
+
+    return any(card is item for item in (getattr(player, "hand", ()) or ()))
+
+
 def _activate_zhiba(game, player, target=None, cards=None):
-    if target is None:
+    """制霸：``player`` 是发起拼点的吴将，``target`` 是持有技能的主公孙策。
+
+    拼点用的那张牌**不是费用**（``keep_cards``）：它的去向是拼点（亮出后进
+    弃牌堆），由拼点流程自己移动，所以这里不能先弃掉它。
+    """
+
+    if target is None or not (cards or ()):
         return False
-    ZhibaFlow(game.engine, player, target).start()
+    card = cards[0]
+    if not _zhiba_candidate(game, player, card):
+        return False
+    # 次数记在**发起者**身上（技能属于孙策，限制属于这名吴将）。走到这里说明
+    # 引擎已经校验通过，取消 / 放弃根本到不了这里，所以不会替他消耗次数。
+    player.skill_state.set("zhiba", "used", 1, ResetScope.PHASE)
+    ZhibaFlow(game.engine, player, target, card).start()
     return True
 
 
-class ZhibaFlow(Flow):
-    """制霸：其他吴势力角色与你拼点；该角色没赢时，你可以获得双方的拼点牌。"""
+#: 制霸的输入契约：选一位持有【制霸】的主公 + 一张手牌用于拼点。
+ZHIBA_SPEC = ActiveSkillSpec(
+    needs_target=True,
+    target_prompt="【制霸】：请选择要与你拼点的角色",
+    cost_cards=1,
+    cost_prompt="【制霸】：请选择用于拼点的一张手牌",
+    keep_cards=True,
+    cost_candidates=_zhiba_candidate,
+)
 
-    def __init__(self, engine, owner, target):
+
+class ZhibaFlow(Flow):
+    """制霸：吴将发起拼点 → 已觉醒的孙策可以拒绝 → 孙策没赢则可拿两张拼点牌。
+
+    拼点方向按官方文案：``initiator`` 是发起拼点的吴将，``owner`` 是孙策。
+    """
+
+    def __init__(self, engine, initiator, owner, card):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
+        self.initiator = initiator
         self.owner = owner
-        self.target = target
-        self.stage = "confirm"
+        self.card = card
+        self.pindian_cards = []
+        self.stage = "accept"
 
     def begin(self):
-        start_pindian(self.engine, self.owner, self.target, reason="zhiba",
-                      on_complete=self._after_pindian)
+        if not _zhiba_can_refuse(self.game, self.owner):
+            return self._start_pindian()
+        # 已觉醒：拼点开始前先问孙策是否接受，拒绝则本次作废。
+        ask_confirm(self.engine, self, source=self.initiator, target=self.owner,
+                    prompt="【制霸】：%s 要与你拼点。是否接受？" % self.initiator.name,
+                    reason="zhiba")
         return self.current_result()
 
     def advance(self, response=None):
-        return self.complete({"applied": True})
+        if self.stage == "accept":
+            if response is None or not response.confirmed:
+                self.game.add_log("%s 拒绝 %s 的【制霸】拼点"
+                                  % (self.owner.name, self.initiator.name))
+                return self.complete({"applied": False})
+            return self._start_pindian()
+        if self.stage == "claim":
+            return self._after_claim(response)
+        # 拼点由 PindianFlow 自己推进，结束时回到 _after_pindian。
+        return self.current_result()
+
+    def _start_pindian(self):
+        self.stage = "pindian"
+        start_pindian(self.engine, self.initiator, self.owner, reason="zhiba",
+                      on_complete=self._after_pindian,
+                      forced_initiator_card=self.card)
+        return self.current_result()
 
     def _after_pindian(self, result):
         game = self.game
         if result is None or result.cancelled:
-            return
+            return self.complete({"applied": False})
         if result.initiator_wins:
-            game.add_log("【制霸】：%s 没赢" % self.target.name)
-            return
-        game.add_log("【制霸】：%s 获得双方拼点的牌" % self.owner.name)
-        for card in (result.initiator_card, result.target_card):
-            if card is None:
+            game.add_log("【制霸】：%s 没赢" % self.initiator.name)
+            return self.complete({"applied": True})
+        # 吴将没赢（平点也算没赢）：两张拼点牌此刻都在弃牌堆里。
+        cards = [card for card in (result.initiator_card, result.target_card)
+                 if card is not None and self._in_discard(card)]
+        if not cards:
+            return self.complete({"applied": True})
+        # 状态**先记再问**：回答可能是同步的（AI），流程会在 ask_confirm 内部
+        # 就恢复并读到 self.pindian_cards——留在 ask_confirm 之后赋值会读到空列表。
+        self.pindian_cards = cards
+        self.stage = "claim"
+        ask_confirm(self.engine, self, source=self.initiator, target=self.owner,
+                    prompt="【制霸】：%s 没赢，是否获得两张拼点牌？"
+                           % self.initiator.name,
+                    reason="zhiba")
+        return self.current_result()
+
+    def _after_claim(self, response):
+        if response is None or not response.confirmed:
+            self.game.add_log("%s 放弃获得【制霸】的拼点牌" % self.owner.name)
+            return self.complete({"applied": True})
+        taken = 0
+        for card in self.pindian_cards:
+            if not self._in_discard(card):
                 continue
-            if any(item is card for item in game.deck.discard_pile):
-                game.deck.discard_pile.remove(card)
-                self.owner.hand.append(card)
+            # 弃牌堆里的牌换主人走统一原子；raw list 操作不发任何事件。
+            self.context.apply(MoveCardAtom(
+                card, source=self.game.deck.discard_pile,
+                destination=self.owner.hand, reason="zhiba"))
+            taken += 1
+        self.game.add_log("【制霸】：%s 获得 %d 张拼点牌"
+                          % (self.owner.name, taken))
         return self.complete({"applied": True})
+
+    def _in_discard(self, card):
+        return any(item is card for item in self.game.deck.discard_pile)
+
 
 
 # ==================================================
@@ -567,7 +763,7 @@ class Beige(Skill):
         if card is None or getattr(card, "name", None) != "SHA":
             return False
         target = getattr(damage, "target", None)
-        return target is not None and bool(_cards_of(self.owner))
+        return target is not None and bool(_discardable_cards(self.owner))
 
     def resolve(self, context, event):
         BeigeFlow(context.services["engine"], self.owner,
@@ -586,12 +782,16 @@ class BeigeFlow(Flow):
         self.stage = "select"
 
     def begin(self):
-        candidates = _cards_of(self.owner)
+        candidates = _discardable_cards(self.owner)
         if not candidates:
             return self.complete({"applied": False})
         ask_cards(self.engine, self, source=self.owner, target=self.owner,
                   prompt="【悲歌】：请弃置一张牌为受伤角色判定",
-                  reason="beige", candidates=candidates, min_cards=1, max_cards=1)
+                  reason="beige", candidates=candidates, min_cards=1, max_cards=1,
+                  # 候选是"手牌 + 装备区"：必须声明 zone，否则界面按手牌处理，
+                  # 装备区的那几张**点不到**（本机手牌为空时会直接卡死——
+                  # 必须弃一张却没有任何可点的目标）。
+                  zone="public_pool", context={"zone_owner": self.owner})
         return self.current_result()
 
     def advance(self, response=None):
@@ -652,7 +852,7 @@ class BeigeFlow(Flow):
         候选是手牌与装备区的全部可弃牌；不足两张时按实际数量处理。
         """
 
-        candidates = _cards_of(source)
+        candidates = _discardable_cards(source)
         if not candidates:
             self.game.add_log("【悲歌】梅花：%s 没有牌可弃" % source.name)
             return self.complete({"applied": True})
@@ -661,7 +861,8 @@ class BeigeFlow(Flow):
         ask_cards(self.engine, self, source=self.owner, target=source,
                   prompt="【悲歌】梅花：请选择要弃置的 %d 张牌" % count,
                   reason="beige", candidates=candidates,
-                  min_cards=count, max_cards=count)
+                  min_cards=count, max_cards=count,
+                  zone="public_pool", context={"zone_owner": source})
         return self.current_result()
 
     def _after_club(self, response):
@@ -724,11 +925,42 @@ def _is_not_heart(card):
     return getattr(card, "suit", None) != "heart"
 
 
+def _lost_from_own_zone(owner, payload):
+    """这次"失去牌"的牌真的来自这名角色**自己的区域**吗。
+
+    判定牌是从**牌堆**抽出来的：它进弃牌堆时归属照实写成被判定者（【落英】
+    那类"因判定进入弃牌堆"的技能需要它），但那张牌从来不在他手里——规则上
+    不是"失去牌"。没有这条判据，【屯田】会被自己的判定牌反复触发（每失去
+    一张牌就连续判定到技能的触发深度上限），「田」成倍地堆。
+    """
+
+    source = payload.get("from")
+    if source is owner.placed_zone(TIAN_ZONE):
+        # 「田」离开武将牌是技能自己的结算，不算失去牌。
+        return False
+    if source is not None:
+        return (source is getattr(owner, "hand", None)
+                or source is getattr(owner, "judgement_zone", None)
+                or source is getattr(owner, "equipment", None))
+    # 来源为 None：装备离场（``UnequipAtom`` 用 ``from_zone`` 声明），
+    # 以及处理区 / 牌堆这类"不属于任何角色"的区域——后者不是失去牌。
+    return payload.get("from_zone") == EQUIPMENT_ZONE
+
+
 class Tuntian(Skill):
-    """回合外失去牌时判定，非红桃的判定牌置于武将牌上，称为「田」。"""
+    """当你于回合外失去牌后，你可以进行一次判定，非红桃的判定牌成为「田」。
+
+    "可以"必须落到玩家手里：条件满足时先问一句，邓艾可以不发动（真人不回答
+    之前不判定、不放牌、不留痕）。同一批移动只触发一次——见 ``_batch_of``。
+    """
 
     id = "tuntian"
     name = "屯田"
+
+    def __init__(self, owner=None):
+        super().__init__(owner)
+        #: 上一次触发所属的"同一批移动"标识（见 ``_batch_of``）。
+        self._batch = None
 
     def bindings(self):
         return (
@@ -739,18 +971,47 @@ class Tuntian(Skill):
     def can_trigger(self, context, event):
         if not self.owner.alive:
             return False
-        if event.payload.get("owner") is not self.owner:
+        payload = event.payload
+        if payload.get("owner") is not self.owner:
             return False
-        # 「田」本身离开武将牌不算"失去牌"（那是技能自己的结算）。
-        if event.payload.get("from") is self.owner.placed_zone(TIAN_ZONE):
+        if not _lost_from_own_zone(self.owner, payload):
             return False
         return context.state.current_turn_player is not self.owner
 
     def resolve(self, context, event):
-        TuntianFlow(context.services["engine"], self.owner).start()
+        batch = _batch_of(context, event)
+        if batch is not None and batch == self._batch:
+            # 同一批移动里的后续牌：合并成一次触发（不再问第二遍、不再判定）。
+            return
+        self._batch = batch
+        optional_trigger(
+            context, self.owner,
+            prompt="【屯田】：是否进行一次判定？", reason="tuntian", label="屯田",
+            effect=lambda flow: TuntianFlow(flow.engine, self.owner).start(),
+        ).start()
+
+
+def _batch_of(context, event):
+    """这次"失去牌"属于哪一批移动；判据是**同一个发起流程 + 同一个移动原因**。
+
+    官方口径是一次失去多张牌只触发一次【屯田】。【缔盟】交换手牌、【甘露】
+    交换装备这类批量移动都在同一条流程的同一段结算里连续发出事件，引擎里
+    表达"同一批"的现成判据就是流程栈顶（``Flow.start/resume`` 期间压栈）：
+    这一批的每一张牌都在同一条流程里被移动，原因（``MoveCardAtom.reason``）
+    也相同。没有外层流程时返回 ``None``——那是一次独立移动，不与任何批次
+    合并（不能按张数循环，也不能拿"上一次事件的时间"猜）。
+    """
+
+    engine = (context.services or {}).get("engine")
+    flow = getattr(engine, "current_flow", None) if engine is not None else None
+    if flow is None:
+        return None
+    return (id(flow), str(event.payload.get("reason") or ""))
 
 
 class TuntianFlow(Flow):
+    """屯田：判定一次，非红桃的判定牌置于武将牌上（问句由触发窗口负责）。"""
+
     def __init__(self, engine, owner):
         super().__init__(engine.context)
         self.engine = engine
@@ -761,6 +1022,9 @@ class TuntianFlow(Flow):
     def begin(self):
         return self._begin_judge()
 
+    def advance(self, response=None):
+        return self.complete({"applied": True})
+
     def _begin_judge(self):
         flow, result = judge(self.engine, self.owner, "tuntian")
         if result is None:
@@ -768,9 +1032,6 @@ class TuntianFlow(Flow):
             self.wait(flow)
             return self.current_result()
         return self._after_judge(result)
-
-    def advance(self, response=None):
-        return self.complete({"applied": True})
 
     def _after_judge(self, result):
         game = self.game
@@ -944,8 +1205,8 @@ MOUNTAIN_SKILLS = (
     active(
         "tiaoxin",
         "挑衅",
-        "出牌阶段限一次，你可以指定一名使用【杀】能攻击到你的角色，"
-        "该角色需对你使用一张【杀】，否则你弃置其一张牌。",
+        "出牌阶段限一次，你可以选择一名攻击范围内含有你的其他角色，"
+        "令其选择一项：对你使用一张【杀】，或令你弃置其一张牌。",
         can_activate=_can_tiaoxin,
         activate=_activate_tiaoxin,
         spec=ActiveSkillSpec(
@@ -977,19 +1238,23 @@ MOUNTAIN_SKILLS = (
         factory=Hunzi,
         tags=("awakening",),
     ),
-    active(
-        "zhiba",
-        "制霸",
-        "主公技，其他吴势力角色可以在其出牌阶段与你进行一次拼点；"
-        "若该角色没赢，你可以获得双方拼点的牌。",
-        can_activate=_can_zhiba,
+    SkillDef(
+        id="zhiba",
+        name="制霸",
+        description="主公技，其他吴势力角色的出牌阶段限一次，"
+                    "该角色可以与你拼点（若你已觉醒，你可以拒绝此拼点）；"
+                    "若其没赢，你可以获得两张拼点牌。",
+        kind=SkillKind.ACTIVE,
         activate=_activate_zhiba,
-        spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=_zhiba_targets,
-            target_prompt="【制霸】：请选择与你拼点的吴势力角色",
+        # 授予型：技能属于孙策，发动权与费用在那名吴势力角色手里。
+        # 技能属于谁、谁发起，两个主体必须分开——把制霸塞进"拥有者自己发动"
+        # 的主动技模型会让孙策在自己的回合伸手找吴将拼点，而真正该发起的
+        # 吴将没有任何入口。判据只有 ``_zhiba_can_offer`` 这一份。
+        grant=GrantedSpec(
+            can_offer=_zhiba_can_offer,
+            spec=ZHIBA_SPEC,
         ),
-        tags=("active", "lord"),
+        tags=("active", "granted_to_others", "lord"),
         is_lord_skill=True,
     ),
     active(
@@ -1037,9 +1302,10 @@ MOUNTAIN_SKILLS = (
     SkillDef(
         id="tuntian",
         name="屯田",
-        description="每当你于回合外失去牌时，你可以进行一次判定，"
+        description="当你于回合外失去牌后，你可以进行一次判定，"
         "将非红桃的判定牌置于你的武将牌上，称为「田」；"
-        "每有一张「田」，你计算与其他角色的距离减一。",
+        "每有一张「田」，你计算与其他角色的距离减一。"
+        "（同一次失去多张牌只触发一次。）",
         kind=SkillKind.PASSIVE,
         factory=Tuntian,
         modifiers=(

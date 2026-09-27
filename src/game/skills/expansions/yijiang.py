@@ -14,7 +14,11 @@ from src.game.atoms_v2 import (
     RecoverHpAtom,
     UnequipAtom,
 )
-from src.game.conversion import CardConversion, PLAY_CONTEXT
+from src.game.conversion import (
+    CardConversion,
+    PLAY_CONTEXT,
+    RESPONSE_CONTEXT,
+)
 from src.game.engine import EventType, Flow
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
@@ -238,8 +242,81 @@ class XuanfengFlow(Flow):
 # ==================================================
 
 
-def _ganlu_targets(game, player):
+def _xuanhuo_targets(game, player):
+    """【眩惑】的目标候选：必须是**其他**角色（牌要交到别人手上）。"""
+
     return other_alive_players(game, player)
+
+
+def _equipment_count(player):
+    return len([card for card in (getattr(player, "equipment", None) or {}).values()
+                if card is not None])
+
+
+def _ganlu_max_diff(player):
+    """【甘露】允许的装备牌数差上限 X = 你已损失的体力值。"""
+
+    return max(0, lost_hp(player))
+
+
+def _ganlu_candidates(game, player):
+    """【甘露】的两名角色候选：**所有**存活角色，包含吴国太本人。
+
+    官方文本是"你可以选择两名角色"，并没有限定"其他角色"——她既可以与
+    队友互换装备，也可以把对手的装备换到自己身上，两人局里同样能选自己
+    与对方。旧实现只列"其他角色"，于是两人局永远报"需要两名角色"。
+    """
+
+    return list(game.get_alive_players())
+
+
+def _ganlu_legal(first, second, owner):
+    """这两个角色现在能不能按【甘露】交换装备（官方：数差不能超过 X）。"""
+
+    if first is None or second is None or first is second:
+        return False
+    if not getattr(first, "alive", True) or not getattr(second, "alive", True):
+        return False
+    return (abs(_equipment_count(first) - _equipment_count(second))
+            <= _ganlu_max_diff(owner))
+
+
+def _ganlu_second_candidates(game, owner, first):
+    """选定第一名之后的第二名候选：数差超上限的组合**在这里就被排除**。
+
+    过滤放在候选层（规则层），玩家不会先选中一个必然失败的组合、提交之后
+    才被告知"数差超上限"——那种"先让你点、再告诉你不行"的路径既浪费一次
+    选择，也让技能看起来像是发动失败。
+    """
+
+    return [other for other in _ganlu_candidates(game, owner)
+            if other is not first and _ganlu_legal(first, other, owner)]
+
+
+def _ganlu_pairs(game, owner):
+    """现在**真的能交换**的无序角色对（含吴国太本人）。"""
+
+    candidates = _ganlu_candidates(game, owner)
+    return [(first, second)
+            for index, first in enumerate(candidates)
+            for second in candidates[index + 1:]
+            if _ganlu_legal(first, second, owner)]
+
+
+def _ganlu_first_candidates(game, owner):
+    """第一名候选：至少要有一个合法搭档才列出来（按座次）。
+
+    没有搭档的角色（例如装备数差对**所有**人都超上限的那位）不出现在候选里
+    ——他的存在只会让玩家选中一个注定失败的第一步。注意合法组合是无序对，
+    搭档可能在组合的任意一侧，所以这里取的是"出现在任一合法组合里的人"。
+    """
+
+    paired = set()
+    for first, second in _ganlu_pairs(game, owner):
+        paired.add(id(first))
+        paired.add(id(second))
+    return [item for item in _ganlu_candidates(game, owner)
+            if id(item) in paired]
 
 
 def _can_ganlu(game, player):
@@ -249,14 +326,9 @@ def _can_ganlu(game, player):
         return False, "只能在你的出牌阶段发动"
     if player.skill_state.get("ganlu", "used", 0):
         return False, "本回合已经发动过"
-    if len(_ganlu_targets(game, player)) < 2:
-        return False, "需要两名角色"
+    if not _ganlu_pairs(game, player):
+        return False, "没有装备牌数差在你已损失的体力值以内的两名角色"
     return True, ""
-
-
-def _equipment_count(player):
-    return len([card for card in (getattr(player, "equipment", None) or {}).values()
-                if card is not None])
 
 
 def _activate_ganlu(game, player, target=None, cards=None):
@@ -279,7 +351,7 @@ class GanluFlow(Flow):
     def begin(self):
         ask_targets(self.engine, self, source=self.owner, target=self.owner,
                     prompt="【甘露】：请选择第一名角色", reason="ganlu",
-                    candidates=_ganlu_targets(self.game, self.owner),
+                    candidates=_ganlu_first_candidates(self.game, self.owner),
                     min_targets=1, max_targets=1)
         return self.current_result()
 
@@ -293,12 +365,18 @@ class GanluFlow(Flow):
         if not targets:
             return self.complete({"applied": False})
         self.first = targets[0]
+        seconds = _ganlu_second_candidates(self.game, self.owner, self.first)
+        # 服务端复核：引擎已经按候选校验过一次（不在候选里的提交会被拒），
+        # 这里挡的是"候选在两次询问之间变了 / 绕过界面的调用方"。
+        if not seconds:
+            self.game.message = (
+                "【甘露】：没有可以与 %s 交换装备的角色（装备牌数差"
+                "不能超过你已损失的体力值）。" % self.first.name)
+            return self.complete({"applied": False})
         self.stage = "second"
         ask_targets(self.engine, self, source=self.owner, target=self.owner,
                     prompt="【甘露】：请选择第二名角色（与 %s 交换装备）" % self.first.name,
-                    reason="ganlu",
-                    candidates=[other for other in _ganlu_targets(self.game, self.owner)
-                                if other is not self.first],
+                    reason="ganlu", candidates=seconds,
                     min_targets=1, max_targets=1)
         return self.current_result()
 
@@ -307,10 +385,9 @@ class GanluFlow(Flow):
         if not targets:
             return self.complete({"applied": False})
         self.second = targets[0]
-        diff = abs(_equipment_count(self.first) - _equipment_count(self.second))
-        if diff > max(0, lost_hp(self.owner)):
-            self.game.message = ("【甘露】：装备牌数差 %d 超过你已损失的体力值，无法交换。"
-                                 % diff)
+        if not _ganlu_legal(self.first, self.second, self.owner):
+            self.game.message = ("【甘露】：这两名角色的装备牌数差超过你已损失的"
+                                 "体力值，无法交换。")
             return self.complete({"applied": False})
         self.owner.skill_state.set("ganlu", "used", 1, ResetScope.TURN)
         first_cards = [card for card in (self.first.equipment or {}).values() if card]
@@ -671,27 +748,85 @@ class Luoying(Skill):
         return True
 
 
+def _jiushi_card(player):
+    """【酒诗】"视为使用"的那张虚拟【酒】。"""
+
+    from ..mechanics import virtual_card
+
+    return virtual_card("JIU", player, (), category="basic")
+
+
+def _jiushi_usable(game, player):
+    """这张虚拟【酒】此刻真的能用吗；返回 ``(ok, reason)``。
+
+    走的是**规则层唯一那份可用性查询**：提交 ``UseCardAction`` 之后
+    ``UseCardFlow`` 第一步调用的就是这个 ``CardEffect.can_use``（【急袭】探测
+    【顺手牵羊】的合法目标、【奇袭】探测单目标合法性用的是同一个入口）。
+    这里不重写任何一条【酒】的规则——"本回合喝过没有 / 手里有没有【杀】 /
+    有没有攻击范围内的目标"全部由它回答。
+    """
+
+    from src.game.engine import UseCardAction
+
+    virtual = _jiushi_card(player)
+    effect = game.engine.card_effects.get(virtual)
+    if effect is None:                                    # pragma: no cover - 防御
+        return False, "现在不能使用【酒】"
+    valid, reason = effect.can_use(
+        game, UseCardAction(player, virtual, [player], ignore_usage_limit=False))
+    if not valid:
+        return False, str(reason or "现在不能使用【酒】")
+    return True, ""
+
+
 def _can_jiushi(game, player):
     if game.game_over or not player.alive:
         return False, "无法发动"
+    # 时机：只在自己的出牌阶段。以前没有这一条——响应窗口 / 别人的回合里
+    # 技能也是亮的，点了先把武将牌翻面，那张【酒】却用不出去（"你没有
+    # 【杀】，现在不能使用【酒】"），白翻一面。
+    if game.current_turn_player is not player or game.phase != "play":
+        return False, "只能在你的出牌阶段发动"
     if not getattr(player, "face_up", True):
         return False, "你的武将牌已经背面朝上"
+    # 出牌阶段限一次：这次发动的产物就是一张【酒】，所以【酒】自己的
+    # "每回合限一次"（``jiu_used``）已经把它限死；这里再记一道技能自己的
+    # 标记（成功之后才写），挡住"翻了面又被人翻回来、本回合还能再翻一次"
+    # 这条侧面。
+    if player.skill_state.get("jiushi", "used", 0):
+        return False, "本回合已经发动过【酒诗】"
     if player.jiu_used:
         return False, "本回合已经使用过【酒】"
+    usable, reason = _jiushi_usable(game, player)
+    if not usable:
+        return False, reason
     return True, ""
 
 
 def _activate_jiushi(game, player, target=None, cards=None):
-    """酒诗：翻面来视为使用一张【酒】。"""
+    """酒诗：翻面来视为使用一张【酒】。
 
-    flip_player(game, player, reason="酒诗")
+    顺序固定为**预验证 → 支付 → 结算**：``flip_player``（翻面）是这次发动的
+    费用，只有在"这张虚拟【酒】此刻真的用得出"确认之后才执行。判据不过就
+    什么都不做——不翻面、不写标记、不动任何牌，只把原因写进提示。以前是
+    先翻面再提交，任何一条使用被拒的路径都会留下"翻了面、什么都没发生"。
+    """
+
     from src.game.engine import UseCardAction
 
-    from ..mechanics import virtual_card
+    # 与 ``can_activate`` 同一份判据复核一遍：按钮（或 AI 的候选表）是上一次
+    # 刷新的结论，从那一刻到这次提交之间状态可能已经变了。
+    allowed, reason = _can_jiushi(game, player)
+    if not allowed:
+        game.message = "【酒诗】：" + reason
+        return False
 
-    virtual = virtual_card("JIU", player, (), category="basic")
-    game.engine.submit(UseCardAction(
+    flip_player(game, player, reason="酒诗")              # 费用
+    virtual = _jiushi_card(player)
+    game.engine.submit(UseCardAction(                     # 结算
         player, virtual, [player], ignore_usage_limit=False))
+    # 限次标记写在成功之后：上面那条被拒绝的路径一次都不写。
+    player.skill_state.set("jiushi", "used", 1, ResetScope.TURN)
     game.add_log("%s 发动【酒诗】，翻面并视为使用一张【酒】" % player.name)
     return True
 
@@ -1250,7 +1385,17 @@ class Huilei(Skill):
 
 
 def _xianzhen_targets(game, player):
-    return other_alive_players(game, player)
+    """能拼点的其他角色：**双方都有手牌**才列出来。
+
+    空手的目标拼不出点（``PindianFlow.start`` 会当场取消），旧实现把他列成
+    可选，玩家选中、技能已经播报之后才失败。过滤走共用的 ``pindian_possible``
+    （与【天义】【驱虎】同一判据），技能自己不写第二套判断。
+    """
+
+    return [
+        other for other in other_alive_players(game, player)
+        if pindian_possible(player, other)
+    ]
 
 
 def _can_xianzhen(game, player):
@@ -1263,7 +1408,7 @@ def _can_xianzhen(game, player):
     if not player.hand:
         return False, "需要一张手牌拼点"
     if not _xianzhen_targets(game, player):
-        return False, "没有其他角色"
+        return False, "没有可以拼点的角色"
     return True, ""
 
 
@@ -1378,7 +1523,7 @@ YIJIANG_SKILLS = (
         "ganlu",
         "甘露",
         "出牌阶段限一次，你可以选择两名角色，交换他们装备区里的所有牌。"
-        "以此法交换的装备牌数差不能超过你已损失的体力值。",
+        "以此法交换的装备牌数差不能超过 X（X 为你已损失的体力值）。",
         can_activate=_can_ganlu,
         activate=_activate_ganlu,
         spec=ActiveSkillSpec(),
@@ -1439,7 +1584,8 @@ YIJIANG_SKILLS = (
     SkillDef(
         id="jiushi",
         name="酒诗",
-        description="若你的武将牌正面朝上，你可以将武将牌翻面来视为使用一张【酒】；"
+        description="出牌阶段限一次，若你的武将牌正面朝上，你可以将武将牌翻面来"
+        "视为使用一张【酒】；"
         "当你的武将牌背面朝上时你受到伤害，你可以在伤害结算后将之翻回正面。",
         kind=SkillKind.ACTIVE,
         factory=JiushiBack,
@@ -1465,7 +1611,7 @@ YIJIANG_SKILLS = (
         activate=_activate_xuanhuo,
         spec=ActiveSkillSpec(
             needs_target=True,
-            target_candidates=_ganlu_targets,
+            target_candidates=_xuanhuo_targets,
             target_prompt="【眩惑】：请选择获得其一张牌的角色",
             # 素材牌不是费用：它要交到目标手上，去向由技能自己的结算决定。
             cost_cards=1,
@@ -1550,14 +1696,23 @@ YIJIANG_SKILLS = (
         id="jinjiu",
         name="禁酒",
         description="锁定技，你的【酒】均视为【杀】。",
-        kind=SkillKind.VIEW_AS,
+        # 锁定技：这不是"可以点技能选择转化"，而是**替换**——手里的【酒】
+        # 就是【杀】，因此 ① 技能栏不该给一个可选的发动入口，② 原牌名那条路
+        # （把【酒】当【酒】喝掉、濒死时拿【酒】自救）必须彻底关掉。
+        # 写法与【武神】的 ``locks_source`` 完全一致：发现层不再为这些牌生成
+        # "普通使用"那一条，引擎侧的用牌 / 响应两个权威入口也一起拒绝按
+        # 原牌名提交。使用 / 打出 / 响应三个场合都要覆盖（决斗、南蛮入侵
+        # 要的是【杀】，因此上下文必须同时包含响应）。
+        kind=SkillKind.LOCKED,
         conversions=(
             CardConversion(
                 skill_id="jinjiu",
                 matches=lambda card: (not getattr(card, "is_virtual", False)
                                       and getattr(card, "name", None) == "JIU"),
-                name="SHA", contexts=(PLAY_CONTEXT,)),
+                name="SHA",
+                contexts=(PLAY_CONTEXT, RESPONSE_CONTEXT),
+                locks_source=True),
         ),
-        tags=("conversion",),
+        tags=("conversion", "locked"),
     ),
 )

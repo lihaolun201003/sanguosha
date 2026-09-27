@@ -12,6 +12,7 @@ from src.game.rules import TurnPhase
 
 from ..definitions import (
     ActiveSkillSpec,
+    CostZone,
     ModifierSpec,
     SkillDef,
     SkillKind,
@@ -187,11 +188,45 @@ class JileiFlow(Flow):
 # ==================================================
 
 
-def _sp_lijian_males(game, player):
+def _sp_lijian_males(game, player, *, exclude=None):
+    """SP 离间的目标候选：其他**存活男性**角色（``exclude`` 用于排除发起者）。"""
+
     return [
         other for other in game.get_alive_players()
-        if other is not player and getattr(other, "gender", None) == "male"
+        if other is not player and other is not exclude
+        and getattr(other, "gender", None) == "male"
     ]
+
+
+#: SP【离间】的输入契约：与标准版同一句话，只有【决斗】"不能被无懈可击响应"
+#: 这一条结算差异——费用是"弃一张牌"（手牌 + 装备区都能支付），第一步只定
+#: "谁使用这张【决斗】"，第二步（流程里）再定打向谁。
+SP_LIJIAN_SPEC = ActiveSkillSpec(
+    needs_target=True,
+    target_candidates=_sp_lijian_males,
+    target_prompt="【离间】：请选择发起【决斗】的男性角色",
+    cost_cards=1,
+    cost_prompt="【离间】：请选择一张牌弃置",
+    allowed_zones=(CostZone.HAND, CostZone.EQUIPMENT),
+)
+
+
+def _sp_lijian_cost_cards(game, player):
+    """这次发动能支付的牌（与引擎校验、界面高亮同一份判断）。"""
+
+    from src.game.skills.activation import cost_candidates
+
+    return cost_candidates(game, player, SP_LIJIAN_SPEC)
+
+
+def _is_sp_lijian_male(player, target):
+    """服务端复核：这名角色现在能不能作为离间的男性角色。"""
+
+    if target is None or target is player:
+        return False
+    if not getattr(target, "alive", True):
+        return False
+    return getattr(target, "gender", None) == "male"
 
 
 def _can_sp_lijian(game, player):
@@ -201,28 +236,68 @@ def _can_sp_lijian(game, player):
         return False, "只能在你的出牌阶段发动"
     if player.skill_state.get("lijian_sp", "used", 0):
         return False, "本阶段已经发动过"
-    if not player.hand:
-        return False, "需要弃置一张牌"
+    if not _sp_lijian_cost_cards(game, player):
+        return False, "需要弃一张牌"
     if len(_sp_lijian_males(game, player)) < 2:
         return False, "需要两名男性角色"
     return True, ""
 
 
 def _activate_sp_lijian(game, player, target=None, cards=None):
-    """SP 离间：弃一张牌，令一名男性对另一名男性使用一张不能被无懈的【决斗】。"""
+    """SP 离间：费用已由引擎支付；令选中的男性角色对另一名男性使用【决斗】。
 
-    males = _sp_lijian_males(game, player)
-    if len(males) < 2:
+    方向：``target``（第一步选出的角色）是**使用这张【决斗】的人**，它的目标
+    由流程的第二步单独询问——以前这里直接取"名单里的第一位男性"，玩家只能
+    决定谁发起决斗，打向谁是代码替他定的。
+    """
+
+    actor = target
+    if not _is_sp_lijian_male(player, actor):
         return False
-    actor, defender = males[0], males[1]
-    if target is not None and target in males:
-        actor = target
-        defender = next((item for item in males if item is not actor), males[1])
+    # 费用已经付掉了：次数在这里就该记上，第二步只是"打向谁"。
     player.skill_state.set("lijian_sp", "used", 1, ResetScope.PHASE)
-    use_virtual(game, actor, "JUEDOU", targets=[defender], skip_wuxie=True)
-    game.add_log("%s 发动【离间】：%s 与 %s 决斗（不能被【无懈可击】响应）"
-                 % (player.name, actor.name, defender.name))
+    SpLijianFlow(game.engine, player, actor).start()
     return True
+
+
+class SpLijianFlow(Flow):
+    """SP 离间第二步：这张【决斗】打向**哪一名**男性角色，由玩家自己选。"""
+
+    def __init__(self, engine, owner, actor):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.actor = actor
+        self.stage = "target"
+
+    def begin(self):
+        candidates = _sp_lijian_males(self.game, self.owner, exclude=self.actor)
+        if not candidates:
+            self.game.message = "【离间】：没有另一名男性角色可以作为决斗目标。"
+            return self.complete({"applied": False})
+        ask_targets(
+            self.engine, self, source=self.owner, target=self.owner,
+            prompt="【离间】：请选择 %s 这张【决斗】的目标" % self.actor.name,
+            reason="lijian_sp", candidates=candidates,
+            min_targets=1, max_targets=1)
+        return self.current_result()
+
+    def advance(self, response=None):
+        targets = list(getattr(response, "targets", ()) or ())
+        defender = targets[0] if targets else None
+        # 两名角色必须互不相同、都是男性、都存活。
+        if (not _is_sp_lijian_male(self.owner, defender)
+                or defender is self.actor):
+            self.game.message = "【离间】：没有选择决斗目标，费用已支付但决斗未发生。"
+            self.game.add_log("%s 的【离间】没有选择决斗目标" % self.owner.name)
+            return self.complete({"applied": False})
+        # 先写战报再提交：这条"发动"记录要排在【决斗】自己的结算记录之前。
+        self.game.add_log("%s 发动【离间】：%s 对 %s 决斗（不能被【无懈可击】响应）"
+                          % (self.owner.name, self.actor.name, defender.name))
+        use_virtual(self.game, self.actor, "JUEDOU", targets=[defender],
+                    skip_wuxie=True)
+        return self.complete({"applied": True})
 
 
 # ==================================================
@@ -479,17 +554,11 @@ SP_SKILLS = (
         "lijian_sp",
         "离间",
         "出牌阶段限一次，你可以弃一张牌并选择两名男性角色，"
-        "视为其中一名角色对另一名角色使用一张【决斗】"
+        "令其中一名男性角色视为对另一名男性角色使用一张【决斗】"
         "（此【决斗】不能被【无懈可击】响应）。",
         can_activate=_can_sp_lijian,
         activate=_activate_sp_lijian,
-        spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=_sp_lijian_males,
-            target_prompt="【离间】：请选择发起决斗的男性角色",
-            cost_cards=1,
-            cost_prompt="【离间】：请选择一张牌弃置",
-        ),
+        spec=SP_LIJIAN_SPEC,
         tags=("active",),
     ),
     SkillDef(

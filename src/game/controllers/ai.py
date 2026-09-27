@@ -33,6 +33,61 @@ BENEFICIAL_TRICKS = {"WUZHONG", "TAOYUAN", "WUGU"}
 BENEFIT_REASONS = frozenset({"jieming"})
 
 
+def _cost_combo_ok(validator, game, player, cards):
+    """技能声明的费用组合校验（``cost_validator``）的一个答案。
+
+    与引擎侧（``activation._as_result``）读同一个钩子、同一个契约：
+    ``(ok, reason)`` 或裸 ``bool`` 两种返回形态都接受。AI 不在这里重复任何
+    规则——"两张必须同花色"这类判断只存在于技能自己的声明里。
+    """
+
+    result = validator(game, player, list(cards))
+    if isinstance(result, tuple):
+        return bool(result[0])
+    return bool(result)
+
+
+def _predicate_ok(value):
+    """技能谓词的两种返回形态：``bool`` 或 ``(bool, reason)``。"""
+
+    if isinstance(value, tuple):
+        return bool(value[0])
+    return bool(value)
+
+
+class _PendingNoRequest:
+    """空的请求栈（谓词只读 ``current`` / ``active`` 也是安全的）。"""
+
+    current = None
+    active = False
+
+
+class _EngineNoRequest:
+    def __init__(self, engine):
+        self._engine = engine
+        self.pending = _PendingNoRequest()
+
+    def __getattr__(self, name):
+        return getattr(self._engine, name)
+
+
+class _NoRequestView:
+    """反事实对照用的**只读**视图：把"待回答的请求"报告成"没有请求"。
+
+    **不改动任何真实状态**（不摘请求栈、不发事件、不移动牌），只把 ``game``
+    包一层，让技能的可用性判据看到"这条响应请求不存在"的世界。技能的
+    ``can_activate(game, player)`` 契约本来就是"只读传进来的 game 与 player"，
+    所以这份视图对谓词是合法输入。
+    """
+
+    def __init__(self, game):
+        self._game = game
+        self.engine = _EngineNoRequest(getattr(game, "engine", None))
+
+    def __getattr__(self, name):
+        return getattr(self._game, name)
+
+
 class AIController(PlayerController):
 
     MAX_CARDS_PER_TURN = 10
@@ -68,6 +123,9 @@ class AIController(PlayerController):
         self._cards_played = 0
         self._failed_cards = set()
         self._used_skills_this_turn = set()
+        #: 已经用技能试过的响应请求 id（一条请求只发动一次技能，见
+        #: ``_respond_with_skill``）。
+        self._skill_response_tried = set()
 
     # ==================================================
     # 估值与信息边界
@@ -489,6 +547,8 @@ class AIController(PlayerController):
         self._cards_played = 0
         self._failed_cards = set()
         self._used_skills_this_turn = set()
+        # 上一回合的响应请求都已经结束，重开记录（避免集合无限增长）。
+        self._skill_response_tried = set()
         self._continue_turn(on_complete)
 
     def _continue_turn(self, on_complete):
@@ -629,6 +689,11 @@ class AIController(PlayerController):
             from src.game.engine import ActivateSkillAction
 
             cards = self._active_skill_cards(skill_id)
+            if cards is None:
+                # 挑不出满足技能组合约束的组合（【乱击】手里没有两张同花色）：
+                # 这一手不发动，也不把这次机会记成"用过了"。
+                self._used_skills_this_turn.discard(skill_id)
+                continue
             ok, _message = self.submit(
                 ActivateSkillAction(self.player, skill_id, target=target, cards=cards)
             )
@@ -701,12 +766,17 @@ class AIController(PlayerController):
         几张才是 AI 的策略。候选这一层不能省：牌不是想给就能给的（眩惑只能
         交红桃手牌、明策只能给装备或【杀】、直谏只能给装备），AI 必须按同一
         份名单挑，否则房主会拒绝它提交的牌。
+
+        组合约束（【乱击】的两张必须同花色）由技能在 ``spec.cost_validator``
+        里声明，这里读**同一份**校验来挑组合：不合格就换组合。挑不到任何
+        合法组合时返回 ``None``——提交一份注定被拒的牌等于白丢一次发动机会，
+        不如这一手不发。
+
+        返回：牌列表，或 ``None``（这次不发动）。
         """
 
         inputs = self._available_actions().skill_inputs(self.player, skill_id)
         candidates = list(inputs.get("cost_candidates") or ())
-        if not candidates:
-            return []
         if inputs.get("variable_cost"):
             cap = int(inputs.get("max_cost_cards") or 0)
             need = min(cap, len(candidates)) if cap else len(candidates)
@@ -720,8 +790,38 @@ class AIController(PlayerController):
             need = int(inputs.get("cost_cards") or 0)
         if need <= 0:
             return []
+        if len(candidates) < need:
+            # 连候选（逐张谓词那一层）都不够付：提交一份凑不满的牌只会被
+            # 规则层拒绝。宁可这一手不发。
+            return None
         ranked = sorted(candidates, key=self.card_value)
-        return ranked[:need]
+        return self._pick_cost_cards(skill_id, ranked, need)
+
+    def _pick_cost_cards(self, skill_id, ranked, need):
+        """从"最没价值优先"的候选里挑一组合法的费用牌（挑不到返回 ``None``）。
+
+        合法性判据是技能自己声明的那一份（``ActiveSkillSpec.cost_validator``，
+        引擎 ``plan_activation`` 校验阶段读的是同一个函数），所以 AI 不会再
+        挑出"两张不同花色"这种会被规则层拒绝的组合。组合按价值从低到高枚举，
+        第一个通过的即为本次选择——够用即可，不做全组合搜索。
+        """
+
+        from src.game.skills.activation import spec_of
+
+        definition = self.game.skill_registry.get(skill_id)
+        spec = spec_of(definition) if definition is not None else None
+        validator = getattr(spec, "cost_validator", None) if spec is not None else None
+        if not callable(validator):
+            return ranked[:need]
+        import itertools
+
+        # 候选本身就是"手上能用的牌"（最多十几张），直接枚举组合即可：
+        # 数量级完全可控，而且不会像"只看最便宜的几张"那样在组合边界上漏掉
+        # 唯一合法的搭配。
+        for combo in itertools.combinations(ranked, need):
+            if _cost_combo_ok(validator, self.game, self.player, combo):
+                return list(combo)
+        return None
 
     def _skill_gives_cards_away(self, skill_id):
         definition = self.game.skill_registry.get(skill_id)
@@ -1042,7 +1142,82 @@ class AIController(PlayerController):
             card = None
         if card is None:
             card = self.converted_response(request)
+        if card is None and self._respond_with_skill(request, responder):
+            # 技能替我完成了这次响应（【激将】：蜀势力角色打出的【杀】由刘备
+            # 打出）。请求已经由那条技能的流程回答，这里不再提交"放弃"。
+            return
         self._play_or_pass(request, card)
+
+    def _respond_with_skill(self, request, responder):
+        """没有实体牌 / 转化牌可打时，看看**技能**能不能替我完成这次响应。
+
+        判据全部来自规则层的同一份可用性查询（``game.skills.can_activate``）：
+        【激将】在"被要求打出【杀】"的响应窗口里能不能发动，由技能自己回答
+        （有其他存活的蜀势力角色即可）——AI 不认牌名，也不认技能 id。这条
+        路与出牌阶段的 ``_try_active_skill`` 是同一个口径：规则层说"可以
+        发动"的技能，真人界面上也亮着同一个按钮。
+
+        返回 True 表示已经由技能的流程接手这次响应（可能还挂着等同伴回答）。
+
+        **一条请求只发动一次技能**：技能没能满足这条请求时（【激将】问了
+        一圈、没有一个蜀势力角色愿意提供【杀】），引擎会把这条请求重新驱动
+        到最前面再问一次，没有这个记忆就会"发动 → 没人提供 → 再发动"地
+        无限递归。标记必须在 ``submit`` **之前**落下——那条重新驱动就发生在
+        ``submit`` 里面，等它返回再记就来不及了。
+        """
+
+        game = self.game
+        if responder is not self.player or game.game_over:
+            return False
+        if request.request_id in self._skill_response_tried:
+            return False
+        for skill_id in game.skills.activatable_skills(responder):
+            definition = game.skill_registry.get(skill_id)
+            if definition is None:
+                continue
+            if getattr(definition, "needs_local_ui", False):
+                continue
+            if "granted" in getattr(definition, "tags", ()):
+                continue
+            if not self._skill_serves_this_request(definition, responder):
+                # 它在这个窗口里"恰好也能发动"，但那次可发动跟这条请求无关
+                # （【酒诗】在任意时刻都能翻面视为使用【酒】）：替玩家发动它
+                # 只会白白花掉翻面 / 一张牌，还回答不了这条请求。
+                continue
+            from src.game.engine import ActivateSkillAction
+
+            self._skill_response_tried.add(request.request_id)
+            ok, _message = self.submit(
+                ActivateSkillAction(responder, skill_id))
+            if ok:
+                return True
+            # 被规则层拒绝（等于什么都没发生）：撤掉标记，继续试下一个。
+            self._skill_response_tried.discard(request.request_id)
+        return False
+
+    def _skill_serves_this_request(self, definition, player):
+        """这个技能此刻的"可发动"是**这条响应请求带来的**吗。
+
+        反事实对照：把待回答的请求报告成不存在，再问一次技能自己的可用性
+        判据（只读视图，不改任何真实状态）。摘掉请求之后仍然可发动 → 这个
+        技能与"完成这次响应"无关，AI 不替玩家发动它；只有"没有这条请求就
+        发不动"的技能（【激将】：没有被要求打出【杀】时不可发动）才是真正
+        为这次响应而生的。
+
+        没有可用性判据的技能（``can_activate is None``）随时都能发动，同样
+        不算响应型技能——保守方向是"宁可不用"，不会出现"AI 替玩家白花一张
+        牌或翻一次面"。
+        """
+
+        predicate = getattr(definition, "can_activate", None)
+        if not callable(predicate):
+            return False
+        try:
+            return not _predicate_ok(
+                predicate(_NoRequestView(self.game), player))
+        except Exception:                                              # noqa: BLE001
+            # 谓词读到了这份视图给不出的东西：保守地当成"与本次响应无关"。
+            return False
 
     def _wuxie_choice(self, request):
         card = self._pick_card(self.answerer(request), ("WUXIE",))

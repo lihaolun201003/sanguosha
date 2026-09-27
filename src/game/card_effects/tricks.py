@@ -420,10 +420,15 @@ class JiedaoWielderFlow(Flow):
     * 不使用时要交出的武器，走统一装备离场入口。
 
     没有合法【杀】时直接交武器，不弹一个只能点"不杀"的假入口。
+
+    持武器者是刘备（主公）时，选项里多一条"发动【激将】"：他手里没有【杀】
+    也能让其他蜀势力角色替他打出这一张，而不是被迫交武器。选项仍然只有
+    这一处（``ask_option`` 的现成机制），不新造窗口。
     """
 
     SHA = "sha"
     SURRENDER = "surrender"
+    JIJIANG = "jijiang"
 
     def __init__(self, owner_flow, options):
         super().__init__(owner_flow.context)
@@ -435,20 +440,50 @@ class JiedaoWielderFlow(Flow):
         self.victim = owner_flow.action.metadata.get("jiedao_victim")
         self.options = list(options)
         self.stage = "choose"
+        self.can_jijiang = self._jijiang_available()
 
     # ---- 1. 出杀还是交武器 ----
 
+    def _jijiang_available(self):
+        """这次"使用一张【杀】"能不能交给【激将】完成。
+
+        两个条件都来自规则层，谁也不看谁的手牌：
+
+        * 【激将】本身可以发动（主公技 + 有其他存活的蜀势力角色），判据由
+          技能自己提供（``shu.jijiang_ready``）；
+        * 这个目标现在仍然是持武器者一张【杀】的合法目标（本文件上面那份
+          ``can_use_sha_on``，含距离与技能改写）。
+
+        同伴手里到底有没有【杀】是**他们自己**在被问到的时候回答的事，这里
+        问了就等于替刘备读别人的暗手牌（点不亮 / 亮得起都会泄露）。
+        """
+
+        from src.game.skills.standard.shu import jijiang_ready
+
+        if self.victim is None or self.wielder is None:
+            return False
+        if not jijiang_ready(self.game, self.wielder):
+            return False
+        return can_use_sha_on(self.game, self.wielder, self.victim)
+
     def begin(self):
-        if self.victim is None or not self.options:
+        if self.victim is None or not (self.options or self.can_jijiang):
             return self._surrender()
         from src.game.skills.mechanics import ask_option
 
+        # 只列出**现在真的能做**的事情：手里一张能当【杀】的牌都没有时，
+        # 不给一个点了也没用的"使用【杀】"按钮（那会让人以为是自己点错了）。
+        choices = []
+        if self.options:
+            choices.append((self.SHA, "对 %s 使用【杀】" % self.victim.name))
+        if self.can_jijiang:
+            choices.append(
+                (self.JIJIANG, "发动【激将】，让蜀势力角色替你打出【杀】"))
+        choices.append((self.SURRENDER, "不使用【杀】，交出武器"))
         ask_option(self.engine, self, source=self.user, target=self.wielder,
                    prompt="【借刀杀人】：对 %s 使用一张【杀】，或交出武器"
                           % self.victim.name,
-                   reason="jiedao",
-                   options=((self.SHA, "对 %s 使用【杀】" % self.victim.name),
-                            (self.SURRENDER, "不使用【杀】，交出武器")))
+                   reason="jiedao", options=tuple(choices))
         return self.current_result()
 
     def advance(self, response=None):
@@ -456,6 +491,9 @@ class JiedaoWielderFlow(Flow):
             option = str(getattr(response, "option", "") or "")
             if option == self.SHA:
                 return self._ask_source()
+            if option == self.JIJIANG:
+                self.stage = "jijiang"
+                return self._ask_jijiang()
             return self._surrender()
         return self._use_sha(response)
 
@@ -492,6 +530,43 @@ class JiedaoWielderFlow(Flow):
             return self._surrender()
         return self._submit(option)
 
+    # ---- 2b. 把这次使用交给【激将】（刘备作为持武器者）----
+
+    def _ask_jijiang(self):
+        """由蜀势力角色提供【杀】、由刘备完成借刀要求的这次使用。
+
+        走的是**同一条** ``JijiangFlow``：逐个询问其他蜀势力角色，每人自己
+        决定是否提供、提供哪一张（可以拒绝，也可以只给手里最没用的那张）。
+        所有人都拒绝时这次【杀】就没有打出去，按规则退回"交出武器"。
+        """
+
+        from src.game.skills.standard.shu import jijiang_use_flow
+
+        child = jijiang_use_flow(
+            self.engine, self.wielder, self.victim,
+            validator=lambda game, actor, target: can_use_sha_on(game, actor, target),
+            on_used=lambda _result: self._after_sha())
+        if child.status in (FlowStatus.COMPLETED, FlowStatus.CANCELLED):
+            # 同伴当场就答完了（AI 对局）：子流程不会再回调，这里自己接上。
+            return self._after_jijiang(child.result)
+        return self.guard_child_flows(child) or self.current_result()
+
+    def resume_from_child(self, result):
+        """【激将】的子流程结束：有人提供了 → 那张【杀】已经交出去了；
+        没人提供 → 这次使用没有成立，退回交武器。"""
+
+        return self._after_jijiang(result)
+
+    def _after_jijiang(self, result):
+        value = getattr(result, "value", result)
+        if isinstance(value, dict) and value.get("applied"):
+            # 【杀】已经提交给引擎（结算走完时 ``on_used`` 会接回 _after_sha），
+            # 这里不能重复完成这条流程。
+            return self.current_result()
+        if self.status in (FlowStatus.COMPLETED, FlowStatus.CANCELLED):
+            return self.current_result()
+        return self._surrender()
+
     # ---- 3. 真正使用（走正常 UseCardFlow）----
 
     def _submit(self, option):
@@ -516,6 +591,9 @@ class JiedaoWielderFlow(Flow):
     def _after_sha(self):
         """【杀】按正常流程结算完了（含闪响应 / 伤害 / 濒死）。"""
 
+        if self.status in (FlowStatus.COMPLETED, FlowStatus.CANCELLED):
+            # 子流程（激将）的收尾可能比这条回调先到：完成只做一次。
+            return self.current_result()
         self.game.add_log("%s 的【借刀杀人】结算完成" % self.user.name)
         return self.complete({"applied": True, "mode": self.SHA})
 

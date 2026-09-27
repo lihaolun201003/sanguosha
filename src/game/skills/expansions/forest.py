@@ -1,13 +1,15 @@
 """林包武将技能：孙坚 / 孟获 / 徐晃 / 曹丕 / 祝融 / 董卓 / 贾诩 / 鲁肃。"""
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, UnequipAtom
+from src.game.atoms_v2 import DISCARD_REASON, DrawCardsAtom, MoveCardAtom, UnequipAtom
 from src.game.conversion import PLAY_CONTEXT, CardConversion
 from src.game.engine import EventType, Flow, FlowStatus
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
+from ..activation import emit_skill_triggered
 from ..definitions import (
     ActiveSkillSpec,
+    CostZone,
     ModifierSpec,
     PhaseReplacement,
     SkillDef,
@@ -383,7 +385,7 @@ class FangzhuFlow(Flow):
 
 
 class Songwei(Skill):
-    """主公技：其他魏势力角色的判定牌为黑色且生效后，可以让你摸一张牌。"""
+    """主公技：其他魏势力角色的判定牌生效后，**其**可以令你摸一张牌（黑色）。"""
 
     id = "songwei"
     name = "颂威"
@@ -400,6 +402,9 @@ class Songwei(Skill):
             return False
         if getattr(judged, "kingdom", None) != "wei":
             return False
+        if not getattr(judged, "alive", True):
+            # 判定者已经阵亡：没人能做这个决定（不替他自动发动）。
+            return False
         return getattr(result, "color", None) == "black"
 
     def resolve(self, context, event):
@@ -410,6 +415,13 @@ class Songwei(Skill):
 
 
 class SongweiFlow(Flow):
+    """颂威：是否发动由**进行判定的那名魏势力角色**决定，不是曹丕。
+
+    官方："主公技，其他魏势力角色的判定牌生效后，若判定牌为黑色，**其**可以
+    令你摸一张牌。" 决定权在那名魏势力角色手里——他可以选择不发动。以前这里
+    问的是技能拥有者自己（曹丕自问自答），等于把别人的选择权拿走了。
+    """
+
     def __init__(self, engine, owner, judged, label):
         super().__init__(engine.context)
         self.engine = engine
@@ -420,17 +432,22 @@ class SongweiFlow(Flow):
         self.stage = "confirm"
 
     def begin(self):
-        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
-                    prompt="【颂威】：%s 的判定为黑色（%s），是否摸一张牌？"
-                           % (self.judged.name, self.label),
-                    reason="songwei")
+        if self.judged is None or not getattr(self.judged, "alive", True):
+            return self.complete({"applied": False})
+        ask_confirm(
+            self.engine, self, source=self.owner, target=self.judged,
+            prompt="【颂威】：你的判定牌为黑色（%s），是否令 %s 摸一张牌？"
+                   % (self.label, self.owner.name),
+            reason="songwei")
         return self.current_result()
 
     def advance(self, response=None):
         if response is None or not response.confirmed:
+            self.game.add_log("%s 放弃发动【颂威】" % self.judged.name)
             return self.complete({"applied": False})
         self.context.apply(DrawCardsAtom(self.owner, 1))
-        self.game.add_log("%s 的【颂威】摸一张牌" % self.owner.name)
+        self.game.add_log("%s 的【颂威】令 %s 摸一张牌"
+                          % (self.judged.name, self.owner.name))
         return self.complete({"applied": True})
 
 
@@ -640,7 +657,7 @@ class BenguaiFlow(Flow):
 
 
 class Baonue(Skill):
-    """主公技：其他群势力角色每造成一次伤害，可判定，黑色则董卓回复 1 点体力。"""
+    """主公技：其他群势力角色造成伤害后，其可以令董卓判定，黑桃则董卓回血。"""
 
     id = "baonue"
     name = "暴虐"
@@ -654,30 +671,66 @@ class Baonue(Skill):
         source = event.source
         if source is None or source is self.owner:
             return False
+        if not getattr(source, "alive", True):
+            # 伤害来源已经阵亡：没人能做这个决定（不替他自动发动）。
+            return False
         if getattr(source, "kingdom", None) != "qun":
             return False
         damage = event.payload.get("damage")
         if damage is None or int(event.payload.get("amount", 0) or 0) <= 0:
             return False
-        return self.owner.hp < self.owner.max_hp
+        # 官方（旧版）**没有**"董卓必须已受伤"这个前提：满体力时照样问伤害
+        # 来源要不要发动，判定为黑桃才回血（满体力时回血自然无效，但流程与
+        # 询问照走）。这里曾经用 ``self.owner.hp < self.owner.max_hp`` 当门槛，
+        # 等于替伤害来源做了决定——他连"要不要赌一次判定"都问不到。
+        return True
 
     def resolve(self, context, event):
         BaonueFlow(context.services["engine"], self.owner, event.source).start()
 
 
 class BaonueFlow(Flow):
+    """暴虐：判定与否由**造成伤害的那名其他群势力角色**决定，黑桃才回血。
+
+    官方："主公技，其他群势力角色造成伤害后，**其**可以令你进行一次判定，
+    若结果为**黑桃**，你回复 1 点体力。" 旧实现两处都与官方相反：直接判定
+    （不问伤害来源愿不愿意），而且把结果判据写成了"黑色"——梅花判定也会
+    让董卓回血。判定本身仍然由董卓执行（"令**你**进行一次判定"）。
+
+    第三处偏差是"董卓必须已受伤"这个门槛（``can_trigger`` 的结尾）：官方
+    文本里没有它，而且它是替伤害来源做决定——董卓满体力时他连"要不要赌一次
+    判定"都问不到。门槛已删去：满体力时照样询问、照样判定，只是回血无效。
+    """
+
     def __init__(self, engine, owner, source):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
         self.owner = owner
         self.source = source
-        self.stage = "judge"
+        self.stage = "confirm"
 
     def begin(self):
+        if self.source is None or not getattr(self.source, "alive", True):
+            return self.complete({"applied": False})
+        ask_confirm(
+            self.engine, self, source=self.owner, target=self.source,
+            prompt="【暴虐】：是否令 %s 进行一次判定？（黑桃则 %s 回复 1 点体力）"
+                   % (self.owner.name, self.owner.name),
+            reason="baonue")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "judge":
+            # 判定流程（含改判窗口）已经收尾：结果由 ``_after_judge`` 接。
+            return self.complete({"applied": True})
+        if response is None or not response.confirmed:
+            self.game.add_log("%s 放弃发动【暴虐】" % self.source.name)
+            return self.complete({"applied": False})
         return self._begin_judge()
 
     def _begin_judge(self):
+        self.stage = "judge"
         flow, result = judge(self.engine, self.owner, "baonue")
         if result is None:
             flow.on_complete = self._after_judge
@@ -685,20 +738,17 @@ class BaonueFlow(Flow):
             return self.current_result()
         return self._after_judge(result)
 
-    def advance(self, response=None):
-        return self.complete({"applied": True})
-
     def _after_judge(self, result):
         game = self.game
-        if result is not None and getattr(result, "color", None) == "black":
+        if result is not None and getattr(result, "suit", None) == "spade":
             from src.game.atoms_v2 import RecoverHpAtom
 
             before = self.owner.hp
             self.context.apply(RecoverHpAtom(self.owner, 1))
-            game.add_log("%s 的【暴虐】判定为黑色，回复 %d 点体力"
+            game.add_log("%s 的【暴虐】判定为黑桃，回复 %d 点体力"
                          % (self.owner.name, self.owner.hp - before))
         else:
-            game.add_log("%s 的【暴虐】判定不为黑色" % self.owner.name)
+            game.add_log("%s 的【暴虐】判定不是黑桃" % self.owner.name)
         return self.complete({"applied": True})
 
 
@@ -1073,14 +1123,47 @@ def _can_dimeng(game, player):
     return True, ""
 
 
+#: 【缔盟】的费用是"弃置 X 张牌"（X = 两名目标角色的手牌数之差）：手牌与装备区
+#: 的牌都能支付。张数要等两名目标选定才算得出来，所以它没法在
+#: ``ActiveSkillSpec`` 里预先声明（那一步还不知道目标）——这份声明只用来收集
+#: 候选牌：``activation.cost_candidates`` 是候选 / 界面高亮 / 引擎校验的同一份
+#: 实现，张数、支付与结算由 ``DimengFlow`` 按"预验证 → 支付 → 结算"做。
+DIMENG_COST_SPEC = ActiveSkillSpec(
+    cost_cards=1,
+    cost_prompt="【缔盟】：请弃置等同于两名角色手牌数差的牌",
+    allowed_zones=(CostZone.HAND, CostZone.EQUIPMENT),
+)
+
+
+def _dimeng_cost_candidates(game, player):
+    """这次发动能支付的牌（手牌 + 装备区；与引擎的候选判断同一份实现）。"""
+
+    from src.game.skills.activation import cost_candidates
+
+    return cost_candidates(game, player, DIMENG_COST_SPEC)
+
+
 def _activate_dimeng(game, player, target=None, cards=None):
-    player.skill_state.set("dimeng", "used", 1, ResetScope.TURN)
+    """缔盟：两名目标与费用都在流程里收集，所以这里**不写** used 标记。
+
+    以前它在流程开始前就把次数记成"已发动"：点了技能又取消、或者手里的牌
+    不够支付 X，次数照样被扣掉，一个出牌阶段就此白废。现在次数只在
+    "两名目标确认 + 差额算出 + 费用真的付掉"之后才写（见 ``DimengFlow._settle``）。
+    """
+
     DimengFlow(game.engine, player).start()
     return True
 
 
 class DimengFlow(Flow):
-    """缔盟：选两名其他角色 → 弃掉等于手牌数差的牌 → 交换他们的手牌。"""
+    """缔盟：选两名其他角色 → 弃置 X 张牌（X = 手牌数之差）→ 交换他们的手牌。
+
+    费用事务的三段与 ``activation.plan_activation`` 同序、同判据：
+    预验证（目标合法、候选牌够付、每张牌确实还在自己的区域）→ 支付（手牌走
+    ``MoveCardAtom``、装备区走 ``UnequipAtom(reason="discard")``）→ 结算
+    （交换手牌 + 记次数）。被拒绝或被取消的发动不改任何状态：不消耗次数、
+    不发技能事件、不动牌。
+    """
 
     def __init__(self, engine, owner):
         super().__init__(engine.context)
@@ -1105,12 +1188,14 @@ class DimengFlow(Flow):
             return self._after_first(response)
         if self.stage == "second":
             return self._after_second(response)
-        return self._after_discard(response)
+        return self._after_cost(response)
+
+    # ---- 第一步：两名目标（换牌双方由玩家指定，不替玩家挑）----
 
     def _after_first(self, response):
         targets = list(getattr(response, "targets", ()) or ())
         if not targets:
-            return self.complete({"applied": False})
+            return self._abort("没有选择角色")
         self.first = targets[0]
         self.stage = "second"
         ask_targets(self.engine, self, source=self.owner, target=self.owner,
@@ -1122,36 +1207,87 @@ class DimengFlow(Flow):
                     min_targets=1, max_targets=1)
         return self.current_result()
 
+    # ---- 第二步：差额 → 预验证费用 ----
+
     def _after_second(self, response):
         targets = list(getattr(response, "targets", ()) or ())
         if not targets:
-            return self.complete({"applied": False})
+            return self._abort("没有选择第二名角色")
         self.second = targets[0]
+        if self.second is self.first or not getattr(self.second, "alive", True):
+            return self._abort("没有选择合法的角色")
+        # X = 两名角色手牌数之差（在支付**之前**结算，与官方口径一致）。
         self.need = abs(len(self.first.hand) - len(self.second.hand))
         if self.need <= 0:
-            return self._swap()
-        candidates = list(self.owner.hand)
+            # X = 0：没有费用要支付，直接交换。
+            return self._settle()
+        candidates = _dimeng_cost_candidates(self.game, self.owner)
         if len(candidates) < self.need:
-            self.game.message = "【缔盟】：手牌不足 %d 张，无法发动。" % self.need
+            # 预验证失败：费用不够 → 整次发动作废，次数与牌一个都不动。
+            self.game.message = ("【缔盟】：需要弃置 %d 张牌，但只有 %d 张可以支付，"
+                                 "本次发动未结算。" % (self.need, len(candidates)))
+            self.game.add_log("%s 的【缔盟】费用不足 %d 张，未发动"
+                              % (self.owner.name, self.need))
             return self.complete({"applied": False})
-        self.stage = "discard"
+        self.stage = "cost"
         ask_cards(self.engine, self, source=self.owner, target=self.owner,
-                  prompt="【缔盟】：请弃置 %d 张牌（两名角色手牌数差）" % self.need,
+                  prompt="【缔盟】：请弃置 %d 张牌（两名角色手牌数之差）" % self.need,
                   reason="dimeng", candidates=candidates,
-                  min_cards=self.need, max_cards=self.need)
+                  min_cards=self.need, max_cards=self.need,
+                  # 手牌 + 装备混选走公共牌池：只有这个区域能让玩家点到
+                  # 装备区的牌（手牌那一侧照旧可以从手牌区点）。
+                  zone="public_pool",
+                  context={"zone_owner": self.owner, "cancellable": True})
         return self.current_result()
 
-    def _after_discard(self, response):
+    # ---- 第三步：支付 → 结算 ----
+
+    def _after_cost(self, response):
         cards = list(getattr(response, "cards", ()) or ())
+        if len(cards) != self.need:
+            # 放弃 / 张数不符：一张牌都不付、次数也不消耗。
+            return self._abort("没有支付费用")
+        from src.game.skills.activation import allowed_zones, cost_placement
+
+        zones = allowed_zones(DIMENG_COST_SPEC)
+        entries = []
         for card in cards:
-            if any(item is card for item in self.owner.hand):
+            placement = cost_placement(self.owner, card, zones)
+            if placement is None:
+                # 提交的费用牌已经不在能支付的区域：拒绝本次发动。
+                return self._abort("费用牌已经不在可以支付的区域")
+            entries.append((card, placement[0], placement[1]))
+        self._pay(entries)
+        return self._settle()
+
+    def _pay(self, entries):
+        """按预验证的结果支付：手牌走 MoveCardAtom，装备区走 UnequipAtom。
+
+        与 ``skills.activation.pay_cost`` 的两条分支一致——装备区的费用必须带
+        "因弃置"的原因，【落英】一类订阅者才照常工作。
+        """
+
+        for card, zone, slot in entries:
+            if zone is CostZone.EQUIPMENT:
+                self.context.apply(UnequipAtom(
+                    self.owner, slot, self.game.deck.discard_pile,
+                    reason=DISCARD_REASON))
+            else:
                 self.context.apply(MoveCardAtom(
                     card, source=self.owner.hand,
                     destination=self.game.deck.discard_pile))
-        self.game.add_log("%s 的【缔盟】弃置 %d 张牌" % (self.owner.name, len(cards)))
-        return self._swap()
+        self.game.add_log("%s 的【缔盟】弃置 %d 张牌"
+                          % (self.owner.name, len(entries)))
 
-    def _swap(self):
+    def _settle(self):
+        """交换两名角色的手牌；次数与技能事件都只在这里（成功之后）落地。
+
+        ``spec`` 声明了 ``defer_skill_event``：技能事件不能在"激活"时就发，
+        否则玩家取消选目标、或者手里的牌不够支付 X 时，横幅已经播过一遍而
+        实际什么都没发生。所以事件挪到这里——目标、差额、费用全部成立之后，
+        和 used 标记同一个时刻。取消 / 失败走 ``_abort``，一条事件都不发。
+        """
+
         first_cards = list(self.first.hand)
         second_cards = list(self.second.hand)
         for card in first_cards:
@@ -1160,9 +1296,20 @@ class DimengFlow(Flow):
         for card in second_cards:
             self.context.apply(MoveCardAtom(
                 card, source=self.second.hand, destination=self.first.hand))
+        self.owner.skill_state.set("dimeng", "used", 1, ResetScope.TURN)
         self.game.add_log("%s 的【缔盟】交换了 %s 与 %s 的手牌"
                           % (self.owner.name, self.first.name, self.second.name))
+        emit_skill_triggered(
+            self.engine, self.game.skill_registry.get("dimeng"), self.owner,
+            targets=(self.first, self.second))
         return self.complete({"applied": True})
+
+    def _abort(self, reason):
+        """本次发动未成立：不改任何状态（不消耗次数、不动牌、不发技能事件）。"""
+
+        self.game.message = "【缔盟】：%s，本次未结算。" % reason
+        self.game.add_log("%s 没有发动【缔盟】（%s）" % (self.owner.name, reason))
+        return self.complete({"applied": False})
 
 
 # ==================================================
@@ -1235,7 +1382,7 @@ FOREST_SKILLS = (
     triggered(
         "songwei",
         "颂威",
-        "主公技，其他魏势力角色的判定牌为黑色且生效后，你可以摸一张牌。",
+        "主公技，其他魏势力角色的判定牌生效后，若判定牌为黑色，其可以令你摸一张牌。",
         factory=Songwei,
         is_lord_skill=True,
     ),
@@ -1293,8 +1440,8 @@ FOREST_SKILLS = (
     triggered(
         "baonue",
         "暴虐",
-        "主公技，其他群势力角色每造成一次伤害，你可以进行一次判定："
-        "若结果为黑色，你回复 1 点体力。",
+        "主公技，其他群势力角色造成伤害后，其可以令你进行一次判定："
+        "若结果为黑桃，你回复 1 点体力。",
         factory=Baonue,
         is_lord_skill=True,
     ),
@@ -1343,11 +1490,14 @@ FOREST_SKILLS = (
     active(
         "dimeng",
         "缔盟",
-        "出牌阶段限一次，你可以选择其他两名角色，弃掉等同于这两名角色手牌数差的牌，"
-        "然后交换他们的手牌。",
+        "出牌阶段限一次，你可以弃置 X 张牌并选择两名其他角色"
+        "（X 为这两名角色手牌数之差），然后交换他们的手牌。",
         can_activate=_can_dimeng,
         activate=_activate_dimeng,
-        spec=ActiveSkillSpec(),
+        # ``defer_skill_event``：目标、差额、费用全在 ``DimengFlow`` 里收集，
+        # 玩家可以在任何一步取消。技能事件因此不能在"激活"时发，改由流程在
+        # 确认成立（``_settle``）时自己调 ``activation.emit_skill_triggered``。
+        spec=ActiveSkillSpec(defer_skill_event=True),
         tags=("active",),
     ),
 )

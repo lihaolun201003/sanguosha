@@ -106,6 +106,27 @@ class ActiveSkillSpec:
     #: 还是原来的手牌语义。装备牌被费用支付时走 ``UnequipAtom``（失去装备
     #: 事件 / 装备技能卸载 / 修正移除全部照常发生），不从装备字典里硬删。
     allowed_zones: Tuple[str, ...] = (CostZone.HAND,)
+    #: 费用牌的**组合**约束：``callable(game, player, cards) -> (ok, reason)``。
+    #:
+    #: ``cost_candidates`` 是逐张谓词，表达不了"这几张牌凑在一起才合法"
+    #: （【乱击】的两张必须同花色）。这类约束由 ``plan_activation`` 在
+    #: **支付之前**的纯校验阶段调用本钩子裁决：非法组合返回规则原因，
+    #: 于是不写 used、不发 ``SKILL_TRIGGERED``、一张牌都不动。
+    #:
+    #: 传入的是玩家提交的**全部**牌（``keep_cards`` 的素材不在 entries 里，
+    #: 也会照常传进来），所以素材类技能同样能用它。
+    cost_validator: Any = None
+    #: 这次发动的 ``SKILL_TRIGGERED`` 由**技能自己**发，不在激活时自动发。
+    #:
+    #: 默认（``False``）是"激活即发事件"：``settle_activation`` 在调用技能的
+    #: ``activate`` 之前就发。这对"激活即结算"的技能是对的，但对【缔盟】这类
+    #: **在流程内部**收集目标、算差额、可能整次取消的技能，事件会在玩家取消
+    #: 或费用不足之前就发出去——表现层据此播一次技能横幅，而什么都没发生。
+    #:
+    #: 声明 ``True`` 之后，技能必须在**自己确认成立**时调用
+    #: ``skills.activation.emit_skill_triggered(engine, definition, player,
+    #: targets=...)``；取消 / 失败路径照旧什么都不发。
+    defer_skill_event: bool = False
 
 
 @dataclass(frozen=True)

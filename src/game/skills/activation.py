@@ -12,6 +12,12 @@ first and then submits a single ``ActivateSkillAction``.
     2. ``pay_cost``         支付费用（手牌走 MoveCardAtom，装备区走 UnequipAtom）
     3. ``settle_activation``发技能事件并执行技能自己的效果
 
+``SKILL_TRIGGERED`` 默认在第 3 步发出。技能若声明
+``ActiveSkillSpec.defer_skill_event``（【缔盟】这类目标 / 费用在流程内部收集、
+可能整次取消的技能），事件改由技能在**自己确认成立**时调
+``emit_skill_triggered`` —— 被取消的发动一条事件都不发，和"不消耗次数、
+不动牌"是同一条原则在事件上的补齐。
+
 校验阶段把"这张牌还在不在、区域对不对、是不是同一张牌被提交了两次"全部
 问完，支付阶段只按已经定好的位置执行——所以不存在"弃了一部分才发现剩下的
 不合法"。校验失败返回规则原因（`False, message`），不抛异常：
@@ -371,24 +377,53 @@ def pay_cost(engine, plan):
             ))
 
 
+def emit_skill_triggered(engine, definition, player, targets=()):
+    """发一次 ``SKILL_TRIGGERED``（"技能发动了"）。
+
+    这是技能事件的**唯一**公共出口，两个调用时机都走它：
+
+    * ``settle_activation`` 在**激活时**发（默认行为，绝大多数技能）；
+    * 声明了 ``ActiveSkillSpec.defer_skill_event`` 的技能在**自己确认成立**时
+      发——那些技能的目标 / 费用在流程内部收集（【缔盟】取消选目标、付不起
+      费用时整次发动都不成立），技能事件不能比"成立"更早发出去。
+
+    ``targets`` 只为表现层（指向箭头）提供"谁对谁发动了技能"，不参与任何
+    规则判定；``None`` 会被剔掉，其余照旧整份进 payload。
+    """
+
+    game = engine.game
+    from src.game.engine.events import Event, EventType
+
+    from src.game.interaction_presentation import skill_payload
+
+    skill_targets = [item for item in (targets or ()) if item is not None]
+    game.context.emit(Event(
+        EventType.SKILL_TRIGGERED,
+        source=player,
+        payload=skill_payload(
+            game,
+            str(getattr(definition, "id", "") or ""),
+            str(getattr(definition, "name", "") or ""),
+            targets=skill_targets,
+        ),
+    ))
+
+
 def settle_activation(engine, plan):
     """发技能事件并执行技能自己的效果（费用已经支付完毕）。"""
 
     game = engine.game
     definition = plan.definition
 
-    from src.game.engine.events import Event, EventType
-
-    # targets 只为表现层（指向箭头）提供"谁对谁发动了技能"，不参与任何规则判定。
-    skill_targets = [plan.target] if plan.target is not None else []
-    from src.game.interaction_presentation import skill_payload
-
-    game.context.emit(Event(
-        EventType.SKILL_TRIGGERED,
-        source=plan.player,
-        payload=skill_payload(
-            game, definition.id, definition.name, targets=skill_targets),
-    ))
+    # 技能事件默认就在这里发（"激活即发"）。声明 ``defer_skill_event`` 的技能
+    # 把它推迟到自己确认成立的那一刻（技能内部调 ``emit_skill_triggered``）：
+    # 它们的目标与费用都在流程里收集，取消 / 付不起时整次发动都不成立，
+    # 不能留下"技能发动过"的痕迹。
+    spec = plan.spec
+    if not bool(getattr(spec, "defer_skill_event", False)):
+        emit_skill_triggered(
+            engine, definition, plan.player,
+            targets=[plan.target] if plan.target is not None else ())
     # 技能自己知道为什么发动不了（"两张牌的花色必须相同"一类），
     # 那句提示比笼统的"技能未能发动"有用得多：先清掉旧提示，再让技能写。
     game.message = ""

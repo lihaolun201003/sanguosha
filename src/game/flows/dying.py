@@ -1,8 +1,34 @@
 """Resumable dying and self-rescue flow."""
 
+from src.card import display_name_for
 from src.game.atoms_v2 import RecoverHpAtom
 from src.game.engine import Event, EventType, Flow, FlowResult, FlowStatus
 from src.game.engine.pending import PendingRequestType
+
+#: 提示文案里牌名的排列顺序。**只是写法**，不代表任何可用性判断——哪些牌
+#: 现在能用由规则层查询给出（``_rescue_names_for``）。
+RESCUE_NAME_ORDER = ("TAO", "JIU")
+
+
+def rescue_names_text(names):
+    """一组救援牌名 → 提示里的写法（"【桃】或【酒】"）。"""
+
+    ordered = [name for name in RESCUE_NAME_ORDER if name in names]
+    ordered.extend(sorted(name for name in names if name not in RESCUE_NAME_ORDER))
+    return "或".join("【" + display_name_for(name) + "】" for name in ordered)
+
+
+def self_rescue_message(names):
+    """本机玩家的濒死提示：说清他**现在**能拿哪些牌自救。
+
+    ``names`` 为空就不能再写"可以使用【桃】或【酒】自救"——【禁酒】把【酒】
+    改写成【杀】之后玩家会照着提示去找一张用不了的牌。这里明确告诉他救不了，
+    后面轮到谁救由救援顺序决定，不在这一句里下结论。
+    """
+
+    if not names:
+        return "你进入濒死状态，没有可以自救的牌。"
+    return "你进入濒死状态，可以使用" + rescue_names_text(names) + "自救。"
 
 
 class DyingFlow(Flow):
@@ -58,9 +84,7 @@ class DyingFlow(Flow):
                 )
             )
             if self.dying_player is self.game.player:
-                self.game.message = (
-                    "你进入濒死状态，可以使用【桃】或【酒】自救。"
-                )
+                self.game.message = self._self_rescue_message()
             else:
                 self.game.message = "电脑进入濒死状态。"
             # 涅槃 / 补益这类"濒死时"技能在这条事件里开窗口：先等它们处理完
@@ -102,8 +126,7 @@ class DyingFlow(Flow):
             PendingRequestType.RESPOND_CARD,
             source=self.source,
             target=self.current_rescuer,
-            prompt=("濒死：使用【桃】或【酒】自救" if self.current_rescuer is self.dying_player else
-                    "是否使用【桃】救援 " + self.dying_player.name + "？"),
+            prompt=self._rescue_prompt(allowed),
             owner_flow=self,
             allowed_cards=allowed,
             min_cards=0,
@@ -118,6 +141,19 @@ class DyingFlow(Flow):
         self.wait(request)
         self.engine.present_or_auto_resolve(request)
         return FlowResult(self.status, self.result)
+
+    def _self_rescue_message(self):
+        """本机玩家此刻的濒死提示（判据与求桃是同一个规则层查询）。"""
+
+        return self_rescue_message(self._rescue_names_for(self.dying_player))
+
+    def _rescue_prompt(self, allowed):
+        """这条询问要哪几张牌——同样按规则层给出的 ``allowed`` 写文案。"""
+
+        text = rescue_names_text(allowed)
+        if self.current_rescuer is self.dying_player:
+            return "濒死：使用" + text + "自救"
+        return "是否使用" + text + "救援 " + self.dying_player.name + "？"
 
     def _rescue_names_for(self, rescuer):
         """这个救援者现在能满足哪些救援牌名（真实牌与技能转化一并计算）。

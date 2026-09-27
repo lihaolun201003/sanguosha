@@ -156,7 +156,7 @@ LIUBEI = GeneralDef(
     max_hp=4,
     skill_ids=("rende", "jijiang"),
     title="仁德之君",
-    description="【仁德】：出牌阶段你可以将任意数量手牌交给一名其他角色。【激将】：主公技，你可以请蜀势力角色替你出【杀】。",
+    description="【仁德】：出牌阶段你可以将任意数量手牌交给一名其他角色。【激将】：主公技，当你需要使用或打出一张【杀】时，你可以令其他蜀势力角色选择是否打出一张【杀】（视为由你使用或打出）。",
 )
 
 ZHUGE_LIANG = GeneralDef(
@@ -277,7 +277,7 @@ HUA_TUO = GeneralDef(
     max_hp=3,
     skill_ids=("jijiu", "qingnang"),
     title="神医",
-    description="【急救】：你的回合外，你可以将一张红色牌当【桃】使用。【青囊】：出牌阶段你可以弃一张手牌，令一名已受伤的角色回复 1 点体力。",
+    description="【急救】：你的回合外，你可以将一张红色牌当【桃】使用。【青囊】：出牌阶段限一次，你可以弃一张手牌，令一名已受伤的角色回复 1 点体力。",
 )
 
 LV_BU = GeneralDef(
@@ -299,7 +299,7 @@ DIAO_CHAN = GeneralDef(
     max_hp=3,
     skill_ids=("lijian", "biyue"),
     title="绝世舞姬",
-    description="【离间】：出牌阶段限一次，弃一张手牌令两名男性角色决斗。【闭月】：结束阶段你可以摸一张牌。",
+    description="【离间】：出牌阶段限一次，你可以弃一张牌并选择两名男性角色，令其中一名男性角色视为对另一名男性角色使用一张【决斗】。【闭月】：结束阶段你可以摸一张牌。",
 )
 
 SECOND_ROSTER_GENERALS = (

@@ -223,15 +223,15 @@ def _outcome_shuangxiong(result, _subject=None):
 
 
 def _outcome_baonue(result, _subject=None):
-    """暴虐：黑色判定回复 1 点体力。"""
+    """暴虐：**黑桃**判定回复 1 点体力（梅花 / 红桃 / 方块都不回）。"""
 
     if result is None:
         return _missing(result)
-    if getattr(result, "color", None) == "black":
+    if getattr(result, "suit", None) == "spade":
         return JudgeOutcome(JudgeOutcomeTone.POSITIVE, "暴虐 · 回复 1 点体力",
-                            "黑色判定，回复 1 点体力。")
+                            "黑桃判定，回复 1 点体力。")
     return JudgeOutcome(JudgeOutcomeTone.NEUTRAL, "暴虐 · 判定未生效",
-                        "非黑色判定，不回复体力。")
+                        "非黑桃判定，不回复体力。")
 
 
 def _outcome_leiji(result, _subject=None):
@@ -325,7 +325,7 @@ JUDGE_SOURCES = {
     "baonue": JudgeSourceSpec(
         reason="baonue", kind=JudgeSourceKind.SKILL,
         display_name="暴虐", skill_id="baonue",
-        rule_text="受到伤害后判定：黑色则回复 1 点体力。",
+        rule_text="其他群势力角色造成伤害后判定：黑桃则回复 1 点体力。",
         outcome_of=_outcome_baonue,
     ),
     "leiji": JudgeSourceSpec(

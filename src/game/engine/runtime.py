@@ -128,6 +128,16 @@ class GameEngine:
         if flow in self._flow_stack:
             self._flow_stack.remove(flow)
 
+    @property
+    def current_flow(self):
+        """当前正在执行的流程（执行栈顶）；不在任何流程里时返回 ``None``。
+
+        只读查询：给"这次结算 / 这次牌移动属于哪一条流程"这类判据用——
+        例如【屯田】要认"同一批移动"：同一批牌都由同一条流程连续移动。
+        """
+
+        return self._flow_stack[-1] if self._flow_stack else None
+
     def open_response_window(self):
         """开一个新的共享响应阶段，返回它的稳定窗口号。"""
 

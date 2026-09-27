@@ -200,7 +200,17 @@ def _bazhen_armor(game, query):
 
 
 def _tianyi_targets(game, player):
-    return other_alive_players(game, player)
+    """【天义】的拼点对象：双方都还有手牌的其他角色。
+
+    空手的人拼点根本成立不了（拼点流程会当场取消，次数却已经用掉），所以
+    这种人不进候选。筛选放在这里，而不是拖到 ``activate`` 里：这份名单同时
+    是 ``plan_activation`` 校验目标用的候选（见 ``activation.activation_inputs``
+    → 目标必须在 ``spec.target_candidates`` 里），非法的拼点对象因此在
+    **发技能事件之前**就被拒绝，不会"先播报、后失败"。
+    """
+
+    return [other for other in other_alive_players(game, player)
+            if pindian_possible(player, other)]
 
 
 def _tianyi_won(game, query):
@@ -223,13 +233,15 @@ def _can_tianyi(game, player):
     if not player.hand:
         return False, "需要一张手牌拼点"
     if not _tianyi_targets(game, player):
-        return False, "没有可以拼点的角色"
+        return False, "没有可以拼点的角色（双方都要有手牌）"
     return True, ""
 
 
 def _activate_tianyi(game, player, target=None, cards=None):
     # 拼点真的能成立（双方都有手牌）才扣技能次数：只要目标空手，
     # 拼点会当场取消，次数却已经用掉——白付一次机会。
+    # 主要入口是候选过滤（``_tianyi_targets``，在计划阶段就拒绝），这里
+    # 保留同一份判据兜底，防止别的调用路径绕过计划阶段。
     if not pindian_possible(player, target):
         return False
     player.skill_state.set("tianyi", "used", 1, ResetScope.TURN)
@@ -413,8 +425,15 @@ class NiepanFlow(Flow):
 
 
 def _quhu_targets(game, player):
+    """【驱虎】的拼点对象：体力比你多、且双方都还有手牌的其他角色。
+
+    手牌为空的人拼点成立不了（拼点流程当场取消），候选里直接不给。
+    这份名单同时是 ``plan_activation`` 校验目标用的候选，所以空手目标在
+    发技能事件之前就被拒绝。
+    """
+
     return [other for other in other_alive_players(game, player)
-            if int(other.hp) > int(player.hp)]
+            if int(other.hp) > int(player.hp) and pindian_possible(player, other)]
 
 
 def _can_quhu(game, player):
@@ -427,11 +446,12 @@ def _can_quhu(game, player):
     if not player.hand:
         return False, "需要一张手牌拼点"
     if not _quhu_targets(game, player):
-        return False, "没有体力比你多的角色"
+        return False, "没有体力比你多、且手里有牌的角色"
     return True, ""
 
 
 def _activate_quhu(game, player, target=None, cards=None):
+    # 同【天义】：候选过滤（``_quhu_targets``）是主入口，这里兜底复核。
     if not pindian_possible(player, target):
         return False
     player.skill_state.set("quhu", "used", 1, ResetScope.TURN)
@@ -479,10 +499,13 @@ class QuhuFlow(Flow):
                               % (self.owner.name, self.target.name))
             self._damage(self.target, self.owner)
             return
+        # 官方："该角色对其攻击范围内**由你指定的另一名角色**造成 1 点伤害"。
+        # "另一名"只排除**造成伤害的那名拼点对手**本人：荀彧自己也是一个
+        # 合法候选（把自己打进濒死 / 卖血触发【节命】的经典配合），所以这里
+        # **不**排除 owner。攻击范围只走规则层查询，不在这里自算距离。
         candidates = [
             other for other in self.game.seats.alive_players_in_order(start_after=self.target)
-            if other is not self.target and other is not self.owner
-            and self._in_range(self.target, other)
+            if other is not self.target and self._in_range(self.target, other)
         ]
         if not candidates:
             self.game.message = "【驱虎】没有可指定的受伤者。"
@@ -493,11 +516,12 @@ class QuhuFlow(Flow):
                     reason="quhu", candidates=candidates,
                     min_targets=1, max_targets=1)
 
-    @staticmethod
-    def _in_range(source, target):
+    def _in_range(self, source, target):
+        """``source`` 的攻击范围里有没有 ``target``（规则层唯一权威查询）。"""
+
         from src.game.rules import DistanceRule
 
-        return DistanceRule.in_attack_range(None, source, target)
+        return DistanceRule.in_attack_range(self.game, source, target)
 
 
 class Jieming(Skill):
@@ -587,6 +611,49 @@ def _luanji_same_suit_pair(cards):
     return None
 
 
+def _luanji_pair_check(cards):
+    """这两张素材能不能当【万箭齐发】：数量恰好两张、且花色相同。
+
+    返回 ``(ok, reason)``——与 ``ActiveSkillSpec.cost_validator`` 的契约一致，
+    所以校验阶段与技能自己的兜底复核读的是**同一份判断**。
+    """
+
+    chosen = list(cards or ())
+    if len(chosen) != 2:
+        return False, "【乱击】：请先选择两张手牌。"
+    suit = getattr(chosen[0], "suit", None)
+    if not suit or suit != getattr(chosen[1], "suit", None):
+        return False, "【乱击】：两张牌的花色必须相同。"
+    return True, ""
+
+
+def _luanji_cost_validator(game, player, cards):
+    """【乱击】的费用组合约束：由 ``plan_activation`` 在支付之前裁决。
+
+    放在这里（而不是等 ``activate`` 里再判）的意义：非法组合返回的是规则
+    原因，此时**还没发过 ``SKILL_TRIGGERED``**——技能不会"先播报一次失败
+    的发动、再来说花色不对"。逐张的 ``cost_candidates`` 表达不了"两张必须
+    同花色"这种组合条件，只有这个钩子能表达。
+    """
+
+    return _luanji_pair_check(cards)
+
+
+def _luanji_cost_candidate(game, player, card):
+    """这张手牌能不能进【乱击】的候选：它得有一个同花色的伙伴。
+
+    单张谓词表达不了组合约束，但"手里有没有第二张同花色的牌"是逐张可判的：
+    凑不出对的牌永远不可能成为合法素材，所以界面高亮、引擎校验、AI 选牌
+    读的这份候选里都不该有它。花色有无伙伴随时可变，所以每次都现算。
+    """
+
+    suit = getattr(card, "suit", None)
+    if not suit:
+        return False
+    return sum(1 for item in hand_cards(player)
+               if getattr(item, "suit", None) == suit) >= 2
+
+
 def _can_luanji(game, player):
     if game.game_over or not player.alive:
         return False, "无法发动"
@@ -601,17 +668,17 @@ def _activate_luanji(game, player, target=None, cards=None):
     """乱击：把两张同花色的手牌当【万箭齐发】使用。
 
     哪两张由**玩家自己挑**（spec 的 cost_cards / keep_cards 声明的就是
-    "选两张牌、但不由 activation 代付"）。这里只做最后一层复核：数量不对
-    或花色不同就明确拒绝，**绝不替他找一对同花色的牌**——那样玩家会在
-    什么都没点的情况下看到技能自己打出【万箭齐发】。
+    "选两张牌、但不由 activation 代付"）。组合约束的主入口是 spec 上的
+    ``cost_validator``（非法提交在**发技能事件之前**就被拒绝、不消耗任何
+    状态）；这里保留同一份判据的兜底复核——别的调用路径若绕过计划阶段，
+    也**绝不替他找一对同花色的牌**，那样玩家会在什么都没点的情况下看到
+    技能自己打出【万箭齐发】。
     """
 
     chosen = list(cards or ())
-    if len(chosen) < 2:
-        game.message = "【乱击】：请先选择两张手牌。"
-        return False
-    if getattr(chosen[0], "suit", None) != getattr(chosen[1], "suit", None):
-        game.message = "【乱击】：两张牌的花色必须相同。"
+    ok, reason = _luanji_pair_check(chosen)
+    if not ok:
+        game.message = reason
         return False
     from src.game.rules import target_candidates
 
@@ -864,7 +931,7 @@ FIRE_SKILLS = (
         "quhu",
         "驱虎",
         "出牌阶段限一次，你可以与一名体力比你多的角色拼点：若你赢，"
-        "该角色对其攻击范围内、由你指定的一名角色造成 1 点伤害；"
+        "该角色对其攻击范围内、由你指定的另一名角色造成 1 点伤害；"
         "若你没赢，该角色对你造成 1 点伤害。",
         can_activate=_can_quhu,
         activate=_activate_quhu,
@@ -885,7 +952,7 @@ FIRE_SKILLS = (
     active(
         "luanji",
         "乱击",
-        "出牌阶段，你可以将两张相同花色的手牌当【万箭齐发】使用。",
+        "出牌阶段，你可以将两张花色相同的手牌当【万箭齐发】使用。",
         can_activate=_can_luanji,
         activate=_activate_luanji,
         spec=ActiveSkillSpec(
@@ -894,6 +961,11 @@ FIRE_SKILLS = (
             cost_cards=2,
             keep_cards=True,
             cost_prompt="【乱击】：请选择两张花色相同的手牌",
+            # 逐张谓词：凑不出同花色一对的牌不进候选（界面 / AI / 引擎同一份）
+            cost_candidates=_luanji_cost_candidate,
+            # 组合约束：两张必须同花色。由 plan_activation 在发技能事件与
+            # 支付**之前**裁决，所以异花色提交既不播报也不消耗任何状态。
+            cost_validator=_luanji_cost_validator,
         ),
         tags=("active", "forced_use"),
     ),
