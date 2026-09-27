@@ -59,6 +59,14 @@ class IdentityFlash:
         self.general = general
         return self
 
+    def skip(self):
+        """跳过演出：立刻进入淡出（身份已经公开，翻牌只是表现）。"""
+
+        if self.timer <= 0:
+            return False
+        self.timer = min(self.timer, max(0.05, self.total * 0.18))
+        return True
+
     def cancel(self):
         self.active = False
         self.timer = 0.0

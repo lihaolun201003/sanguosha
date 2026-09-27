@@ -86,6 +86,7 @@ KIND_BY_ENGINE_EVENT = {
     "card.use_finished": CARD_USED,
     "card.revealed": CARD_REVEALED,
     "card.responded": CARD_RESPONSE,
+    "card.nullified": CARD_RESPONSE,
     "skill.triggered": SKILL_ACTIVATED,
     "judge.started": JUDGE_STARTED,
     "judge.revealed": JUDGE_CARD_REVEALED,

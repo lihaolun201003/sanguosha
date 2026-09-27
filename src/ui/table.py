@@ -357,7 +357,15 @@ def draw_story_banner(surface, metrics, info):
 
 
 def draw_deal_flights(surface, flights, metrics):
-    """开局发牌：还在飞行中的牌用牌背绘制，飞到位置后由手牌区接手。"""
+    """正在飞的牌（开局发牌 / 摸牌 / 得到判定牌 / 装备 / 弃牌）。
+
+    一律用**牌背**绘制：飞行途中"这张牌是什么"不该被泄露（别人的摸牌、
+    判定牌、弃牌堆顶都经过这里）。落位那一刻由静态区域接手（``owned_card_ids``
+    让两边不会同时画），淡入淡出在 ``CardFlight.alpha`` 里做交接。
+
+    ``face_down=False`` 的飞行（例如火攻展示）才画牌面——可见性由提交方
+    用 ``card_transfer`` 的 ``visibility`` 声明，这里不猜。
+    """
 
     if not flights:
         return 0
@@ -367,8 +375,19 @@ def draw_deal_flights(surface, flights, metrics):
         if flight.done:
             continue
         x, y = flight.position
-        rect = pygame.Rect(int(x), int(y), size[0], size[1])
-        card_draw.draw_card_back(surface, rect)
+        card_size = getattr(flight, "card_size", None) or size
+        rect = pygame.Rect(int(x) - card_size[0] // 2, int(y) - card_size[1] // 2,
+                           card_size[0], card_size[1])
+        alpha = getattr(flight, "alpha", 255)
+        if alpha <= 0:
+            continue
+        if getattr(flight, "face_down", True):
+            back = card_draw.card_back_surface(rect.width, rect.height).copy()
+            if alpha < 255:
+                back.set_alpha(alpha)
+            surface.blit(back, rect.topleft)
+        else:
+            card_draw.draw_card(surface, flight.card, rect, metrics.fonts, alpha=alpha)
         drawn += 1
     return drawn
 
@@ -603,7 +622,14 @@ def draw_turn_banner(surface, metrics, info):
     surface.blit(text, rect)
 
 
-def draw_phase_strip(surface, game, metrics, phase_label):
+def draw_phase_strip(surface, game, metrics, phase_label, *, progress=1.0):
+    """当前阶段指示条。
+
+    ``progress`` 是 0→1 的换场进度：阶段变化时文字从下方滑入并淡入，而不是
+    "啪"地换一个词。调用方（Renderer）用一个短补间驱动它——阶段推进得很快，
+    没有这点过渡的话玩家根本注意不到阶段变了（尤其是被跳过的那些）。
+    """
+
     fonts = metrics.fonts
     height = metrics.px(30)
     # 贴在中央战场**左下角**：右下角会压住放大后的弃牌堆，居中又会与当前
@@ -614,9 +640,14 @@ def draw_phase_strip(surface, game, metrics, phase_label):
         metrics.px(190),
         height,
     )
+    ratio = max(0.0, min(1.0, float(progress)))
+    slide = int(metrics.px(10) * (1.0 - ratio))
+    rect = rect.move(0, slide)
     draw_panel(surface, rect, fill=theme.PANEL_SUNKEN, border=theme.GOLD_DIM,
                border_width=2, shadow=False, radius=metrics.px(8))
     text = fonts.get("small").render(phase_label, True, theme.GOLD_BRIGHT)
+    if ratio < 0.999:
+        text.set_alpha(int(255 * ratio))
     surface.blit(text, text.get_rect(center=rect.center))
 
 

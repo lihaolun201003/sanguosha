@@ -543,6 +543,10 @@ def _p_skill(feed, event):
 
 
 def _p_turn_start(feed, event):
+    # 换回合 = 权威状态明确前进了一大步。客人的画面如果还积压着上一回合的
+    # 余波（这里只丢**非关键**演出，判定 / 濒死 / 阵亡一定保留），就强制放行：
+    # 否则客人会一直看着上一回合的动画，而房主早已进入下一回合。
+    feed.effects.storyboard.flush(keep_blocking=True)
     feed.effects.present_turn_start(feed.player(event.get("player_id")))
 
 

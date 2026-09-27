@@ -151,7 +151,8 @@ def own_identity_label(game, player):
 
 def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=theme.DANGER, shake=0,
                        source_slots=(), candidate_slots=(), responding=False,
-                       alive=None, hp=None):
+                       alive=None, hp=None, tint=0.0, tint_color=None,
+                       equip_pulse=None):
     """真人状态条。
 
     ``alive`` / ``hp`` 是**表现值**（允许落后于权威状态，见 ui/storyboard
@@ -166,7 +167,9 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
         rect = rect.move(shake, 0)
 
     alive = bool(player.alive) if alive is None else bool(alive)
-    hp = int(max(0, player.hp)) if hp is None else int(max(0, hp))
+    # hp 允许是**浮点**：表现层用它做"血点平滑地一格格掉"（见 Effects.hp_view）。
+    # 这里按四舍五入落到整数格，玩家看到的仍然是清清楚楚的血点数。
+    hp = int(max(0, round(player.hp if hp is None else hp)))
     fill = theme.PANEL if alive else theme.PANEL_DEEP
     state = theme.resolve_state(
         None if alive else "dead",
@@ -181,6 +184,11 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     if flash > 0:
         veil = pygame.Surface(rect.size, pygame.SRCALPHA)
         veil.fill((*flash_color, int(140 * flash)))
+        surface.blit(veil, rect.topleft)
+    if tint > 0 and tint_color is not None:
+        # 伤害属性染色（见 ui.seats.draw_seat 的同名参数）。
+        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
+        veil.fill((*tint_color, int(70 * min(1.0, tint))))
         surface.blit(veil, rect.topleft)
 
     pad = metrics.px(16)
@@ -285,6 +293,14 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
             )
 
         border_color = theme.GOLD_DIM if card is not None else theme.CARD_EMPTY_BORDER
+        pulse = 0.0 if equip_pulse is None else float(equip_pulse(slot))
+        if pulse > 0.01:
+            # 刚装上的装备：槽位向外发一圈光，"新牌进了哪个格"一眼可见。
+            halo = theme.glow_border(
+                slot_rect.size, theme.GOLD_BRIGHT, max(2, metrics.px(3)),
+                metrics.px(10), 8, int(200 * pulse))
+            surface.blit(halo, (slot_rect.x - metrics.px(10),
+                                slot_rect.y - metrics.px(10)))
         if slot in source_slots or slot in candidate_slots:
             # 技能转化（View-As / 多 source）的槽位走统一的视觉状态。
             draw_state_border(

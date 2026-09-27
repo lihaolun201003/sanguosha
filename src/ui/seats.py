@@ -112,6 +112,8 @@ def draw_seat(
     hp=None,
     dying=False,
     skill_acting=False,
+    tint=0.0,
+    tint_color=None,
 ):
     """Draw one seat panel.
 
@@ -146,7 +148,8 @@ def draw_seat(
         rect = rect.move(shake, 0)
 
     alive = bool(player.alive) if alive is None else bool(alive)
-    hp = int(max(0, player.hp)) if hp is None else int(max(0, hp))
+    # hp 允许是浮点（表现层的平滑过渡），落地时四舍五入成血点格数。
+    hp = int(max(0, round(player.hp if hp is None else hp)))
     fill = theme.PANEL if alive else theme.PANEL_DEEP
 
     # 语义状态（互斥）：悬停**不**参与，它走下面的叠加层。
@@ -209,6 +212,11 @@ def draw_seat(
     if flash is not None and flash > 0:
         veil = pygame.Surface(rect.size, pygame.SRCALPHA)
         veil.fill((*flash_color, int(150 * flash)))
+        surface.blit(veil, rect.topleft)
+    if tint > 0 and tint_color is not None:
+        # 伤害属性染色（火焰 / 雷电）：与 flash 分开，暗色叠加不影响可读性。
+        veil = pygame.Surface(rect.size, pygame.SRCALPHA)
+        veil.fill((*tint_color, int(74 * min(1.0, tint))))
         surface.blit(veil, rect.topleft)
     draw_state_dim(surface, rect, state)
 

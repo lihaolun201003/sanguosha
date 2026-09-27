@@ -8,11 +8,28 @@ read-only events and keeps its own timers.
 （``CARD_USED`` 的 targets / ``SKILL_TRIGGERED`` 的 targets），这里**不枚举卡名**。
 """
 
+import pygame
+
 from src.game.atoms_v2 import RecoverHpAtom
 from src.game.engine import EventType
 
+from . import anim_config
 from . import layout as layout_module
 from . import theme
+from .card_transfer import (
+    CardTransfer,
+    CardTransferPresentation,
+    VISIBLE,
+    ZONE_DECK,
+    ZONE_DISCARD,
+    ZONE_EQUIPMENT,
+    ZONE_HAND,
+    ZONE_JUDGE,
+    ZONE_PUBLIC_POOL,
+    ZONE_SEAT,
+    ZONE_TABLE,
+)
+from .hand_motion import HandMotion
 from .judge import JudgePanel
 from .identity_flash import IdentityFlash
 from .skill_banner import SkillBanner
@@ -33,6 +50,8 @@ from .storyboard import (
     STEP_RESULT,
     TurnStep,
 )
+from .toast import ToastManager
+from .tween import PointTrack, TweenManager, TweenTrack
 
 # ==================================================
 # 动画节奏（集中配置）
@@ -404,6 +423,22 @@ JUDGE_TIME = _timing.judge_display
 TURN_BANNER_TIME = _timing.turn_banner
 
 
+#: 伤害属性 → 飘字颜色与座位染色/闪光色（普通 / 火焰 / 雷电）。
+#: 属性来自规则层的 ``DamageContext.nature``，界面不自己判断是哪张牌。
+DAMAGE_NATURE = {
+    "normal": ((238, 122, 108), theme.DANGER),
+    "fire": ((248, 158, 78), (206, 108, 48)),
+    "thunder": ((178, 152, 246), (128, 104, 216)),
+}
+
+#: 伤害飘字的符号：一眼看出是哪种属性（不做重型粒子系统）。
+DAMAGE_ICONS = {
+    "normal": "-",
+    "fire": "🔥-",
+    "thunder": "⚡-",
+}
+
+
 class FloatText:
     def __init__(self, text, position, color, life=None):
         self.text = text
@@ -600,6 +635,7 @@ class Effects:
         self._tokens = []
         self._seat_flash = {}
         self._seat_shake = {}
+        self._seat_tint = {}
         self.floats = []
         self.arrows = []
         # 统一判定展示面板：延时锦囊 / 装备技能 / 武将技能共用。
@@ -611,6 +647,28 @@ class Effects:
         self.skill_banner = SkillBanner()
         # 身份揭示演出（身份模式下阵亡时翻开身份）。
         self.identity_flash = IdentityFlash()
+        # ---- Presentation System 2.0 ----
+        # 统一实体牌移动：发牌 / 摸牌 / 得到判定牌 / 装备 / 弃牌全部走这里，
+        # 落点按区域解析（见 ui.card_transfer）。
+        self.transfers = CardTransferPresentation(self)
+        # 界面微交互补间（手牌上浮 / 血条过渡 / 面板淡入…）。
+        self.tweens = TweenManager()
+        # 手牌位置补间：悬停 / 选中 / 重排都平滑移动（见 ui.hand_motion）。
+        self.hand_motion = HandMotion()
+        # 体力显示值的平滑过渡（血点一格格稳定地掉，不跳变）。
+        self.hp_smooth = TweenTrack(anim_config.duration("hp_change"))
+        # 最近一次伤害的属性（normal / fire / thunder）：飘字与粒子的语义色。
+        self._damage_nature = {}
+        # 公共牌池的位置补间（选走一张后其余牌平滑让位）。
+        self._pool_motion = PointTrack(anim_config.duration("card_move"), "ease_out_cubic")
+        # 已经出现过的公共牌（新的那张才播"从牌堆飞入"）。
+        self._pool_seen = set()
+        # 装备槽刚被装上的脉冲计时。
+        self._equip_pulse = {}
+        # 已知的牌屏幕位置（"杀与闪相撞"这类相对表现要用）。
+        self._card_position = {}
+        # 普通信息提示（"不是你的回合"一类不走模态框）。
+        self.toasts = ToastManager()
         # 结算提示条（判定结果 / 阶段跳过）的当前内容。
         self.story_banner = None
         self.story_timer = 0.0
@@ -632,11 +690,63 @@ class Effects:
         self.last_play_pulse = 0.0
         self.action_banner = None
         self.action_timer = 0.0
-        self.deal_flights = []
         self._deal_owner = None
         # 待表现的"牌到手"事件：引擎已经完成真实移动，这里下一帧再决定
         # 要不要播飞行动画（那时才知道有没有别的系统接管了这张牌）。
         self._pending_arrivals = []
+        #: 判定期间背景压暗的强度（0→1 补间）。判定面板出现时升起、结束落下。
+        self.judge_dim = 0.0
+        #: 触摸到过的时间步（首帧 / 跳过演出后由 UI 推进手牌与血条补间）。
+        self._last_dt = 0.0
+
+    # ---- 实体牌移动（统一入口）----
+
+    @property
+    def deal_flights(self):
+        """正在飞的牌（兼容旧调用点：``table.draw_deal_flights`` 等）。"""
+
+        return self.transfers.flights
+
+    def sync_transfer_anchors(self):
+        """把这一帧的落点表交给牌移动表现层。
+
+        落点全部来自当前布局（``TableLayout``）：分辨率 / 全屏切换之后同一帧
+        就落到新位置，不会残留上一套屏幕坐标。
+        """
+
+        layout = getattr(self, "_layout", None)
+        metrics = getattr(layout, "metrics", None)
+        if layout is None or metrics is None:
+            return self.transfers
+        anchors = {
+            ZONE_DECK: self._design_center(layout_module.DRAW_PILE_RECT),
+            ZONE_DISCARD: self._design_center(layout_module.DISCARD_PILE_RECT),
+            ZONE_TABLE: self._design_center(layout_module.ACTION_CARD_RECT),
+            ZONE_PUBLIC_POOL: self._design_center(layout_module.CENTRAL_RECT),
+        }
+        game = self.game
+        card_h = metrics.hand_card_size()[1]
+        for owner in getattr(game, "players", ()) or ():
+            if owner is getattr(game, "player", None):
+                hand = metrics.hand_area
+                # 落点是"牌的中心"：手牌区的第一张牌大致落在这一带。
+                anchors[(ZONE_HAND, id(owner))] = (
+                    hand.centerx, hand.y + card_h // 2)
+            else:
+                rect = layout.any_seat_rect(owner)
+                if rect is not None:
+                    anchors[(ZONE_HAND, id(owner))] = (
+                        rect.centerx, rect.bottom - metrics.px(18))
+                    anchors[(ZONE_SEAT, id(owner))] = (
+                        rect.centerx, rect.bottom - metrics.px(18))
+            # 装备槽：装备牌落到对应槽位（替换装备时看得见"新牌进哪个格"）。
+            slots = (layout.player_equipment_rects()
+                     if owner is getattr(game, "player", None) else None)
+            if slots:
+                for slot, rect in slots.items():
+                    anchors[(ZONE_EQUIPMENT, id(owner), slot)] = rect.center
+        self.transfers.sync(anchors=anchors, card_size=metrics.hand_card_size())
+        return self.transfers
 
     # ---- 判定 → 动作队列的门控 ----
 
@@ -790,6 +900,8 @@ class Effects:
         """为**已经发好**的牌登记逐张落位动画（不抽牌、不改变数据）。
 
         真实发牌顺序是"每名玩家连续 N 张"，这里按传入的 cards 顺序播放即可。
+        走统一的 ``CardTransferPresentation``：飞行途中画牌背，落位时与手牌区
+        交接（``dealing_card_ids`` 让手牌区在飞行期间不画它）。
         """
 
         cards = [card for card in (cards or ()) if card is not None]
@@ -797,24 +909,17 @@ class Effects:
             return 0
         per = timing().initial_deal_card if per_card is None else per_card
         dur = per * 0.85 if duration is None else duration
-        self.deal_flights = self._flights_for(player, cards, start, end, per, dur)
+        self.transfers.clear()
+        flights = self.transfers.queue(
+            player, cards, source_zone=ZONE_DECK, destination_zone=ZONE_HAND,
+            duration=dur, per_card=per, visibility="face_down",
+            end=end)
+        if not flights and start is not None:
+            # 落点表还没建好（首帧）：退回旧路径，保证发牌一定有动画。
+            self._deal_owner = player
+            return 0
         self._deal_owner = player
-        return len(self.deal_flights)
-
-    def _flights_for(self, player, cards, start, end, per_card, duration):
-        """一串逐张错开的飞行：同一个落点横向铺开一点，看得出是几张牌。"""
-
-        width = self._hand_card_width()
-        spread = max(6, width // 3)
-        count = len(cards)
-        flights = []
-        for index, card in enumerate(cards):
-            offset = (index - (count - 1) / 2.0) * spread
-            target = (int(end[0] + offset), int(end[1]))
-            flights.append(DealFlight(
-                card, start, target, duration,
-                delay=index * per_card, owner=player))
-        return flights
+        return len(flights)
 
     def queue_draw(self, player, cards, *, start, end, per_card=None, duration=None):
         """摸牌 / 拿牌：把**已经到手**的牌登记成"从来源飞向该角色"的表现。
@@ -829,12 +934,12 @@ class Effects:
             return 0
         step = timing().draw_card_step if per_card is None else per_card
         dur = timing().draw_card_flight if duration is None else duration
-        flights = self._flights_for(player, cards, start, end, step, dur)
-        self.deal_flights.extend(flights)
+        flights = self.transfers.queue(
+            player, cards, source_zone=ZONE_DECK, destination_zone=ZONE_HAND,
+            duration=dur, per_card=step, visibility="face_down",
+            start=start, end=end)
         # 同时最多留 12 张在飞，避免连续摸牌堆成一片。
-        limit = 12
-        if len(self.deal_flights) > limit:
-            self.deal_flights = self.deal_flights[-limit:]
+        self.transfers.keep(12)
         return len(flights)
 
     def _hand_card_width(self):
@@ -847,8 +952,7 @@ class Effects:
     def dealing_card_ids(self, player):
         """还在飞向该角色的牌：手牌区暂时不画它们，避免"牌同时出现在两处"。"""
 
-        return {id(flight.card) for flight in self.deal_flights
-                if not flight.arrived and (flight.owner is None or flight.owner is player)}
+        return self.transfers.dealing_card_ids(player)
 
     def owned_card_ids(self):
         """这一帧由某个表现系统**独占表现**的牌（稳定身份 ``id(card)``）。
@@ -869,9 +973,7 @@ class Effects:
         queue = getattr(self.game, "actions", None)
         if queue is not None:
             ids |= queue.animating_card_ids()
-        for flight in self.deal_flights:
-            if not flight.arrived:
-                ids.add(id(flight.card))
+        ids |= self.transfers.owned_card_ids()
         ids |= self.judge_panel.owned_card_ids(self.game)
         return ids
 
@@ -880,7 +982,63 @@ class Effects:
         return self.owned_card_ids()
 
     def deal_in_progress(self):
-        return any(not flight.arrived for flight in self.deal_flights)
+        return self.transfers.busy()
+
+    def move_card(self, card, source_zone, destination_zone, *, owner=None,
+                  slot="", visibility=VISIBLE, duration=None, delay=0.0,
+                  start=None, end=None):
+        """一张实体牌移动的统一表现入口（获得判定牌 / 装备 / 弃牌 / 五谷）。
+
+        ``visibility`` 用 ``card_transfer.HIDDEN`` 表示"这一趟不让人看见牌面"。
+        """
+
+        if card is None:
+            return None
+        transfer = CardTransfer(
+            card, source_zone, destination_zone,
+            visibility=visibility, owner=owner, slot=slot)
+        if duration is None:
+            duration = anim_config.duration("card_move")
+        return self.transfers.submit(
+            transfer, start=start, end=end, duration=duration, delay=delay)
+
+    def sync_hand_motion(self, table_layout, dt, *, hover_index=None,
+                         selected_card_ids=()):
+        """推进手牌位置补间并回写布局用的显示位置。
+
+        由 ``Renderer`` 每帧调用一次：手牌区据此平滑上浮 / 重排，而**命中
+        测试用的是同一批 rect**（``TableLayout.hand_rects``）。
+        """
+
+        game = self.game
+        if game is None or table_layout is None:
+            return
+        metrics = getattr(table_layout, "metrics", None)
+        player = getattr(game, "player", None)
+        if metrics is None or player is None:
+            return
+        base = getattr(table_layout, "hand_base_rects", None) or []
+        hand = list(getattr(player, "hand", ()) or ())
+        if not base or len(base) != len(hand):
+            return
+        lift_hover = metrics.px(layout_module.HOVER_LIFT)
+        lift_selected = metrics.px(layout_module.SELECTED_LIFT)
+        self.hand_motion.advance(
+            hand, base,
+            hover_index=hover_index,
+            selected_keys=getattr(table_layout, "selected_hand_keys", ()),
+            hover_lift=lift_hover, selected_lift=lift_selected,
+            dt=dt,
+            skip=self.skipping,
+        )
+
+    # ---- 跳过演出 ----
+
+    @property
+    def skipping(self):
+        """这一帧是不是"跳过演出"生效（只在表演期间为真）。"""
+
+        return float(getattr(self.storyboard, "fast_forward", 0.0) or 0.0) > 0.0
 
     # ==================================================
     # 订阅
@@ -914,6 +1072,8 @@ class Effects:
             (EventType.PENDING_RESOLVED, self._on_pending_resolved),
             (EventType.PHASE_SKIPPED, self._on_phase_skip),
             (EventType.CARD_REVEALED, self._on_card_revealed),
+            (EventType.CARD_NULLIFIED, self._on_card_nullified),
+            (EventType.CARD_RESPONDED, self._on_card_responded),
         )
         for event_name, handler in subscriptions:
             self._tokens.append(
@@ -941,6 +1101,7 @@ class Effects:
     def reset(self):
         self._seat_flash.clear()
         self._seat_shake.clear()
+        self._seat_tint.clear()
         self.floats.clear()
         self.arrows = []
         self.judge_panel.cancel()
@@ -955,9 +1116,72 @@ class Effects:
         self.turn_timer = 0.0
         self.action_banner = None
         self.action_timer = 0.0
-        self.deal_flights = []
+        self.transfers.clear()
+        self.tweens.clear()
+        self.hand_motion.clear()
+        self.toasts.clear()
+        self.hp_smooth.clear()
+        self._pool_motion.clear()
+        self._pool_seen = set()
+        self._equip_pulse.clear()
+        self._card_position.clear()
         self._deal_owner = None
         self._pending_arrivals = []
+        self.judge_dim = 0.0
+        self._damage_nature = {}
+
+    # ==================================================
+    # 跳过演出（只跳动画，绝不跳规则步骤）
+    # ==================================================
+
+    def skip_presentation(self):
+        """把**正在播的动画**立刻推到终点。
+
+        做三件事，一件都不涉及规则：
+
+        * 演出队列：当前这一步的时长立刻走完，判定面板的展示阶段直接进结论；
+        * 牌移动 / 发牌飞行：所有还在飞的牌立刻落位；
+        * 界面补间（手牌上浮、血条过渡…）：全部到位。
+
+        它**不**提交任何 DecisionResponse、不推进引擎、不改任何游戏数据——
+        "跳动画"与"跳规则步骤"是两件事，这里只做前者。
+        """
+
+        self.storyboard.skip_current()
+        self.transfers.finish_all()
+        self.tweens.finish_all()
+        self.hand_motion.finish_all()
+        self.judge_panel.skip()
+        self.skill_banner.skip()
+        self.identity_flash.skip()
+        self.hp_smooth.finish()
+        # 漂浮文字与箭头没有"终点"可言：直接收掉，免得留在屏幕上。
+        self.floats.clear()
+        for arrow in self.arrows:
+            arrow.release()
+        return True
+
+    def hp_view(self, player, base=None):
+        """画面上该显示的体力（浮点，平滑过渡到账本值）。
+
+        账本值管的是"还没轮到播的增量"（演出排队的语义），这里再叠一层
+        "视觉上平滑靠近"：血点是整数格，所以玩家看到的是血一格格稳定地减少，
+        而不是从 3 直接跳成 0。
+        """
+
+        if player is None:
+            return 0.0
+        target = self.display_hp(player, base)
+        if player not in self.hp_smooth:
+            self.hp_smooth.set(player, float(target))
+            return float(target)
+        self.hp_smooth.to(player, float(target), anim_config.duration("hp_change"))
+        return float(self.hp_smooth.value(player, float(target)))
+
+    def background_dim(self):
+        """判定 / 身份揭示期间背景压暗的强度（0..1）。"""
+
+        return self.judge_dim
 
     # ==================================================
     # 公开表现入口
@@ -978,8 +1202,9 @@ class Effects:
         return self.storyboard.submit(
             CardStep(actor, targets, card, sequential=sequential))
 
-    def present_damage(self, player, amount):
-        return self.storyboard.submit(DamageStep(player, int(amount or 0)))
+    def present_damage(self, player, amount, nature="normal"):
+        return self.storyboard.submit(DamageStep(player, int(amount or 0),
+                                                 nature=nature))
 
     def present_lose_hp(self, player, amount):
         return self.storyboard.submit(LoseHpStep(player, int(amount or 0)))
@@ -1037,22 +1262,29 @@ class Effects:
 
     # ---- 立即执行（由队列轮到时调用）----
 
-    def show_damage(self, player, amount):
-        """受到伤害：闪红 + 抖动 + 飘出 -N。"""
+    def show_damage(self, player, amount, nature="normal"):
+        """受到伤害：闪红 + 抖动 + 飘出 -N（按属性区分普通 / 火焰 / 雷电）。"""
 
         if player is None or amount <= 0:
             return
-        self._seat_flash[player] = (timing().flash, theme.DANGER)
+        self._damage_nature[player] = str(nature or "normal")
+        color, flash_color = DAMAGE_NATURE.get(
+            str(nature or "normal"), DAMAGE_NATURE["normal"])
+        self._seat_flash[player] = (timing().flash, flash_color)
         self._seat_shake[player] = timing().shake
+        # 座位底色短暂染成属性色（火焰偏橙、雷电偏紫），肉眼能分辨属性。
+        self._seat_tint[player] = (timing().flash, color)
         x, y = self._anchor(player)
-        self.floats.append(FloatText("-" + str(int(amount)), (x, y), (238, 122, 108)))
+        self.floats.append(FloatText(
+            DAMAGE_ICONS.get(str(nature or "normal"), "-") + str(int(amount)),
+            (x, y), color))
 
     def show_recover(self, player, amount):
         if player is None or amount <= 0:
             return
         self._seat_flash[player] = (timing().flash, theme.HEAL)
         x, y = self._anchor(player)
-        self.floats.append(FloatText("+" + str(int(amount)), (x, y), theme.HEAL))
+        self.floats.append(FloatText("✚" + str(int(amount)), (x, y), theme.HEAL))
 
     def show_lose_hp(self, player, amount):
         """失去体力（不是伤害）：用偏黄的飘字区分于伤害。"""
@@ -1063,11 +1295,21 @@ class Effects:
         self.floats.append(FloatText("-" + str(int(amount)), (x, y), (240, 196, 120)))
 
     def show_dying(self, player):
+        """进入濒死：座位危险脉冲 + **屏幕中央**写明"谁进入濒死，等【桃】"。
+
+        中央那一条不是装饰：濒死改变的是"全桌现在在干什么"，只靠座位上一个小
+        角标，其他人根本不知道轮到自己救人了。
+        """
+
         if player is None:
             return
         self._seat_flash[player] = (timing().flash, theme.DANGER)
+        self._seat_shake[player] = timing().shake * 0.6
         x, y = self._anchor(player)
         self.floats.append(FloatText("濒死", (x, y), (240, 170, 120)))
+        self.present_result(
+            "%s 进入濒死" % (getattr(player, "name", "") or "有角色"),
+            detail="等待【桃】救援", tone="negative", min_duration=0.9)
 
     def show_death(self, player):
         if player is None:
@@ -1228,6 +1470,126 @@ class Effects:
     def note_discard(self):
         self.last_discard_pulse = timing().pulse
 
+    # ==== 装备落位 / 公共池 / 响应撞击（Presentation System 2.0）====
+
+    def equip_pulse(self, slot):
+        """某个装备槽刚刚被装上牌：返回剩余脉冲强度 0..1（槽位发光用）。"""
+
+        remaining = self._equip_pulse.get(str(slot), 0.0)
+        if remaining <= 0:
+            return 0.0
+        return max(0.0, remaining / max(0.01, anim_config.duration("focus")))
+
+    def public_rects(self, cards):
+        """公共牌池（五谷 / 从别处选牌）这一帧的**绘制与命中**矩形。
+
+        位置走补间：选走一张之后，剩下的牌平滑移动到新位置，而不是"哗"地
+        重整（``layout.public_rect_list`` 只给基础排列）。
+        """
+
+        cards = list(cards or ())
+        if not cards:
+            return []
+        metrics = getattr(getattr(self, "_layout", None), "metrics", None)
+        if metrics is None:
+            return layout_module.public_rect_list(cards, None)
+        base = layout_module.public_rect_list(cards, metrics)
+        rects = []
+        for card, rect in zip(cards, base):
+            point = self._pool_motion.value(id(card))
+            item = pygame.Rect(rect)
+            if point is not None:
+                item.center = (int(round(point[0])), int(round(point[1])))
+            rects.append(item)
+        return rects
+
+    def sync_public_pool(self, dt=0.0):
+        """公共牌池：新出现的牌从牌堆**逐张飞入**，其余牌平滑让位。"""
+
+        game = self.game
+        if game is None:
+            return
+        cards = list(getattr(game, "public_card_pool", ()) or ())
+        keys = [id(card) for card in cards]
+        self._pool_motion.keep_only(keys)
+        if not cards:
+            self._pool_seen = set()
+            return
+        metrics = getattr(getattr(self, "_layout", None), "metrics", None)
+        if metrics is None:
+            return
+        base = layout_module.public_rect_list(cards, metrics)
+        fresh = {id(card) for card in cards if id(card) not in self._pool_seen}
+        self._pool_seen = set(keys)
+        for index, (card, rect) in enumerate(zip(cards, base)):
+            self._pool_motion.to(id(card), rect.center,
+                                 anim_config.duration("card_move"))
+            if id(card) in fresh:
+                # 刚翻出来的公共牌：从牌堆飞过来。
+                self.move_card(
+                    card, ZONE_DECK, ZONE_PUBLIC_POOL,
+                    duration=anim_config.duration("card_move"),
+                    end=rect.center, delay=0.05 * index)
+        if self.skipping:
+            self._pool_motion.finish()
+        self._pool_motion.update(dt)
+
+    def clash(self, first, second, *, tone=(255, 236, 200)):
+        """两张牌（【杀】与【闪】）短促相撞：在中点放一次撞击光点。
+
+        不做粒子系统：一个快速淡出的光点就足以表达"挡下来了"。
+        """
+
+        if first is None or second is None:
+            return None
+        metrics = getattr(getattr(self, "_layout", None), "metrics", None)
+        if metrics is None:
+            return None
+        a = self._card_position.get(id(first), metrics.action_card_center)
+        b = self._card_position.get(id(second), metrics.response_card_rect.center)
+        point = (int((a[0] + b[0]) / 2.0), int((a[1] + b[1]) / 2.0))
+        life = anim_config.duration("scale_pop") * 1.8
+        self.floats.append(FloatText("✦", point, tone, life=life))
+        return point
+
+    def note_card_position(self, card, point):
+        """记下一张牌当前的屏幕位置（"杀与闪相撞"这类相对表现要用）。"""
+
+        if card is not None and point is not None:
+            self._card_position[id(card)] = (int(point[0]), int(point[1]))
+        return point
+
+    def _on_card_responded(self, _context, event):
+        """一次响应挡下了原来的牌（【闪】挡【杀】/ 【无懈】挡锦囊）。
+
+        这里只放一次短促的"相撞"光点：两张牌都还在中央展示位上，光点落在
+        它们中间——玩家看到的是"这张牌把那张牌挡住了"。牌进弃牌堆由规则层
+        的移动负责（``note_card_moved``）。
+        """
+
+        payload = event.payload or {}
+        response_card = payload.get("card")
+        request = payload.get("request")
+        context = getattr(request, "context", None) or {}
+        origin_card = context.get("card")
+        if response_card is None or origin_card is None:
+            return
+        if str(payload.get("reason") or "") == "wuxie_chain":
+            # 无懈有自己的链式界面，不要再叠一次光点。
+            return
+        self.clash(origin_card, response_card)
+
+    def _on_card_nullified(self, _context, event):
+        """锦囊被无懈抵消：中央结论条（"【XX】被【无懈可击】抵消"）。"""
+
+        payload = event.payload or {}
+        card = payload.get("card")
+        if card is None:
+            return
+        self.present_result(
+            "【%s】被【无懈可击】抵消" % getattr(card, "display_name", ""),
+            detail="这次使用没有生效", tone="negative", min_duration=1.0)
+
     # ---- 判定（面板状态机复用同一个 JudgePanel） ----
 
     def judge_begin(self, result):
@@ -1306,12 +1668,14 @@ class Effects:
         amount = event.payload.get("amount", 0)
         target = getattr(damage, "target", None) or event.target
         amount = int(amount or 0)
+        # 伤害属性（普通 / 火焰 / 雷电）来自规则层，飘字与座位染色按它区分。
+        nature = str(getattr(damage, "nature", "") or "normal")
         # 伤害在引擎里先是一条"失去体力"（LoseHpAtom）：一次结算只播一次，
         # 把队列里那条还没开始播的失去体力吃掉（与客户端事件层同一判据）。
         self.storyboard.absorb(STEP_LOSE_HP, target, amount)
         # 排进演出队列：判定 / 技能提示还在播时，这一次伤害不会抢先出现在
         # 屏幕上（玩家反馈："判定没播完，人已经死了"）。
-        self.present_damage(target, amount)
+        self.present_damage(target, amount, nature=nature)
 
     def _on_atom(self, _context, event):
         atom = event.payload.get("atom")
@@ -1334,11 +1698,15 @@ class Effects:
             destination = getattr(atom, "destination", None)
             if self.game is not None and destination is self.game.deck.discard_pile:
                 self.note_discard()
+            card = getattr(atom, "card", None)
+            source = getattr(atom, "source", None)
+            # 统一牌移动表现：把"从哪到哪"画出来（判定牌被获得 / 摸牌 / 装备 /
+            # 弃牌）。别处已经在演这张牌时不重复登记。
+            self.note_card_moved(card, source, destination)
             # 牌进了某个角色的手牌：只要没有别的系统接管，就播一段飞行动画。
             owner = self._hand_owner(destination)
             if owner is not None:
-                self.note_move(owner, getattr(atom, "card", None),
-                               getattr(atom, "source", None))
+                self.note_move(owner, card, source)
 
     def _hand_owner(self, zone):
         """这个区域是不是某个角色的手牌？是则返回该角色。"""
@@ -1349,6 +1717,91 @@ class Effects:
             if player.hand is zone:
                 return player
         return None
+
+    def zone_of(self, container):
+        """一个实体容器 → ``card_transfer`` 的区域名与归属（统一牌移动的基础）。
+
+        返回 ``(zone_name, owner)``；认不出来时返回 ``("", None)``，调用方按
+        "不动画"处理（宁可牌瞬间到位，也不要飞到错误的位置）。
+        """
+
+        game = self.game
+        if container is None or game is None:
+            return "", None
+        deck = getattr(game, "deck", None)
+        if deck is not None:
+            if container is getattr(deck, "discard_pile", None):
+                return ZONE_DISCARD, None
+            if container is getattr(deck, "draw_pile", None):
+                return ZONE_DECK, None
+        if container is getattr(game, "public_card_pool", None):
+            return ZONE_PUBLIC_POOL, None
+        if container is getattr(game, "processing_zone", None):
+            # 处理区 = 桌面上"正在被结算"的位置（判定牌 / 使用中的牌都经这里）。
+            return ZONE_TABLE, None
+        finder = getattr(game, "owner_of_zone", None)
+        owner = None
+        if callable(finder):
+            try:
+                owner = finder(container)
+            except Exception:                          # noqa: BLE001 - 只用于表现
+                owner = None
+        if owner is None:
+            for candidate in getattr(game, "players", ()) or ():
+                if (container is candidate.hand
+                        or container is candidate.judgement_zone
+                        or container in tuple(candidate.equipment.values())):
+                    owner = candidate
+                    break
+        if owner is None:
+            return "", None
+        if container is owner.hand:
+            return ZONE_HAND, owner
+        if container is owner.judgement_zone:
+            return ZONE_JUDGE, owner
+        for slot, card in tuple(getattr(owner, "equipment", {}).items()):
+            if container is card:
+                return ZONE_EQUIPMENT, owner
+        return "", owner
+
+    def note_card_moved(self, card, source, destination, *, owner=None):
+        """一次实体牌移动 → 一段统一飞行动画（``card_transfer``）。
+
+        只在**没有别的东西在演这张牌**时才登记（引擎的移动动画、正在飞的
+        同一张牌、判定面板正在展示的牌都算"别人接管了"），因此不会出现
+        同一张牌飞两遍。
+        """
+
+        if card is None or self.game is None:
+            return None
+        if not getattr(self.game, "ui_rects", None):
+            return None
+        if id(card) in self.owned_card_ids():
+            return None
+        from_zone, from_owner = self.zone_of(source)
+        to_zone, to_owner = self.zone_of(destination)
+        if not to_zone or not from_zone or to_zone == from_zone:
+            # 认不出起点（或起点终点相同）：交给 ``_flush_arrivals`` 的旧路径，
+            # 宁可不动画，也不要从错误的位置起飞。
+            return None
+        # 弃牌堆永远画牌背（"这一摞牌"的视觉，不泄露内容）；牌堆同理。
+        visibility = "face_down" if to_zone in (ZONE_DISCARD, ZONE_DECK) else VISIBLE
+        if to_zone == ZONE_HAND and to_owner is not getattr(self.game, "player", None):
+            visibility = "face_down"
+        slot = ""
+        if to_zone == ZONE_EQUIPMENT:
+            slot = getattr(card, "subtype", "") or ""
+            # 槽位亮一下：新装备落在哪个格子必须看得见（换装尤其重要）。
+            if slot:
+                self._equip_pulse[slot] = anim_config.duration("focus")
+        # 从手牌出发的移动（出牌 / 弃牌 / 打出）由引擎的移动动画负责；
+        # 这里只补那些"数据直接跳过去"的移动（获得判定牌【天妒】/ 装备）。
+        return self.move_card(
+            card, from_zone, to_zone,
+            owner=to_owner or owner or from_owner,
+            slot=slot, visibility=visibility,
+            duration=anim_config.duration("card_move"),
+        )
 
     # ---- 牌到手的飞行动画 ----
 
@@ -1429,7 +1882,7 @@ class Effects:
             return self._design_center(layout_module.TABLE_CARD_RECT)
         if self.game is not None and player is self.game.player:
             hand = metrics.hand_area
-            return (hand.centerx, hand.y)
+            return (hand.centerx, hand.y + metrics.hand_card_size()[1] // 2)
         rect = layout.any_seat_rect(player)
         if rect is not None:
             return (rect.centerx, rect.bottom - metrics.px(18))
@@ -1583,18 +2036,32 @@ class Effects:
     # ==================================================
 
     def update(self, dt):
+        dt = max(0.0, float(dt))
+        self._last_dt = dt
+        # 速度档只有一处生效点：表现层的每帧把本机速度同步给界面时长表，
+        # 按钮 / 提示 / 手牌上浮因此与演出队列走同一个节奏。
+        anim_config.set_speed(getattr(self.game, "speed", None))
         for player, (remaining, _color) in list(self._seat_flash.items()):
             remaining -= dt
             if remaining <= 0:
                 del self._seat_flash[player]
             else:
                 self._seat_flash[player] = (remaining, _color)
-        for player, remaining in list(self._seat_shake.items()):
-            remaining -= dt
-            if remaining <= 0:
-                del self._seat_shake[player]
-            else:
-                self._seat_shake[player] = remaining
+        for table, key in ((self._seat_shake, "shake"), (self._seat_tint, "tint")):
+            for player, value in list(table.items()):
+                if key == "shake":
+                    value -= dt
+                    if value <= 0:
+                        del table[player]
+                    else:
+                        table[player] = value
+                else:
+                    remaining, color = value
+                    remaining -= dt
+                    if remaining <= 0:
+                        del table[player]
+                    else:
+                        table[player] = (remaining, color)
 
         for item in list(self.floats):
             item.life -= dt
@@ -1605,9 +2072,34 @@ class Effects:
             if not arrow.update(dt):
                 self.arrows.remove(arrow)
 
-        for flight in list(self.deal_flights):
-            if not flight.update(dt):
-                self.deal_flights.remove(flight)
+        # 装备槽脉冲（刚装上的那件亮一下）。
+        for slot, remaining in list(self._equip_pulse.items()):
+            remaining -= dt
+            if remaining <= 0:
+                del self._equip_pulse[slot]
+            else:
+                self._equip_pulse[slot] = remaining
+
+        # 实体牌移动（统一表现层）：发牌 / 摸牌 / 得到判定牌 / 装备 / 弃牌。
+        self.transfers.update(dt)
+        # 界面补间与手牌位置由 Renderer 在 begin_frame 里"先推进再建布局"，
+        # 这里只推进那些与布局无关的一次性补间。
+        self.tweens.update(dt)
+
+        # 判定期间背景压暗：面板在演就升起，面板结束就落下（补间，不跳变）。
+        target_dim = 1.0 if self.judge_panel.active else 0.0
+        rate = dt / max(0.05, anim_config.duration("dim"))
+        if self.judge_dim < target_dim:
+            self.judge_dim = min(target_dim, self.judge_dim + rate)
+        elif self.judge_dim > target_dim:
+            self.judge_dim = max(target_dim, self.judge_dim - rate)
+
+        # 体力显示值的平滑目标（账本值变了才开始过渡）。
+        for player in list(getattr(self.game, "players", ()) or ()):
+            self.hp_view(player)
+        self.hp_smooth.update(dt)
+
+        self.toasts.update(dt)
 
         # 上一帧记录的"牌到手"在这里变成飞行动画：此时别的系统（顺手牵羊 /
         # 仁德的亮牌动画）已经把该接管的牌登记好了，能准确判断谁该播。
@@ -1673,6 +2165,29 @@ class Effects:
         import math
 
         return int(math.sin(remaining * 46) * 5 * ratio)
+
+    def seat_tint(self, player):
+        """座位上的伤害属性染色：``(强度 0..1, 颜色)``（没有则 ``(0, None)``）。
+
+        火焰偏橙、雷电偏紫、普通偏红——玩家不必读战报就能看出是哪种属性。
+        """
+
+        entry = self._seat_tint.get(player)
+        if entry is None:
+            return 0.0, None
+        remaining, color = entry
+        if remaining <= 0:
+            return 0.0, None
+        return max(0.0, remaining / max(0.01, timing().flash)), color
+
+    def damage_pulse(self, player):
+        """这一次伤害的属性强调强度（0..1）：飘字与座位共用同一段计时。"""
+
+        entry = self._seat_flash.get(player)
+        if entry is None:
+            return 0.0
+        remaining, _color = entry
+        return max(0.0, remaining / max(0.01, timing().flash))
 
     def judge_display(self):
         """兼容接口：把判定展示状态整理成旧的横幅结构。

@@ -14,6 +14,7 @@ from src.renderer import Renderer
 from src.settings import shared as shared_preferences
 from src.game.skills.standard.fanjian import FanjianFlow  # noqa: F401  (技能流程随包加载)
 from src.start_menu import StartMenu
+from src.ui import debug_overlay
 from src.ui.duel_hud import DuelHud
 from src.ui.duel_setup import DuelSetupScreen
 from src.ui.favorite_generals import FavoriteGeneralsScreen
@@ -351,6 +352,18 @@ while running:
 
             elif event.key in (pygame.K_EQUALS, pygame.K_KP_PLUS, pygame.K_3):
                 game.faster()
+
+            elif event.key == pygame.K_SPACE and game.scene == "game":
+                # 跳过当前演出：**只跳动画**，绝不跳过任何规则步骤
+                # （不提交响应、不推进引擎、不改任何游戏数据）。
+                renderer.effects.skip_presentation()
+
+            elif event.key == pygame.K_F1:
+                # F1 演出调试：队列 / 输入优先级 / 速度 / 待回答请求。
+                shown = debug_overlay.toggle()
+                renderer.effects.toasts.push(
+                    "演出调试面板" + ("已开启" if shown else "已关闭"),
+                    tone="info", key="debug:panel")
 
             continue
 

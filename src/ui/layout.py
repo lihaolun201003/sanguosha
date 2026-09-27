@@ -380,13 +380,20 @@ class TableLayout:
     一一对应）。它是命中测试的唯一依据：布局永远是上一帧的，手牌可能刚变
     （出牌 / 摸牌 / 被拿走），此时必须按"屏幕上那一张牌"认回来，而不能用
     现在的张数另算一套坐标（见 ``Renderer.card_at_position``）。
+
+    ``hand_motion`` 给定时，手牌的悬停上浮 / 选中上浮 / 整体重排都走补间
+    （见 ``ui.hand_motion``）：``hand_rects`` 是**这一帧真正画出来**的位置，
+    命中测试用的就是它——补间只在表现层，不会让"看到的"与"点得到的"分家。
     """
 
-    def __init__(self, game, metrics=None, mouse_pos=None, selected_card_ids=()):
+    def __init__(self, game, metrics=None, mouse_pos=None, selected_card_ids=(),
+                 hand_motion=None, dt=0.0):
         self.game = game
         self.metrics = metrics if metrics is not None else LayoutMetrics(DESIGN_WIDTH, DESIGN_HEIGHT)
         self.mouse_pos = mouse_pos
         self.selected_card_ids = set(selected_card_ids)
+        self.hand_motion = hand_motion
+        self.dt = float(dt or 0.0)
         self.seat_rects = self._build_seat_rects()
         self.hand_rects = []
         self.hand_base_rects = []
@@ -538,13 +545,50 @@ class TableLayout:
         hand = list(self.game.player.hand)
         base = self._base_hand_rects(hand)
         self.hand_base_rects = base
-        self.hand_rects = list(base)
         self.hand_cards = list(hand)
         if not base:
             return
 
         hover_lift = self.metrics.px(HOVER_LIFT)
         selected_lift = self.metrics.px(SELECTED_LIFT)
+
+        if self.hand_motion is not None:
+            # 走补间：先按**上一帧画出来的位置**判断悬停，再把目标交给补间并
+            # 推进一帧，最后用推进后的位置当作这一帧的绘制与命中位置。
+            previous = [self.hand_motion.offset(card) for card in hand]
+            display = [
+                pygame.Rect(int(pos[0]), int(pos[1]), base[index].width, base[index].height)
+                if pos is not None else base[index]
+                for index, pos in enumerate(previous)
+            ]
+            # 命中区域 = **显示位置** + 它正下方一个上浮高度。
+            # 不能拿"基础排列位置 ∪ 显示位置"：重排过程中两个位置水平错开，
+            # 每张牌的命中区会横向张大并互相侵占，点到的就不是眼睛看到的那张
+            # （自检 3.7b：缩放窗口后点第一张，命中了后面某一张）。
+            # 只向下扩展则保留了"牌抬起来后，鼠标还在它原位也能点到"的手感。
+            self.hand_hit_rects = [
+                display[index].union(display[index].move(0, hover_lift))
+                for index in range(len(base))
+            ]
+            if self.mouse_pos is not None:
+                self.hand_hover = _hit_test(display, self.mouse_pos,
+                                            lift_rects=self.hand_hit_rects)
+            positions = self.hand_motion.advance(
+                hand, base,
+                hover_index=self.hand_hover,
+                selected_keys=self.selected_hand_keys,
+                hover_lift=hover_lift, selected_lift=selected_lift,
+                dt=self.dt,
+            )
+            if len(positions) == len(base):
+                self.hand_rects = [
+                    pygame.Rect(int(pos[0]), int(pos[1]), base[index].width,
+                                base[index].height)
+                    for index, pos in enumerate(positions)
+                ]
+                return
+            self.hand_rects = list(base)
+            return
 
         lifted_hover = [rect.move(0, -hover_lift) for rect in base]
         self.hand_hit_rects = [

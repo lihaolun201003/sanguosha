@@ -31,6 +31,8 @@ class EventType(str, Enum):
     # payload: actor / card / request / reason。与 CARD_USED 分开：
     # CARD_USED 是"使用"，响应是"打出"，两者的时机条件不同（银月枪一类）。
     CARD_RESPONDED = "card.responded"
+    #: 一次使用被【无懈可击】抵消（规则已经定案）：表现层据此显示结论条。
+    CARD_NULLIFIED = "card.nullified"
     TARGET_SELECTED = "card.target.selected"
     BECOME_TARGET = "card.target.became"
     CARD_EFFECT_BEFORE = "card.effect.before"

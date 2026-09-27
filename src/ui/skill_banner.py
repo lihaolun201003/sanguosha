@@ -93,6 +93,15 @@ class SkillBanner:
         self.targets = tuple(targets or ())
         return self
 
+    def skip(self):
+        """跳过演出：立刻进入淡出（横幅只是提示，没有规则含义）。"""
+
+        if self.timer <= 0:
+            return False
+        self.timer = min(self.timer, max(0.05, self.total * 0.16))
+        self.alpha = self._alpha_for(self.timer)
+        return True
+
     def cancel(self):
         self.active = False
         self.timer = 0.0

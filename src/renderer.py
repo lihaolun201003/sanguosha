@@ -13,13 +13,16 @@ from src.ui import fx as effects_module
 from src.game.conversion import EQUIPMENT_ZONE
 from src.game.identity import identity_name, visible_identity
 from src.ui import layout, player, prompt, seats, table, theme, tooltip
+from src.ui import anim_config
+from src.ui import debug_overlay
+from src.ui import input_lock
 from src.ui import wuxie_chain
 from src.ui.overlay import GameOverOverlay
 from src.ui.action_picker import CardActionPicker
 from src.ui.huogong import HuogongPanel
 from src.ui.skill_bar import SkillBar, SkillPicker
 from src.ui.speed import SpeedControl
-from src.ui.widgets import Button, place_tooltip
+from src.ui.widgets import Button, motion as button_motion, place_tooltip
 
 DEBUG_UI = False
 
@@ -61,6 +64,16 @@ class Renderer:
         self._pressed_action = None
         self._layout_size = None
         self._judge_hover_rects = []
+        # 悬停提示的唯一通道（延时 200ms 出现、同时只显示一份）。
+        self.tooltips = tooltip.TooltipManager()
+        self._dt = 0.0
+        self._hold_notice = None
+        # 阶段指示条的换场动画（阶段一变就重新滑入）。
+        self._phase_key = ""
+        self._phase_elapsed = 1.0
+        self._phase_total = 1.0
+        # 界面上所有控件的补间（按钮缩放 / 亮度、面板淡入…）。
+        self.buttons = button_motion()
 
         self.primary_button = Button(self.metrics.primary_button, "结束回合", kind="danger", font="normal")
         self.secondary_button = Button(self.metrics.secondary_button, "取消", kind="ghost", font="small", enabled=False)
@@ -143,8 +156,16 @@ class Renderer:
             metrics,
             mouse_pos,
             selected_card_ids=player.selected_hand_card_ids(game),
+            # 手牌的上浮 / 重排走补间（见 ui.hand_motion）：hand_rects 是这一帧
+            # 真正画出来的位置，命中测试用的也是它。
+            hand_motion=self.effects.hand_motion,
+            dt=self._dt,
         )
         self.effects.set_layout(self.table_layout)
+        # 实体牌移动的落点表：全部来自当前布局，分辨率变化同一帧生效。
+        self.effects.sync_transfer_anchors()
+        # 公共牌池（五谷）：新牌从牌堆飞入、其余牌平滑让位。
+        self.effects.sync_public_pool(self._dt)
         # 关键演出（技能提示一类）还在播时，手牌的可出牌高亮先收起来：
         # 界面层让路，避免"提示还没看完就已经能点牌了"。
         self.playable = ([] if self.effects.interaction_hold()
@@ -175,9 +196,44 @@ class Renderer:
         return self.table_layout
 
     def update(self, dt):
+        self._dt = float(dt)
         self.effects.update(dt)
+        self.tooltips.update(dt)
+        # 按钮的 hover / pressed 补间（全项目共用一份，见 ui.widgets.ButtonMotion）。
+        self.buttons.update(dt)
         if self._surrender_armed > 0:
             self._surrender_armed = max(0.0, self._surrender_armed - dt)
+        self._hold_notice = self._hold_text()
+
+    def _phase_progress(self, game):
+        """阶段指示条的换场进度（阶段一变就从头开始，见 ui.table.draw_phase_strip）。"""
+
+        phase = str(getattr(game, "phase", ""))
+        if phase != self._phase_key:
+            self._phase_key = phase
+            self._phase_elapsed = 0.0
+            self._phase_total = max(0.05, anim_config.duration("phase_change"))
+        if self._phase_total <= 0:
+            return 1.0
+        self._phase_elapsed = min(self._phase_total, self._phase_elapsed + self._dt)
+        return self._phase_elapsed / self._phase_total
+
+    def _hold_text(self):
+        """操作层让路时那句说明（演出期间给玩家的唯一出口提示）。"""
+
+        game = getattr(self, "game", None)
+        effects = self.effects
+        if game is None or not effects.interaction_hold():
+            return None
+        step = effects.storyboard.current
+        kind = str(getattr(step, "kind", ""))
+        if kind == "skill":
+            return "技能发动中…"
+        if kind in ("judge", "result"):
+            return "判定结算中…"
+        if kind:
+            return "演出播放中…   空格：跳过动画"
+        return "判定结算中…   空格：跳过动画"
 
     def reset_effects(self):
         self.effects.reset()
@@ -222,7 +278,16 @@ class Renderer:
         return _fallback_hit(position, hand, self.metrics)
 
     def get_public_card_rects(self, cards):
-        return [pygame.Rect(rect) for rect in layout.public_rect_list(list(cards), self.metrics)]
+        """公共牌池的屏幕矩形。
+
+        位置来自表现层的补间（选走一张后其余牌平滑让位），**绘制与命中用的是
+        同一份**——否则玩家会点到"牌曾经在的位置"。
+        """
+
+        rects = self.effects.public_rects(list(cards))
+        if not rects:
+            rects = layout.public_rect_list(list(cards), self.metrics)
+        return [pygame.Rect(rect) for rect in rects]
 
     def get_pool_cards(self, game):
         return [card for card, _key in self.get_pool_entries(game)]
@@ -373,24 +438,33 @@ class Renderer:
             "secondary_action": state["secondary"][2],
         }
 
+    def speed_control_hit(self, position, game):
+        """动画速度控件的热区（**本地表现设置，永远可点**，见 ``input_lock``）。"""
+
+        control = getattr(self, "speed_control", None)
+        if control is None:
+            return None
+        return control.hit(position, game)
+
     def hit_action(self, position, game):
         """Map a click to a UI action name, or None."""
 
         if game.game_over:
             return self.result_overlay.handle_click(position)
 
+        # ALWAYS 层：动画速度是**这台机器自己的表现设置**，与规则无关，任何
+        # 演出期间都保留（玩家随时能把自己的动画调快 / 调慢）。
+        speed_hit = self.speed_control_hit(position, game)
+        if speed_hit is not None:
+            return speed_hit
+
         # 判定优先：判定面板是牌桌最高层级，它捕获牌桌点击。唯一的例外是
         # "当前这条判定请求问的正是本机玩家"（改判窗口的「跳过」按钮之类），
-        # 那属于判定流程自己要求的输入。见 src/game/judge_gate.py。
-        gate = getattr(game, "judge_gate", None)
-        if gate is not None and not gate.allows_local_input():
+        # 那属于判定流程自己要求的输入。判据统一在 ``input_lock`` 里。
+        if input_lock.resolve(game, self.effects).layer == "judge":
             return None
 
         # 技能发动提示还在播：操作界面先让路（只拦界面，不拦引擎）。
-        # 节奏控件不拦——玩家随时可以调整自己的动画速度。
-        speed_hit = self.speed_control.hit(position, game)
-        if speed_hit is not None:
-            return speed_hit
         if self.effects.interaction_hold():
             return None
 
@@ -780,10 +854,14 @@ class Renderer:
                 flash=flash if flash > 0 else None,
                 flash_color=flash_color,
                 shake=self.effects.seat_shake(player_obj),
+                # 伤害属性染色（火焰偏橙 / 雷电偏紫）：不读战报也能看出属性。
+                tint=self.effects.seat_tint(player_obj)[0],
+                tint_color=self.effects.seat_tint(player_obj)[1],
                 # 体力 / 存活走表现层的"未播增量"：快照可以立刻把血量改成 0，
                 # 但画面要等这一次伤害真正演完才变（见 ui/storyboard 的账本）。
+                # 再叠一层"平滑靠近"：血点一格格稳定地掉，不跳变。
                 alive=self.effects.display_alive(player_obj),
-                hp=self.effects.display_hp(player_obj),
+                hp=self.effects.hp_view(player_obj),
             )
 
         # 中央
@@ -812,7 +890,9 @@ class Renderer:
             # 公共牌区的当前挑选者（五谷丰登这类公开的集体流程）。
             chooser=(game.pending_selection or {}).get("owner"),
         )
-        table.draw_phase_strip(self.screen, game, metrics, self.get_phase_name(game.phase))
+        table.draw_phase_strip(
+            self.screen, game, metrics, self.get_phase_name(game.phase),
+            progress=self._phase_progress(game))
         table.draw_turn_banner(self.screen, metrics, self.effects.turn_display())
         self.draw_moving_card(game)
 
@@ -826,11 +906,15 @@ class Renderer:
             flash=player_flash if player_flash > 0 else 0.0,
             flash_color=player_flash_color,
             shake=self.effects.seat_shake(game.player),
+            tint=self.effects.seat_tint(game.player)[0],
+            tint_color=self.effects.seat_tint(game.player)[1],
             source_slots=source_slots,
             candidate_slots=candidate_slots,
+            # 刚装上的那件装备：对应槽位亮一下（换装时看清"新牌进了哪个格"）。
+            equip_pulse=self.effects.equip_pulse,
             responding=game.player is responding,
             alive=self.effects.display_alive(game.player),
-            hp=self.effects.display_hp(game.player),
+            hp=self.effects.hp_view(game.player),
         )
         player.draw_hand(
             self.screen,
@@ -851,7 +935,7 @@ class Renderer:
         if not show_interaction and self.interaction_layers(game):
             # 演出让路：操作层整体不出现。但**不能什么都不说**——玩家看到的
             # 是"界面突然没了、点哪都没反应"。这里补一条轻量说明，让他知道
-            # "正在演技能，等一下就会回来"。
+            # "正在演技能，等一下就会回来"，以及"空格可以跳过动画"。
             self._draw_hold_notice(game, metrics)
         if show_interaction:
             info = prompt.describe(game)
@@ -885,6 +969,14 @@ class Renderer:
         if show_interaction:
             self.huogong.draw(self.screen, game, metrics, self.mouse_pos)
 
+        # 判定 / 身份揭示期间：背景轻微压暗，把视线集中到中央的演出上。
+        # 强度走补间（见 Effects.background_dim），出现与退场都不跳变。
+        dim = self.effects.background_dim()
+        if dim > 0.01:
+            veil = pygame.Surface((metrics.screen_w, metrics.screen_h), pygame.SRCALPHA)
+            veil.fill((*theme.VEIL, int(96 * min(1.0, dim))))
+            self.screen.blit(veil, (0, 0))
+
         # ---- FX overlay ----
         # 指向箭头与动作横幅单独成层：高于所有常规面板（座位 / 卡牌 / 按钮 /
         # 战报），只让真正的顶层提示与模态盖住它们。
@@ -898,6 +990,8 @@ class Renderer:
         # 动作横幅之上，判定面板之下——判定面板永远是最高层级。
         table.draw_story_banner(
             self.screen, metrics, self.effects.story_display())
+        # 普通信息提示（"不是你的回合" / "等待其他玩家"）：不拦点击、不用模态。
+        self.effects.toasts.draw(self.screen, metrics)
         # 无懈链：多层无懈正在发生时，让玩家看清"哪张牌在被无懈、轮到第几层"。
         # 它只在链存在时出现，不占常驻画面。
         wuxie_chain.draw_chain(
@@ -907,33 +1001,65 @@ class Renderer:
         # 身份揭示：阵亡后翻开身份，与技能横幅同层、判定面板之下。
         self.effects.identity_flash.draw(self.screen, metrics)
 
-        # 悬停提示最后画，保证盖在其他面板之上。
-        self._draw_general_tooltip(game, metrics)
+        # F1 演出调试（默认关闭）：队列 / 输入优先级 / 速度 / 请求，一眼看清
+        # "现在为什么点不动"。它只读状态，不提供任何推进规则的操作。
+        debug_overlay.draw(self.screen, game, metrics, self)
 
-        if DEBUG_UI:
-            self._draw_debug(game, metrics)
+        # 悬停提示最后画，保证盖在其他面板之上（延时 200ms + 只显示一份）。
+        self._draw_tooltips(game, metrics, table_layout)
 
         if game.game_over:
             self.result_overlay.draw(self.screen, game, metrics, self.mouse_pos)
-        else:
-            skill_tip = (
-                None
-                if (game.pending_skill_input or game.pending_skill_picker)
-                else self.skill_bar.tooltip(game, self.mouse_pos)
-            )
-            hovered = self.get_hovered_card(game, self.mouse_pos)
-            if skill_tip is not None:
-                # 提示放在按钮左侧，避免压住三键本身。
-                anchor = self.skill_bar.button.rect
-                self.draw_text_tooltip(
-                    skill_tip,
-                    (anchor.x - self.metrics.px(600), anchor.y - self.metrics.px(20)),
-                )
-            elif hovered is not None:
-                self.draw_card_tooltip(hovered, self.mouse_pos)
 
         # 判定展示面板是战场最高层级：任何 tooltip / 横幅都不许盖住它。
         self.effects.judge_panel.draw(self.screen, game, metrics)
+
+    def _draw_tooltips(self, game, metrics, table_layout):
+        """所有悬停提示的唯一出口：延时出现、同时只显示一份。
+
+        在它之前，技能提示、卡牌提示、武将提示各自判断、各自立刻绘制：鼠标
+        划过去一下就会闪一串提示框，两个来源还可能同时画（互相压住）。这里
+        先按"鼠标现在停在什么上"选**一个**目标，交给 ``TooltipManager`` 计时
+        （200ms），到点才画。
+        """
+
+        if game.game_over:
+            self.tooltips.observe(None)
+            return
+        payload = None
+        skill_tip = (
+            None
+            if (game.pending_skill_input or game.pending_skill_picker)
+            else self.skill_bar.tooltip(game, self.mouse_pos)
+        )
+        if skill_tip:
+            payload = ("skill", skill_tip)
+        else:
+            hovered = self.get_hovered_card(game, self.mouse_pos)
+            if hovered is not None:
+                payload = ("card", hovered)
+            else:
+                hovered_player = self._hovered_general(game)
+                if hovered_player is not None:
+                    payload = ("player", hovered_player)
+        key = None if payload is None else (payload[0], id(payload[1]))
+        self.tooltips.observe(key)
+        if payload is None or not self.tooltips.ready:
+            return
+        kind, target = payload
+        if kind == "skill":
+            # 提示放在按钮左侧，避免压住三键本身。
+            anchor = self.skill_bar.button.rect
+            self.draw_text_tooltip(
+                target,
+                (anchor.x - self.metrics.px(600), anchor.y - self.metrics.px(20)),
+            )
+        elif kind == "card":
+            self.draw_card_tooltip(target, self.mouse_pos)
+        else:
+            tooltip.draw_general_tooltip(
+                self.screen, game, target, self.mouse_pos, metrics,
+                avoid=self._tooltip_avoid_rects(metrics))
 
     def _tooltip_avoid_rects(self, metrics):
         """提示框要尽量避开的区域：座位面板、真人手牌区、提示条、按钮区。
@@ -997,17 +1123,14 @@ class Renderer:
         return selected, candidates
 
     def _draw_hold_notice(self, game, metrics):
-        """操作层让路时的一句说明（"技能发动中…"）。"""
+        """操作层让路时的一句说明（"技能发动中…   空格：跳过动画"）。
 
-        step = self.effects.storyboard.current
-        kind = str(getattr(step, "kind", ""))
-        if kind == "skill":
-            text = "技能发动中…"
-        elif kind in ("judge", "result"):
-            text = "判定结算中…"
-        elif kind:
-            text = "演出播放中…"
-        else:
+        文案在 ``update`` 里算好：这里只画，不重复推导状态（绘制路径出错会
+        直接影响这一帧能不能看）。
+        """
+
+        text = getattr(self, "_hold_notice", None)
+        if not text:
             # 不是队列里的演出（例如判定面板在演）：判定面板自己会说明，
             # 这里不重复占屏。
             return
@@ -1026,38 +1149,32 @@ class Renderer:
             x, y = item.position
             self.screen.blit(rendered, rendered.get_rect(center=(x, y - item.offset)))
 
-    def _draw_general_tooltip(self, game, metrics):
-        """鼠标停在某个角色的**武将牌**上时，摊开他的技能。
+    def _hovered_general(self, game):
+        """鼠标停在**武将牌**上时返回那个角色（否则 None）。
 
         只在武将牌那一小块上触发：装备格上悬停要看的是装备效果（由
-        ``get_hovered_card`` 负责），两者位置不同、提示互斥。真人的面板很大，
-        仍然只在鼠标不在手牌上时显示。
+        ``get_hovered_card`` 负责），两者位置不同、提示互斥。真人面板很大，
+        仍然只在鼠标不在手牌上时命中。
         """
 
         position = self.mouse_pos
         if position is None or game.game_over:
-            return False
+            return None
         hovered = self.player_at_position(position, game)
         if hovered is None:
-            return False
+            return None
         if hovered is game.player:
-            # 真人面板很大，鼠标在手牌上时不要弹提示，免得挡住出牌。
             if self.player_hand_hover(game) is not None:
-                return False
-        else:
-            # 对手座位：只有鼠标落在武将牌上才弹，装备格/血量/判定区都不弹。
-            seat_rect = None
-            if self.table_layout is not None and self.table_layout.game is game:
-                seat_rect = self.table_layout.seat_rect(hovered)
-            if seat_rect is None:
-                return False
-            avatar = seats.avatar_rect(
-                seat_rect, metrics, shift=self.effects.seat_shake(hovered))
-            if not avatar.collidepoint(position):
-                return False
-        return tooltip.draw_general_tooltip(
-            self.screen, game, hovered, position, metrics,
-            avoid=self._tooltip_avoid_rects(metrics))
+                return None
+            return hovered
+        seat_rect = None
+        if self.table_layout is not None and self.table_layout.game is game:
+            seat_rect = self.table_layout.seat_rect(hovered)
+        if seat_rect is None:
+            return None
+        avatar = seats.avatar_rect(
+            seat_rect, self.metrics, shift=self.effects.seat_shake(hovered))
+        return hovered if avatar.collidepoint(position) else None
 
     def resolve_view_card(self, entry):
         """把网络载荷里的牌解析成展示用卡。

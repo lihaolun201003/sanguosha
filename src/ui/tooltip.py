@@ -2,10 +2,18 @@
 
 纯只读展示，不参与任何规则判定：鼠标停在谁的面板上，就显示谁的武将、
 体力上限与全部技能说明（含锁定 / 触发式等关键词）。
+
+# 统一入口：``TooltipManager``
+
+所有提示（技能 / 装备 / 角色状态 / 卡牌 / 按钮）都经过同一条延时通道：
+**鼠标停稳 200ms 才出现**。在此之前每一帧都直接画，于是"鼠标划过去一下"
+就闪一堆提示框，而且不同来源的提示会互相抢屏（同时画两份）。管理器只认
+一个"当前悬停目标"，目标一变就重新计时——所以划过不会闪，停住才出。
 """
 
 import pygame
 
+from . import anim_config
 from . import theme
 from .widgets import draw_panel, place_tooltip
 
@@ -14,6 +22,60 @@ MAX_WIDTH_DESIGN = 380
 FONT_BODY_NAME = "small"
 PAD = 14
 LINE_GAP = 6
+
+#: 悬停多久才弹提示（秒）。太快会闪、太慢会让人以为提示没了。
+HOVER_DELAY = 0.20
+
+
+class TooltipManager:
+    """唯一的提示通道：延时出现 + 同时只显示一份。"""
+
+    def __init__(self, delay=HOVER_DELAY):
+        self.delay = float(delay)
+        self.key = None
+        self.elapsed = 0.0
+
+    # ---- 每帧 ----
+
+    def observe(self, key):
+        """告知"这一帧鼠标停在什么上面"（``None`` = 没停在可提示的东西上）。
+
+        ``key`` 要能唯一标识目标（``("card", id(card))`` / ``("skill", …)``）：
+        换目标就重新计时。
+        """
+
+        if key != self.key:
+            self.key = key
+            self.elapsed = 0.0
+        return key
+
+    def update(self, dt):
+        if self.key is None:
+            self.elapsed = 0.0
+            return
+        self.elapsed += max(0.0, float(dt))
+
+    def clear(self):
+        self.key = None
+        self.elapsed = 0.0
+
+    # ---- 查询 ----
+
+    @property
+    def ready(self):
+        """现在该不该把提示画出来。"""
+
+        return self.key is not None and self.elapsed >= self.delay
+
+    @property
+    def alpha(self):
+        """淡入用的不透明度（0..255）：出现时不硬切。"""
+
+        if self.key is None or self.delay <= 0:
+            return 255 if self.key is not None else 0
+        fade = max(0.01, anim_config.duration("hover"))
+        ratio = min(1.0, max(0.0, (self.elapsed - self.delay) / fade))
+        return int(255 * ratio)
 
 
 def wrap_text(text, font, max_width):

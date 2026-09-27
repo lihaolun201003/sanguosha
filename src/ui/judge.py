@@ -157,6 +157,26 @@ class JudgePanel:
         self.result = None
         return self
 
+    def skip(self):
+        """跳过演出：把面板推到淡出（**不改判定结果，也不结束判定流程**）。
+
+        只有在规则层已经给出结论（``result`` 到手）时才真的跳：那时玩家已经
+        没有必要继续等结论条的停留。反过来，判定还在等改判窗口时只把**本阶段
+        的停留**走完——判定牌本来就要留在屏幕上等结果，把它收掉会让玩家
+        根本没看见判定牌是什么。
+        """
+
+        if not self.active:
+            return False
+        self.timer = 0.0
+        if self.result is None:
+            return False
+        self.stage = JudgeStage.FADE_OUT
+        self.draw_progress = 1.0
+        self.alpha = 255
+        self.timer = min(max(_timing().judge_fade_out, 0.12), 0.25)
+        return True
+
     # ==================================================
     # 推进
     # ==================================================

@@ -430,18 +430,24 @@ class DamageStep(TimedStep):
     kind = STEP_DAMAGE
 
     def presentation_extra(self):
-        return {"actor_id": _player_id(self.player), "text": "-%d" % int(self.amount or 0)}
+        return {"actor_id": _player_id(self.player),
+                "text": "-%d" % int(self.amount or 0),
+                "tone": self.nature,
+                "payload": {"nature": self.nature}}
 
-    def __init__(self, player, amount, *, hp_delta=None):
+    def __init__(self, player, amount, *, hp_delta=None, nature="normal"):
         super().__init__()
         self.player = player
         self.amount = int(amount)
+        #: 伤害属性（``normal`` / ``fire`` / ``thunder``）：飘字与座位染色按它
+        #: 区分。属性来自规则层的 ``DamageContext``，表现层不猜。
+        self.nature = str(nature or "normal")
         #: 这一步要"补回去"的体力增减（负数是掉血）。
         self.hp_delta = -self.amount if hp_delta is None else int(hp_delta)
         self.duration = _timing().story_damage
 
     def start(self, effects):
-        effects.show_damage(self.player, self.amount)
+        effects.show_damage(self.player, self.amount, nature=self.nature)
 
     def reserve(self, ledger):
         ledger.reserve_hp(self.player, self, self.hp_delta)
@@ -573,6 +579,9 @@ class PresentationQueue:
         self.played = 0
         self.dropped = 0
         self.speed_factor = 1.0
+        #: 「跳过演出」的剩余有效期（本机秒）。大于 0 时队列以数倍速度消费，
+        #: 让玩家一次按键就把积压的演出看完——**只加快画面，不改任何规则**。
+        self.fast_forward = 0.0
 
     # ---- 生产者 ----
 
@@ -631,6 +640,11 @@ class PresentationQueue:
             owner = getattr(self.effects, "game", None)
         self.speed_factor = self.speed_for(owner)
         step_dt = max(0.0, float(dt)) * self.speed_factor
+        if self.fast_forward > 0.0:
+            # 跳过演出：这段时间里按"至少半秒一步"的节奏消费队列，
+            # 一次按键就能把积压的演出全部看完。
+            self.fast_forward = max(0.0, self.fast_forward - max(0.0, float(dt)))
+            step_dt = max(step_dt, 0.5 + 6.0 * max(0.0, float(dt)))
 
         if self.current is None:
             self._start_next()
@@ -648,6 +662,52 @@ class PresentationQueue:
             self._start_next()
         # 队列排空（或只剩不重要的演出）→ 关闸，规则恢复推进。
         self._sync_block_gate()
+
+    def skip_current(self):
+        """把正在播的演出推进到终点（跳过演出用；**不碰任何规则**）。
+
+        做法是打开一个很短的高速窗口，而不是"直接切到下一帧画面"：队列里
+        排着的判定 / 技能提示仍然会被依次**开始**（各自的 ``start`` 都会跑到），
+        只是每一段都很快——这样依赖演出开始的收尾逻辑（释放箭头、关闸门、
+        清面板）不会因为跳过而被绕过。
+        """
+
+        self.fast_forward = 0.35
+        panel = getattr(self.effects, "judge_panel", None)
+        if panel is not None and getattr(panel, "active", False):
+            finish = getattr(panel, "skip", None)
+            if callable(finish):
+                finish()
+        step = self.current
+        if step is not None:
+            duration = float(getattr(step, "duration", 0.0) or 0.0)
+            step.elapsed = max(step.elapsed, duration)
+        return True
+
+    def flush(self, *, keep_blocking=True):
+        """强制放行：丢掉排队中的**非关键**演出，让画面立刻追上权威状态。
+
+        联网客户端专用（房主的规则时间线不等客户端，见 ``contracts.
+        presentation`` 的选择 B）：客人的画面落后时，**重要状态必须能挤上台**——
+        旧动画继续排队只会让画面越来越落后（"我在看上一回合的伤害，对面已经
+        开始摸牌了"）。
+
+        ``keep_blocking=True`` 时不丢判定 / 濒死 / 阵亡这一类"必须看清"的演出
+        （它们正是不能错过的部分）；正在播的那一条也不打断。
+        """
+
+        dropped = 0
+        for item in list(self.pending):
+            if keep_blocking and getattr(item, "blocking", False):
+                continue
+            self.pending.remove(item)
+            self._release(item)
+            item.skipped = True
+            item.cancel(self.effects)
+            dropped += 1
+        self.dropped += dropped
+        self._sync_block_gate()
+        return dropped
 
     def _merge(self, step):
         """连续两条**同一个技能**的提示合并成一条（锁定技不刷屏）。"""
@@ -756,6 +816,7 @@ class PresentationQueue:
             self.current.cancel(self.effects)
         self.current = None
         self.ledger.clear()
+        self.fast_forward = 0.0
         # 队列被整体清空（重开 / 场景切换）也要关闸，否则规则会永远让路。
         self._sync_block_gate()
 

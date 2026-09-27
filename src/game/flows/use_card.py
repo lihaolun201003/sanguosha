@@ -210,6 +210,17 @@ class UseCardFlow(Flow):
         self.pending_request = None
         if nullified:
             self.game.message = "【" + self.card.display_name + "】被【无懈可击】抵消。"
+            # 结论已经定案：告诉表现层"这张牌被抵消了"，让它播对应的演出
+            # （而不是让界面去猜 game.message 的文案）。
+            self.context.emit(Event(
+                EventType.CARD_NULLIFIED,
+                source=self.actor,
+                payload={
+                    "card": self.card,
+                    "targets": self.targets,
+                    "flow": self,
+                },
+            ))
             return self.finish(cancelled=True)
         self.stage = "effect"
         return self.effect.begin(self)

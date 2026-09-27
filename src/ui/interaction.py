@@ -21,7 +21,9 @@
 
 from src.game.equipment_skills.granted import granted_skill_id
 
+from . import input_lock
 from . import prompt
+from . import toast as toast_module
 from .human_control import LocalHumanController
 
 
@@ -94,6 +96,34 @@ def run_action(action, game, renderer, human=None):
     return human.run_action(action, renderer)
 
 
+def explain_blocked(game, *, touched=False):
+    """点到具体的东西却什么都没发生时，用 Toast 说明原因。
+
+    **不用模态框**：一句"不是你的回合"弹一个要点确定的框，会打断操作流。
+    同一个原因用同一个 ``key``，反复点击只会刷新那一条，不会堆成一片。
+
+    ``touched=False``（点在空处）时什么都不说——玩家在牌桌上随手点空地的
+    时候很多，每次都弹提示会很吵。
+    """
+
+    if not touched or getattr(game, "game_over", False):
+        return None
+    if getattr(game, "busy", False) and not _in_interactive_slot(game):
+        return toast_module.push("等结算完成再操作", tone="waiting", key="blocked:busy")
+    if getattr(game, "pending_request", None) is not None:
+        return toast_module.push("等待其他玩家响应", tone="waiting", key="blocked:response")
+    current = getattr(game, "current_turn_player", None)
+    me = getattr(game, "player", None)
+    if current is not None and me is not None and current is not me:
+        return toast_module.push("不是你的回合", tone="waiting", key="blocked:turn")
+    phase = str(getattr(game, "phase", "") or "")
+    if phase and phase != "play":
+        label = prompt.PHASE_LABELS.get(phase, phase)
+        return toast_module.push("现在是%s阶段" % label, tone="warning",
+                                 key="blocked:phase")
+    return toast_module.push("这张牌现在用不出去", tone="warning", key="blocked:card")
+
+
 def handle_game_click(position, game, renderer, human=None):
     """处理一次游戏内左键点击；返回是否被消费。
 
@@ -102,19 +132,32 @@ def handle_game_click(position, game, renderer, human=None):
 
     human = human or LocalHumanController(game)
 
+    # ---- ALWAYS 层：本地表现设置，任何演出期间都保留 ----
+    #
+    # 动画速度是这台机器自己的设置（见 ui.speed），不碰规则；演出播放期间
+    # 也必须能调，否则玩家只能干等。它是唯一排在判定前面的东西。
+    hit = getattr(renderer, "speed_control_hit", None)
+    speed_hit = hit(position, game) if callable(hit) else None
+    if speed_hit is not None:
+        human.run_action(speed_hit, renderer)
+        return True
+
+    effects = getattr(renderer, "effects", None)
+
+    # ---- 演出让路期间：点击 = 跳过当前演出（只跳动画，不跳规则） ----
+    #
+    # 这段时间里点击本来就没有别的用途（操作层整体让路、全被吞掉），把它
+    # 变成"跳过演出"既给了玩家出口，也不会误触发任何规则动作。
+    if effects is not None and effects.interaction_hold():
+        effects.skip_presentation()
+        return True
+
     # 判定优先：判定没走完（规则上没走完，或判定牌还在屏幕中央展示）时，
     # 判定面板就是牌桌最高层级——它捕获所有点击。唯一的例外是"这条判定
     # 请求问的正是本机玩家"（司马懿的改判窗口之类），那属于判定流程自己
     # 要求的输入，继续往下走正常的选择路径。
-    gate = getattr(game, "judge_gate", None)
-    if gate is not None and not gate.allows_local_input():
+    if input_lock.resolve(game, effects).layer == "judge":
         # hover 之类的视觉效果保留，但这一下不产生任何 Gameplay Action。
-        return False
-
-    # 关键演出（技能发动提示）还在播：操作界面整体让路（见 ui.storyboard）。
-    # 只拦界面，不拦引擎——队列自己会走完，AI 与房主完全不受影响。
-    effects = getattr(renderer, "effects", None)
-    if effects is not None and effects.interaction_hold():
         return False
 
     # 火攻专用界面：面板自己吞掉落在它上面的点击（点牌 = 选中，点放弃 = 取消）。
@@ -138,6 +181,9 @@ def handle_game_click(position, game, renderer, human=None):
         # 动画 / 结算进行中时的乱点一律吞掉；但玩家**已经在**自己的交互槽位里
         # 挑牌时不能吞——上一名 AI 的动作队列余波（还在播的动画、等待条）会
         # 让 busy 一直是 True，点来源牌没反应，界面就永远停在"已选择 0/2"。
+        # 被吞掉的这一下如果点到了具体东西，就说明原因（Toast，不用模态框）。
+        explain_blocked(game, touched=renderer.card_at_position(
+            position, game.player.hand) is not None)
         return False
 
     # ---- 命中测试（只问几何，不看规则）----
@@ -284,4 +330,6 @@ def handle_game_click(position, game, renderer, human=None):
         human.discard_card(hand_card, hand_index, source_rect)
         return True
 
+    # 点到了一张手牌却什么都做不了：把原因说出来（否则玩家只会觉得"点了没反应"）。
+    explain_blocked(game, touched=True)
     return False

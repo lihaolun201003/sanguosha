@@ -2,7 +2,115 @@
 
 import pygame
 
+from . import anim_config
 from . import theme
+from .tween import TweenTrack
+
+
+def lighten(color, amount):
+    """把颜色向白靠（``amount`` 0..1）——悬停时的"变亮"按这个走。"""
+
+    amount = max(0.0, min(1.0, float(amount)))
+    return tuple(int(channel + (255 - channel) * amount) for channel in color[:3])
+
+
+def desaturate(color, amount):
+    """把颜色向它的灰度靠（``amount`` 0..1）——禁用时的"降饱和"按这个走。"""
+
+    amount = max(0.0, min(1.0, float(amount)))
+    gray = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
+    return tuple(int(channel + (gray - channel) * amount) for channel in color[:3])
+
+
+class ButtonMotion:
+    """按钮的 hover / pressed 缩放补间（全项目唯一实现）。
+
+    以前按钮的悬停 / 按下是**瞬间换色**：鼠标移上去直接换一档填充色，按下
+    直接换另一档，视觉上是"闪一下"。这里把"缩放"与"亮度"都变成补间：
+
+        hover    缓慢放大到 1.02、亮度 +12%
+        pressed  快速缩到 0.97
+        disabled 降饱和 + 降亮度
+
+    缩放通过**重算矩形**实现（而不是缩放渲染好的 surface）：按钮是纯色圆角
+    矩形，重算一次 rect 的开销可以忽略，文字也不会被拉糊。
+    """
+
+    #: 悬停 / 按下的目标缩放。
+    HOVER_SCALE = 1.02
+    PRESS_SCALE = 0.97
+    HOVER_LIGHTEN = 0.14
+    DISABLED_DESATURATE = 0.5
+
+    def __init__(self):
+        self.scale = TweenTrack(anim_config.duration("hover"), "ease_out_quad")
+        self.light = TweenTrack(anim_config.duration("hover"), "ease_out_quad")
+        self.fade = TweenTrack(anim_config.duration("disabled"), "ease_out_quad")
+
+    def update(self, dt):
+        self.scale.update(dt)
+        self.light.update(dt)
+        self.fade.update(dt)
+
+    def state(self, key, *, hovered=False, pressed=False, enabled=True):
+        """返回 ``(缩放, 额外亮度, 不透明度)``；每帧调用一次即可。"""
+
+        if not enabled:
+            target_scale, target_light, target_alpha = 1.0, -0.10, 0.62
+            duration = anim_config.duration("disabled")
+        elif pressed:
+            target_scale = self.PRESS_SCALE
+            target_light = self.HOVER_LIGHTEN * 0.7
+            target_alpha = 1.0
+            duration = anim_config.duration("button_press")
+        elif hovered:
+            target_scale = self.HOVER_SCALE
+            target_light = self.HOVER_LIGHTEN
+            target_alpha = 1.0
+            duration = anim_config.duration("hover")
+        else:
+            target_scale, target_light, target_alpha = 1.0, 0.0, 1.0
+            duration = anim_config.duration("hover")
+
+        # 首次见到这个按钮时从**初始值**出发（1.0 / 0 / 1.0）：不给 start 的
+        # 话 ``TweenTrack.to`` 会按"就位"处理，第一帧直接跳到目标值——
+        # 悬停 / 按下就没有动画了。
+        self.scale.to(key, target_scale, duration, start=1.0)
+        self.light.to(key, target_light, duration, start=0.0)
+        self.fade.to(key, target_alpha, duration, start=1.0)
+        return (self.scale.value(key, target_scale),
+                self.light.value(key, target_light),
+                self.fade.value(key, target_alpha))
+
+    def scaled_rect(self, rect, scale):
+        """按比例放大 / 缩小矩形（中心不变）。"""
+
+        rect = pygame.Rect(rect)
+        if abs(scale - 1.0) < 0.002:
+            return rect
+        width = max(2, int(round(rect.width * scale)))
+        height = max(2, int(round(rect.height * scale)))
+        scaled = pygame.Rect(0, 0, width, height)
+        scaled.center = rect.center
+        return scaled
+
+    def finish_all(self):
+        self.scale.finish()
+        self.light.finish()
+        self.fade.finish()
+
+    def clear(self):
+        self.scale.clear()
+        self.light.clear()
+        self.fade.clear()
+
+
+#: 全局一份：所有 ``Button.draw`` 默认读它，调用点不必各自持有状态。
+_MOTION = ButtonMotion()
+
+
+def motion():
+    return _MOTION
 
 
 def draw_panel(
@@ -390,7 +498,12 @@ BUTTON_STYLES = {
 
 
 class Button:
-    """A themed button with hover / pressed / disabled states."""
+    """A themed button with hover / pressed / disabled states.
+
+    四档状态（normal / hover / pressed / disabled）都走 ``ButtonMotion`` 的
+    补间：缩放与亮度**平滑过渡**，不再瞬间换图。禁用态额外降饱和——一眼看得出
+    "这个按钮现在按不动"，而不是仅仅换了个颜色。
+    """
 
     def __init__(self, rect, label, *, kind="secondary", enabled=True, font="normal", radius=None):
         self.rect = pygame.Rect(rect)
@@ -400,6 +513,8 @@ class Button:
         self.font_name = font
         self.radius = theme.RADIUS_BUTTON if radius is None else radius
         self._press_origin = None
+        #: 补间状态的身份：标题变了就换一个 key，避免两个按钮共用一份动画。
+        self.motion_key = id(self)
 
     def set_rect(self, rect):
         self.rect = pygame.Rect(rect)
@@ -413,35 +528,47 @@ class Button:
     def hovered(self, mouse_pos):
         return mouse_pos is not None and self.enabled and self.contains(mouse_pos)
 
-    def draw(self, surface, font_set, mouse_pos=None, pressed=False):
+    def draw(self, surface, font_set, mouse_pos=None, pressed=False, motion_state=None):
         if not self.label:
             return
         style = BUTTON_STYLES[self.kind]
-        rect = self.rect
+        hover = self.hovered(mouse_pos)
+        state = motion_state
+        if state is None:
+            state = _MOTION.state(
+                self.motion_key, hovered=hover,
+                pressed=bool(pressed and hover), enabled=bool(self.enabled))
+        scale, light, alpha = state
+        rect = _MOTION.scaled_rect(self.rect, scale)
 
         if not self.enabled:
-            fill = theme.DISABLED_FILL
-            border = theme.CARD_EMPTY_BORDER
+            fill = desaturate(theme.DISABLED_FILL, self.DISABLED_DESATURATE)
+            border = desaturate(theme.CARD_EMPTY_BORDER, self.DISABLED_DESATURATE)
             text_color = theme.DISABLED_TEXT
         else:
-            hover = self.hovered(mouse_pos)
             if pressed and hover:
                 fill = style["fill_pressed"]
-                rect = rect.move(0, 2)
             elif hover:
                 fill = style["fill_hover"]
             else:
                 fill = style["fill"]
+            fill = lighten(fill, max(0.0, light))
             border = style["border"]
             text_color = style["text"]
 
-        pygame.draw.rect(surface, theme.SHADOW, self.rect.move(0, 3), border_radius=self.radius)
+        shadow = _MOTION.scaled_rect(self.rect, scale).move(0, 3)
+        pygame.draw.rect(surface, theme.SHADOW, shadow, border_radius=self.radius)
         pygame.draw.rect(surface, fill, rect, border_radius=self.radius)
         pygame.draw.rect(surface, border, rect, 2, border_radius=self.radius)
 
         font = font_set.get(self.font_name)
         label = font.render(self.label, True, text_color)
+        if alpha < 0.999:
+            label.set_alpha(int(255 * max(0.0, alpha)))
         surface.blit(label, label.get_rect(center=rect.center))
+
+    #: 禁用态降饱和的程度（与 ``ButtonMotion`` 同源，供子类复用）。
+    DISABLED_DESATURATE = ButtonMotion.DISABLED_DESATURATE
 
 
 class ButtonBar:
