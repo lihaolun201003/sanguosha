@@ -197,11 +197,28 @@ class Renderer:
         return _fallback_hand_rects(hand, self.metrics)
 
     def card_at_position(self, position, hand):
+        """鼠标位置命中的手牌下标（只看几何，不问规则）。
+
+        命中依据是**上一帧真正画出来的那份布局**（``table_layout``）：布局里
+        存着它当时画的是哪几张牌（``hand_cards``），命中之后按牌的**身份**
+        换算成当前下标。因此
+
+        * 手牌刚增减（出牌 / 摸牌）时，点的仍然是屏幕上那张牌；
+        * 点到的那张牌已经不在手牌里了 → 不命中，而不是顺手选中"现在轮到
+          占这个位置的另一张牌"；
+        * 同一帧连续点击、悬停 / 选中上浮、窗口缩放都走同一份被画出来的
+          rect（``hand_hit_rects`` 本来就把上浮算进去了）。
+
+        只有"根本没有可用的布局"（首帧尚未绘制、这份布局属于另一个 Game）
+        才退回按当前状态现算的兜底排列——那种情况下屏幕上还没有牌，现算的
+        位置就是它将要出现的位置。
+        """
+
         layout_state = self.table_layout
-        if layout_state is not None and len(layout_state.hand_rects) == len(hand):
+        if layout_state is not None:
             reference = getattr(layout_state.game, "player", None)
             if reference is not None and reference.hand is hand:
-                return layout_state.hand_index_at(position)
+                return layout_state.hand_card_at(position, hand)
         return _fallback_hit(position, hand, self.metrics)
 
     def get_public_card_rects(self, cards):

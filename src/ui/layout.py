@@ -374,7 +374,13 @@ def _hit_test(rects, position, *, lift_rects=None):
 
 
 class TableLayout:
-    """Geometry for one frame, derived from the live Game state + metrics."""
+    """Geometry for one frame, derived from the live Game state + metrics.
+
+    ``hand_cards`` 记下这份布局是为**哪些手牌对象**画的（与 ``hand_rects``
+    一一对应）。它是命中测试的唯一依据：布局永远是上一帧的，手牌可能刚变
+    （出牌 / 摸牌 / 被拿走），此时必须按"屏幕上那一张牌"认回来，而不能用
+    现在的张数另算一套坐标（见 ``Renderer.card_at_position``）。
+    """
 
     def __init__(self, game, metrics=None, mouse_pos=None, selected_card_ids=()):
         self.game = game
@@ -385,6 +391,7 @@ class TableLayout:
         self.hand_rects = []
         self.hand_base_rects = []
         self.hand_hit_rects = []
+        self.hand_cards = []
         self.hand_hover = None
         self.selected_hand_keys = {
             index
@@ -532,6 +539,7 @@ class TableLayout:
         base = self._base_hand_rects(hand)
         self.hand_base_rects = base
         self.hand_rects = list(base)
+        self.hand_cards = list(hand)
         if not base:
             return
 
@@ -560,6 +568,26 @@ class TableLayout:
         if not self.hand_rects:
             return None
         return _hit_test(self.hand_rects, position, lift_rects=self.hand_hit_rects)
+
+    def hand_card_at(self, position, hand):
+        """点到的是**被画出来的哪一张牌**，换算成它在 ``hand`` 里的当前下标。
+
+        返回 None 有两种情况，它们都必须保持"不命中"，不能退化成"选中现在
+        占着这个位置的另一张牌"：
+
+        * 点在空处（没碰到任何一张手牌）；
+        * 点到了那张牌，但它已经不在手牌里了（这一帧刚被打出 / 被拿走）——
+          屏幕上还留着它上一帧的位置，点它不该命中别的牌。
+        """
+
+        index = self.hand_index_at(position)
+        if index is None or index >= len(self.hand_cards):
+            return None
+        card = self.hand_cards[index]
+        for current, item in enumerate(hand):
+            if item is card:
+                return current
+        return None
 
     def hand_rect(self, index):
         if 0 <= index < len(self.hand_rects):

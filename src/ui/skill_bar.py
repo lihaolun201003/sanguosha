@@ -94,6 +94,12 @@ class SkillBar:
                 definition = game.skill_registry.get(skill_id)
                 if definition is not None:
                     definitions.append(definition)
+            # 授予型（【黄天】）：技能名在张角身上，按钮长在我这一栏——
+            # 它由我发动、费用也由我出。只在现在真的能发动时出现，判据与
+            # AvailableActions / AI 完全是同一份（``granted_offers``）。
+            for definition, _owners in game.skills.granted_offers(player):
+                if all(item.id != definition.id for item in definitions):
+                    definitions.append(definition)
 
         if [item.id for item in definitions] != [item.id for item in self.skills]:
             self.skills = definitions
@@ -148,6 +154,10 @@ class SkillBar:
 
     @staticmethod
     def _evaluate(game, definition):
+        if definition.is_granted:
+            # 授予型（【黄天】）：能从 ``granted_offers`` 里列出来，就说明
+            # 现在真的能发动——那一份判据已经在 sync 里查过了。
+            return True, ""
         if definition.is_active:
             allowed, reason = game.skills.can_activate(game.player, definition.id)
             return bool(allowed), str(reason)

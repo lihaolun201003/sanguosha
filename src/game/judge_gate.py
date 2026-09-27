@@ -29,6 +29,8 @@
 的压制另由 ``JudgePanel.holds_actions`` 负责。
 """
 
+from .contracts.local_input import local_awaiting_input, request_targets_player
+
 IDLE = "idle"
 LOGICAL = "logical"
 REPLACEMENT = "replacement"
@@ -208,23 +210,30 @@ class JudgeGate:
     def allows_local_input(self, local=None):
         """本机玩家现在还能不能操作牌桌。
 
-        判定的两种占用（规则上的 / 视觉上的）都不允许普通操作；唯一的例外是
-        "当前这条判定请求问的正是本机玩家"——那是判定流程自己要求的输入，
-        例如司马懿在改判窗口里挑一张手牌替换判定牌。
+        三层判据，从强到弱：
+
+        1. 判定自己的输入（改判窗口一类）永远放行——压住它判定永远拿不到结果。
+        2. **规则上**判定还没走完（``logical_pending``）：只允许第 1 条，其余
+           一切（出牌 / 选目标 / 响应窗口 / 主动技）都拦下。
+        3. 规则上判定已经结束、只剩**画面**还在演（``PRESENTATION``）：本机玩家
+           正被要求做的决定照样放行。这条是实测补上的——判定结果会立刻带出
+           一个新的请求（刚烈弃牌、遗计分配…），压住它玩家就只能干等判定演出
+           （实测连续 240 帧点不动，57 次点击全被吞）。此时规则早已推进完，
+           放行不会"抢在判定结果之前出下一张牌"；玩家没被要求做事时仍然拦
+           （判定牌还在屏幕中央时不许随便出牌）。
         """
 
         if not self.active:
             return True
-        request = self.judge_request
-        if request is None:
-            return False
         player = local if local is not None else getattr(self.game, "player", None)
         if player is None:
             return False
-        if request.is_group:
-            return (request.is_member(player)
-                    and request.member_status(player) == "pending")
-        return request.target is player
+        request = self.judge_request
+        if request is not None and request_targets_player(request, player):
+            return True
+        if self.logical_pending:
+            return False
+        return local_awaiting_input(self.game)
 
     def local_request_id(self, local=None):
         """本机玩家现在可以回答的判定请求 id；没有就返回 None。"""

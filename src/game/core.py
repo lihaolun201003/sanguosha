@@ -542,10 +542,14 @@ class Game(
         """「发动技能」里能列出的技能：ACTIVE（可发动）+ VIEW_AS（可进入）。
 
         ACTIVE 与 VIEW_AS 的语义不同（前者执行技能流程，后者进入选牌模式），
-        但入口统一，玩家不需要知道区别。
+        但入口统一，玩家不需要知道区别。授予型技能（【黄天】）也在这里——
+        技能属于张角，但**现在能发动它的是我**，所以它该出现在我的入口里。
         """
 
         options = list(self.skills.activatable_skills(self.player))
+        for definition, _owners in self.skills.granted_offers(self.player):
+            if definition.id not in options:
+                options.append(definition.id)
         for skill_id, allowed, _reason in self.view_as_options():
             if allowed and skill_id not in options:
                 options.append(skill_id)
@@ -558,6 +562,11 @@ class Game(
         for skill_id in self.skills.active_skill_ids(self.player):
             allowed, reason = self.skills.can_activate(self.player, skill_id)
             rows.append((skill_id, allowed, "" if allowed else reason))
+        for definition, _owners in self.skills.granted_offers(self.player):
+            if any(item[0] == definition.id for item in rows):
+                continue
+            # 能从 granted_offers 里出来就说明现在真的能发动。
+            rows.append((definition.id, True, ""))
         for skill_id, allowed, reason in self.view_as_options():
             if any(item[0] == skill_id for item in rows):
                 continue
@@ -586,14 +595,26 @@ class Game(
                 return True
             return False
 
-        allowed, reason = self.skills.can_activate(self.player, skill_id)
-        if not allowed:
-            self.message = reason
-            self.pending_skill_picker = None
-            return False
+        grant_owners = None
+        if definition is not None and definition.is_granted:
+            # 授予型（【黄天】）：技能属于别人，发动的是我。目标候选就是
+            # "交给谁"——那些持有它、并且允许我交牌的角色。
+            definition, owners = self.skills.granted_owners(self.player, skill_id)
+            if definition is None:
+                self.message = "现在不能发动这个技能。"
+                self.pending_skill_picker = None
+                return False
+            grant_owners = owners
+        else:
+            allowed, reason = self.skills.can_activate(self.player, skill_id)
+            if not allowed:
+                self.message = reason
+                self.pending_skill_picker = None
+                return False
 
         definition = self.skill_registry.require(skill_id)
-        spec = definition.active_spec
+        spec = definition.active_spec if definition.active_spec is not None else (
+            definition.grant.spec if definition.grant is not None else None)
         self.pending_skill_picker = None
 
         if spec is None or (
@@ -605,10 +626,15 @@ class Game(
 
         # 目标候选与费用张数走**共同查询**（与 AI / Remote 同一份
         # activation_inputs），本地界面不再自己拼一份。
-        inputs = AvailableActions(self).skill_inputs(self.player, skill_id)
+        inputs = AvailableActions(self).skill_inputs(
+            self.player, skill_id, grant_owners=grant_owners)
         targets = list(inputs.get("targets") or ()) if inputs.get("needs_target") else []
         if inputs.get("needs_target") and not targets:
             self.message = "没有合法目标。"
+            return False
+        if (inputs.get("cost_cards") or inputs.get("variable_cost")) and not (
+                inputs.get("cost_candidates")):
+            self.message = "没有可以支付的牌。"
             return False
 
         self.pending_skill_input = {
@@ -647,11 +673,11 @@ class Game(
         if state["cost_cards"] or state.get("variable_cost"):
             chosen = len(state["cards"])
             required = int(state["cost_cards"])
-            limit = required or self.skill_cost_limit() or len(self.player.hand)
+            limit = required or self.skill_cost_limit() or len(state["cost_candidates"])
             if chosen < required:
                 parts.append(
                     state["cost_prompt"]
-                    or ("请选择 %d 张手牌弃置" % required)
+                    or ("请选择 %d 张牌弃置" % required)
                 )
             elif required:
                 parts.append(state["cost_prompt"] or "")
@@ -671,15 +697,19 @@ class Game(
         return True
 
     def skill_cost_limit(self):
-        """这次发动玩家最多能挑几张牌（0 = 这次不需要挑牌）。"""
+        """这次发动玩家最多能挑几张牌（0 = 这次不需要挑牌）。
+
+        上限按**候选牌数**算，不是手牌数：【制衡】的候选里还有装备区的牌，
+        按手牌数算会让最后几张永远选不满。
+        """
 
         state = self.pending_skill_input
         if state is None:
             return 0
         if state.get("variable_cost"):
             cap = int(state.get("max_cost_cards") or 0)
-            limit = min(len(self.player.hand), cap) if cap else len(self.player.hand)
-            return limit
+            available = len(state.get("cost_candidates") or ())
+            return min(available, cap) if cap else available
         return int(state["cost_cards"])
 
     def select_skill_cost_card(self, card):
@@ -1389,6 +1419,14 @@ class Game(
                 self.pending_identities if identities is None else identities)
             if cards:
                 self.mode.apply_identities(cards)
+                # 身份是**武将技能绑定的一部分**：主公技只在主公身上生效
+                # （见 SkillManager.bind_general）。先绑武将、后写身份的调用
+                # 顺序（reset() 里先 assign_generals，本方法随后才写身份）
+                # 会让主公技一个都不绑定——张角的【黄天】就是这样整条消失的。
+                # 这里对已经绑过武将的角色重新收敛一次绑定。
+                for player in self.players:
+                    if player.general_id:
+                        self.set_general(player, player.general_id)
 
         # 已经有武将的角色不重抽（reset() 里可能刚分配过），只补齐缺的人。
         # 真人自己选的那一个优先：联机的选将结果存在 general_picks 里，

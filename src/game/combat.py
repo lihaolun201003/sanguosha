@@ -20,6 +20,7 @@ from src.constants import (
     TABLE_CARD_RECT,
 )
 
+from .contracts.local_input import local_response_live
 from .equipment_skills.weapons import (
     has_gender_swords,
     has_ice_sword,
@@ -1137,10 +1138,17 @@ class CombatMixin:
         source_rect
     ):
 
-        if self.busy:
+        if not self.response.active:
             return
 
-        if not self.response.active:
+        # 响应窗口里的提交**不因动作队列忙而作罢**：队列里排的可能是上一张
+        # 牌的余波（AI 那边的结算、还在飞的动画），而本机玩家现在就该回答。
+        # 旧代码在 busy 时直接 return，于是点【闪】"点了没反应"——点击被路由
+        # 收下了（consumed=True）却没有效果（Phase 18.5 实测）。
+        #
+        # 规则校验一条都没少：请求 id / 回答者 / 合法牌 / 牌所在区域仍然由引擎
+        # 在 ``_respond_card`` 里复核，面板提交时先清空自己，**只会结算一次**。
+        if self.busy and not local_response_live(self):
             return
 
         if not (
@@ -1152,7 +1160,8 @@ class CombatMixin:
 
         # 响应同样走统一的 Card Action Discovery：真实【闪】与
         # 【龙胆】杀当闪这类转化动作由同一份查询选出，UI 不再自己判断牌名。
-        self.begin_card_action(self.player.hand[index], source_rect, index=index)
+        self.begin_card_action(self.player.hand[index], source_rect, index=index,
+                               allow_busy=True)
 
 
     # ==================================================
@@ -1288,10 +1297,12 @@ class CombatMixin:
 
     def pass_response(self):
 
-        if self.busy:
+        if not self.response.active:
             return
 
-        if not self.response.active:
+        # 与 ``respond_with_card`` 同一条理由：「不出」也是回答，队列忙不该
+        # 让玩家点不动它。面板自己保证只结算一次（提交时先清空 current）。
+        if self.busy and not local_response_live(self):
             return
 
         self.response.pass_response()

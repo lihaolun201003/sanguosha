@@ -408,6 +408,28 @@ class ViewSkills:
         # 因此客户端不向技能栏暴露它们（与本地 UI 的牌方式面板一致）。
         return ()
 
+    def granted_offers(self, actor):
+        """授予型技能（【黄天】）在客户端：房主下发什么就显示什么。
+
+        技能属于张角、按钮长在群势力角色那一栏——房主把它的 entry 放在本条
+        决策的 ``activatable`` 里，客户端只是把同一份列表翻译成技能定义，
+        一条规则都不自己算（与 ``can_activate`` 走的是同一个来源）。
+        """
+
+        view = self._view
+        if view is None:
+            return ()
+        registry = self._registry
+        offers = []
+        for entry in presentation.activatable(getattr(view, "decision", None)):
+            skill_id = str(entry.get("skill_id") or "")
+            if not skill_id or skill_id in self.skill_ids_of(actor):
+                continue
+            definition = registry.get(skill_id) if registry is not None else None
+            if definition is not None:
+                offers.append((definition, ()))
+        return tuple(offers)
+
 
 class PendingSlot:
     """``game.response`` / ``game.choice`` 的替身。
@@ -979,8 +1001,8 @@ class RemoteGameView:
             player = self.player_by_id(item.get("player_id"))
             if player is not None and player not in targets:
                 targets.append(player)
-        cards = [card for card in self.player.hand
-                 if card is not None and card.id in chosen_cards]
+        own = self._own_cost_cards()
+        cards = [card for card in own if card.id in chosen_cards]
         self.allowed_card_ids = {
             str(item.get("card_id") or "") for item in entry.get("cost_candidates") or ()
         } or None
@@ -997,14 +1019,28 @@ class RemoteGameView:
             # 候选由房主算好下发（``allowed_card_ids`` 就是它），客户端只按
             # 同一份名单限制点击，一条规则都不自己算。
             "cost_candidates": (
-                [card for card in self.player.hand
-                 if card is not None and card.id in self.allowed_card_ids]
+                [card for card in own if card.id in self.allowed_card_ids]
                 if self.allowed_card_ids is not None else None
             ),
             "targets": targets,
             "target": self.player_by_id(target_id) if target_id else None,
             "cards": cards,
         }
+
+    def _own_cost_cards(self):
+        """客户端视角下"自己的牌"：手牌 + 装备区。
+
+        装备区的牌也可能是费用（【制衡】"弃置任意张牌"）。客户端只是照房主
+        下发的候选把它们显示出来——能不能选仍然由房主决定。
+        """
+
+        cards = [card for card in self.player.hand if card is not None]
+        equipment = getattr(self.player, "equipment", None) or {}
+        for slot in ("weapon", "armor", "offensive_horse", "defensive_horse"):
+            card = equipment.get(slot)
+            if card is not None:
+                cards.append(card)
+        return cards
 
     def skill_input_ready(self):
         """技能所需的输入是否已经凑齐（固定"确认发动"按钮的可用性）。"""
@@ -1026,8 +1062,8 @@ class RemoteGameView:
             return 0
         if state.get("variable_cost"):
             cap = int(state.get("max_cost_cards") or 0)
-            hand = len(self.player.hand)
-            return min(hand, cap) if cap else hand
+            available = len(state.get("cost_candidates") or ())
+            return min(available, cap) if cap else available
         return int(state["cost_cards"])
 
     def _apply_choice(self, request):

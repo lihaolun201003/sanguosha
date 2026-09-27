@@ -413,13 +413,75 @@ class AvailableActions:
     # ---- 主动技能 ----
 
     def active_skills(self, actor):
-        """当前可发动的主动技（含费用 / 目标 / 不可用原因）。"""
+        """当前可发动的主动技（含费用 / 目标 / 不可用原因）。
+
+        两类来源，同一份描述：自己拥有的主动技，以及**别人拥有、现在由我
+        发动**的授予型技能（【黄天】：群势力角色的出牌阶段里，他把一张
+        【闪】或【闪电】交给持有它的张角）。授予型技能由 ``granted_offers``
+        筛过——现在真的发不动就不会出现在表里，界面不会挂一个点不动的按钮。
+        """
 
         game = self.game
         actions = []
         for skill_id in game.skills.activatable_skills(actor):
             actions.append(self._active_skill(actor, skill_id))
+        for definition, owners in game.skills.granted_offers(actor):
+            actions.append(self._granted_skill(actor, definition, owners))
         return [item for item in actions if item is not None]
+
+    def _granted_skill(self, actor, definition, owners):
+        """授予型主动技（【黄天】）的统一描述。
+
+        目标候选就是"交给谁"——那些持有该技能的角色（通常只有一位）。费用
+        候选、费用张数、提示文案仍然走 ``activation_inputs`` 那唯一一份规则。
+        """
+
+        skill_id = definition.id
+        spec = definition.grant.spec
+        name = getattr(definition, "name", "") or skill_id
+        inputs = self.skill_inputs(actor, skill_id, grant_owners=owners)
+        targets = tuple(_target_candidate(owner) for owner in owners)
+        cost = int(inputs.get("cost_cards") or 0)
+        variable = bool(inputs.get("variable_cost"))
+        candidates = self._cost_candidate_entries(actor, inputs, cost, variable)
+        enabled = bool(targets) and (bool(candidates) if (cost or variable) else True)
+        disabled_reason = "" if enabled else "现在没有可以交给对方的牌"
+        return AvailableAction(
+            action_id="grant:%s:%s" % (skill_id, _actor_id(actor)),
+            kind=ActionType.ACTIVE_SKILL,
+            actor_id=_actor_id(actor), source_skill_id=skill_id, skill_name=name,
+            source_candidates=candidates,
+            min_sources=cost, max_sources=(len(candidates) if variable else cost),
+            target_candidates=targets,
+            min_targets=1, max_targets=1,
+            target_mode=TargetMode.CHOOSE,
+            enabled=enabled, disabled_reason=disabled_reason,
+            complete=False,
+            can_submit=bool(enabled),
+            cost_prompt=str(getattr(spec, "cost_prompt", "") or ""),
+            target_prompt=str(getattr(spec, "target_prompt", "") or ""),
+            variable_cost=variable,
+            transfer_cards=bool(inputs.get("transfer_cards")),
+            label=name,
+            detail=str(getattr(spec, "cost_prompt", "") or ""),
+            prompt=str(getattr(spec, "target_prompt", "") or ""),
+            origin=definition,
+        )
+
+    def _cost_candidate_entries(self, actor, inputs, cost, variable):
+        """费用候选的展示条目（区域 / 槽位来自唯一那份候选列表）。
+
+        候选由 ``activation_inputs`` 按 ``allowed_zones`` 给出：【制衡】的
+        "弃置任意张牌"因此同时列出装备区的牌，而只允许手牌的技能一条都不多。
+        """
+
+        if not (cost or variable):
+            return ()
+        entries = []
+        for card in inputs.get("cost_candidates") or ():
+            zone = self.discovery.zone_of(actor, card)
+            entries.append(_source_candidate(card, zone, _slot_of(actor, card, zone)))
+        return tuple(entries)
 
     def _active_skill(self, actor, skill_id):
         game = self.game
@@ -450,11 +512,7 @@ class AvailableActions:
         targets = tuple(_target_candidate(player) for player in inputs["targets"])
         cost = int(inputs.get("cost_cards") or 0)
         variable = bool(inputs.get("variable_cost"))
-        cost_candidates = ()
-        if cost or variable:
-            cost_candidates = tuple(
-                _source_candidate(card, self.discovery.zone_of(actor, card), "")
-                for card in actor.hand)
+        cost_candidates = self._cost_candidate_entries(actor, inputs, cost, variable)
 
         enabled = bool(allowed)
         disabled_reason = "" if enabled else str(reason or "")
@@ -483,11 +541,12 @@ class AvailableActions:
             origin=definition,
         )
 
-    def skill_inputs(self, actor, skill_id):
-        """主动技需要的输入（目标候选 + 费用张数）。
+    def skill_inputs(self, actor, skill_id, *, grant_owners=None):
+        """主动技需要的输入（目标候选 + 费用张数 / 费用候选牌）。
 
         直接转发 ``skills.activation.activation_inputs``：技能输入的规则只有
-        那一份，这里不重新判断。
+        那一份，这里不重新判断。``grant_owners`` 只对授予型技能（【黄天】）
+        有意义——它给出"交给谁"的候选。
         """
 
         from src.game.skills.activation import activation_inputs
@@ -495,7 +554,8 @@ class AvailableActions:
         definition = self.game.skill_registry.get(skill_id)
         if definition is None:
             return {"needs_target": False, "targets": [], "cost_cards": 0}
-        return dict(activation_inputs(definition, self.game, actor))
+        return dict(activation_inputs(
+            definition, self.game, actor, grant_owners=grant_owners))
 
     # ---- 重铸 ----
 
@@ -714,6 +774,18 @@ def _source_candidate(card, zone, slot):
         slot=str(slot or ""),
         owner_id="",
     )
+
+
+def _slot_of(actor, card, zone):
+    """装备区的牌在哪个槽（手牌 / 不在装备区返回空串）。"""
+
+    if card is None or not zone:
+        return ""
+    equipment = getattr(actor, "equipment", None) or {}
+    for slot, mounted in equipment.items():
+        if mounted is card:
+            return slot
+    return ""
 
 
 def _same_player(candidate, player):

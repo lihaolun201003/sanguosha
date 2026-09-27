@@ -26,6 +26,10 @@ class UseCardFlow(Flow):
 
     def advance(self, response=None):
         if self.stage == "ready":
+            locked = self._locked_identity()
+            if locked:
+                self.game.message = locked
+                return self.cancel(locked)
             valid, message = self.effect.can_use(self.game, self.action)
             if not valid:
                 self.game.message = message
@@ -116,6 +120,14 @@ class UseCardFlow(Flow):
             if resolver is not None:
                 keep_going = resolver(self, response) is not False
             if not keep_going:
+                # 重定向还要再问一次（【流离】：先选转移目标，再选弃哪一张）：
+                # 技能把下一条请求写回 ``target_redirect``，这里就继续等它，
+                # 结论齐备后才进入效果阶段。
+                again = getattr(self, "target_redirect", None)
+                if again is not None:
+                    self.target_redirect = None
+                    self.wait(again)
+                    self.engine.present_or_auto_resolve(again)
                 return self.current_result()
             self.stage = "effect"
             return self.effect.begin(self)
@@ -124,6 +136,24 @@ class UseCardFlow(Flow):
             return FlowResult(self.status, self.result)
 
         raise RuntimeError("UseCardFlow cannot advance from stage " + self.stage)
+
+    def _locked_identity(self):
+        """锁定技把这张实体牌换成了别的牌名时，拒绝按原牌名使用。
+
+        【武神】"你的红桃手牌均视为【杀】"：那张红桃【桃】在手里就是【杀】，
+        不能再当【桃】用。界面与 AI 读的候选来自发现层（已经不给这条路），
+        这里拦的是绕过界面的提交。转化出来的虚拟牌本身就是替换结果，跳过。
+        """
+
+        registry = getattr(self.game, "conversions", None)
+        if registry is None:                              # pragma: no cover
+            return ""
+        locked = registry.locked_name_for(self.actor, self.card)
+        if locked is None or locked == getattr(self.card, "name", ""):
+            return ""
+        from src.card import display_name_for
+
+        return "这张牌视为【%s】，不能按原牌名使用。" % display_name_for(locked)
 
     def _begin_use(self):
         """使用动作落地：移动实体牌 + 发出"已使用 / 成为目标"事件。"""
@@ -134,6 +164,10 @@ class UseCardFlow(Flow):
                     material,
                     source=self.actor.hand,
                     destination=self.game.deck.discard_pile,
+                    # 作为素材用掉的牌是"使用后置入弃牌堆"，不是"弃置"：
+                    # 【落英】一类的时机不认它（官方 FAQ 明确区分这两者）。
+                    reason="use",
+                    owner=self.actor,
                 )
             )
 
@@ -278,6 +312,10 @@ class UseCardFlow(Flow):
                     source_card,
                     source=self.game.processing_zone,
                     destination=self.game.deck.discard_pile,
+                    # 使用结算完毕的牌进入弃牌堆 ≠ 弃置；处理区不属于任何角色，
+                    # 因此归属必须显式带上（否则订阅者会以为这牌无主）。
+                    reason="use",
+                    owner=self.actor,
                 ))
             # 出牌动画展示的是虚拟牌本身，它没有归属，直接收掉。
             self.game.remove_table_card(self.card)

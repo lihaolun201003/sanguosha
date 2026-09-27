@@ -17,7 +17,9 @@ from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
 from ..definitions import (
+    JudgeReplacement,
     ActiveSkillSpec,
+    CostZone,
     ModifierSpec,
     PhaseReplacement,
     SkillDef,
@@ -34,14 +36,18 @@ from ..mechanics import (
     awaken,
     flip_player,
     gain_skill,
+    grant_extra_turn,
     hand_cards,
     judge,
     limited_used,
     lose_hp,
+    lost_hp,
     mark_count,
     other_alive_players,
     remove_mark,
+    take_card_from_zone,
     use_virtual,
+    zone_take_options,
 )
 from ..modifiers import ModifierKind
 from ..state import ResetScope
@@ -134,7 +140,11 @@ class Wuhun(Skill):
 
 
 class WuhunFlow(Flow):
-    """武魂：你死亡时，梦魇标记最多的角色判定，非【桃】/【桃园结义】则立即死亡。"""
+    """武魂：你死亡时，梦魇标记最多的角色判定，非【桃】/【桃园结义】则立即死亡。
+
+    并列最多时**由你指定**一名（以前固定取列表第一人）：这是锁定技，判定
+    一定会发生，所以窗口不可取消——玩家取消时退回并列中的第一位，绝不跳过判定。
+    """
 
     def __init__(self, engine, owner):
         super().__init__(engine.context)
@@ -142,28 +152,55 @@ class WuhunFlow(Flow):
         self.game = engine.game
         self.owner = owner
         self.stage = "judge"
+        self.target = None
 
     def is_noop(self):
-        return self._worst() is None
+        return not self._candidates()
 
-    def _worst(self):
-        candidates = [
+    def _candidates(self):
+        """梦魇标记最多且大于 0 的其他角色（可能并列）。"""
+
+        others = [
             player for player in self.game.players
-            if player is not self.owner and mark_count(player, "wuhun", "nightmare") > 0
+            if player is not self.owner
+            and mark_count(player, "wuhun", "nightmare") > 0
         ]
-        if not candidates:
-            return None
-        best = max(mark_count(player, "wuhun", "nightmare") for player in candidates)
-        return next(player for player in candidates
-                    if mark_count(player, "wuhun", "nightmare") == best)
+        if not others:
+            return []
+        best = max(mark_count(player, "wuhun", "nightmare") for player in others)
+        return [player for player in others
+                if mark_count(player, "wuhun", "nightmare") == best]
 
     def begin(self):
-        if self.is_noop():
+        tied = self._candidates()
+        if not tied:
             return self.complete({"applied": False})
-        return self._begin_judge()
+        if len(tied) == 1:
+            self.target = tied[0]
+            return self._begin_judge()
+        self.stage = "pick"
+        ask_targets(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【武魂】：请指定一名拥有最多梦魇标记的角色进行判定",
+                    reason="wuhun", candidates=tied,
+                    min_targets=1, max_targets=1,
+                    context={"cancellable": False})
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "pick":
+            tied = self._candidates()
+            chosen = [target for target in (getattr(response, "targets", None) or ())
+                      if any(target is item for item in tied)]
+            # 锁定技：判定一定要发生。窗口被取消（或选的人已经不在并列里）
+            # 时退回并列中的第一位，绝不跳过判定。
+            self.target = chosen[0] if chosen else (tied[0] if tied else None)
+            if self.target is None:
+                return self.complete({"applied": False})
+            return self._begin_judge()
+        return self.complete({"applied": True})
 
     def _begin_judge(self):
-        target = self._worst()
+        target = self.target
         flow, result = judge(self.engine, target, "wuhun")
         if result is None:
             flow.on_complete = self._after_judge
@@ -171,12 +208,9 @@ class WuhunFlow(Flow):
             return self.current_result()
         return self._after_judge(result)
 
-    def advance(self, response=None):
-        return self.complete({"applied": True})
-
     def _after_judge(self, result):
         game = self.game
-        target = self._worst()
+        target = self.target
         if target is None or result is None:
             return self.complete({"applied": False})
         card = getattr(result, "card", None)
@@ -263,84 +297,292 @@ JILUE_SKILLS = (
 )
 
 
+def _jilue_can_pay(player):
+    """极略的代价：一枚「忍」标记。"""
+
+    return mark_count(player, "renjie", "ren") >= 1
+
+
+def _jilue_guicai_candidates(game, player, judge_context):
+    """极略·鬼才：判定牌生效前，用一张手牌替换它（代价见 on_use）。"""
+
+    if not _jilue_can_pay(player):
+        return []
+    return hand_cards(player)
+
+
+def _jilue_guicai_cost(game, player, card):
+    """极略·鬼才的代价：弃一枚「忍」标记（付不出就不能发动）。"""
+
+    if not _jilue_can_pay(player):
+        return False
+    remove_mark(game, player, "renjie", 1, "ren")
+    game.add_log("%s 的【极略·鬼才】弃一枚「忍」标记改判" % player.name)
+    return True
+
+
+#: 【极略·制衡】的输入契约：与孙权【制衡】同一条规则——弃**任意张牌**
+#: （手牌 + 装备区），然后摸等量的牌。区域只在这里声明一次，候选、界面、
+#: 引擎校验、远程下发全部由它派生。
+JILUE_ZHI_HENG_SPEC = ActiveSkillSpec(
+    variable_cost=True,
+    cost_prompt="【极略·制衡】：请选择要弃置的牌",
+    allowed_zones=(CostZone.HAND, CostZone.EQUIPMENT),
+)
+
+
+def _jilue_cost_candidates(game, player):
+    """这次能支付的牌（与引擎校验、界面高亮同一份判断）。"""
+
+    from src.game.skills.activation import cost_candidates
+
+    return cost_candidates(game, player, JILUE_ZHI_HENG_SPEC)
+
+
 def _can_jilue(game, player):
+    """极略·制衡的主动技入口（出牌阶段）。"""
+
     if game.game_over or not player.alive:
         return False, "无法发动"
-    if mark_count(player, "renjie", "ren") < 1:
-        return False, "没有「忍」标记"
+    if game.current_turn_player is not player or game.phase != "play":
+        return False, "只能在你的出牌阶段发动"
     if not game.skills.has(player, "jilue"):
         return False, "还没有获得【极略】"
+    if not _jilue_can_pay(player):
+        return False, "没有「忍」标记"
+    if player.skill_state.get("jilue", "zhiheng_used", 0):
+        return False, "本阶段已经制衡过"
+    if not _jilue_cost_candidates(game, player):
+        return False, "没有可以弃置的牌"
     return True, ""
 
 
 def _activate_jilue(game, player, target=None, cards=None):
-    """极略：弃一枚「忍」标记，发动下列一项技能（临时获得直到回合结束）。"""
+    """极略·制衡：弃一枚「忍」标记，弃任意张牌，然后摸等量的牌。
 
-    if mark_count(player, "renjie", "ren") < 1:
+    费用牌（``cards``）已由引擎按 ``variable_cost`` 弃置，这里只负责扣标记
+    与摸牌——与孙权【制衡】的结算完全一致。
+    """
+
+    chosen = list(cards or ())
+    if not chosen:
+        return False
+    if not _jilue_can_pay(player):
         return False
     remove_mark(game, player, "renjie", 1, "ren")
-    JilueFlow(game.engine, player).start()
+    player.skill_state.set("jilue", "zhiheng_used", 1, ResetScope.PHASE)
+    game.engine.context.apply(DrawCardsAtom(player, len(chosen)))
+    game.add_log("%s 的【极略·制衡】：弃置 %d 张牌并摸 %d 张牌"
+                 % (player.name, len(chosen), len(chosen)))
     return True
 
 
-class JilueFlow(Flow):
-    def __init__(self, engine, owner):
-        super().__init__(engine.context)
-        self.engine = engine
-        self.game = engine.game
-        self.owner = owner
-        self.stage = "choose"
+class Jilue(Skill):
+    """极略：五个选项**各自在自己的规则时机**开放，每次弃一枚「忍」结算一次。
 
-    def begin(self):
-        ask_option(self.engine, self, source=self.owner, target=self.owner,
-                   prompt="【极略】：请选择要发动的技能", reason="jilue",
-                   options=JILUE_SKILLS)
-        return self.current_result()
+    卡面：你可以弃一枚「忍」标记，发动下列一项技能：【鬼才】【放逐】【完杀】
+    【集智】【制衡】。
 
-    def advance(self, response=None):
-        option = str(getattr(response, "option", "") or "")
-        if option not in [value for value, _label in JILUE_SKILLS]:
-            return self.complete({"applied": False})
-        # 「发动下列一项技能」= 本回合内拥有它：获得用通用绑定入口，
-        # 回合结束时由 TurnEndCleanup 统一撤掉，不留常驻监听。
-        gain_skill(self.game, self.owner, option)
-        temporary = self.owner.skill_state.get("jilue", "temporary", None)
-        temporary = list(temporary or [])
-        if option not in temporary:
-            temporary.append(option)
-        self.owner.skill_state.set("jilue", "temporary", tuple(temporary),
-                                   ResetScope.TURN)
-        self.game.add_log("%s 的【极略】发动了【%s】"
-                          % (self.owner.name,
-                             self.game.skill_registry.get(option).name))
-        return self.complete({"applied": True})
+    五个能力的时机完全不同，所以不能只做成"出牌阶段点一下"——那样鬼才
+    （判定牌生效前）与放逐（受伤后）在别人的回合里永远发不出来：
 
+        鬼才  判定牌生效前（改判窗口，见 SkillDef 的 ``judge_replacement``）
+        放逐  你受到伤害后
+        完杀  你的出牌阶段开始时（直到回合结束生效）
+        集智  你使用非延时锦囊牌时
+        制衡  出牌阶段（主动技入口，见 ``_activate_jilue``）
 
-class JilueCleanup(Skill):
-    """回合结束时撤掉【极略】临时获得的技能。
-
-    ``id`` 与 SkillDef 的 ``jilue`` 一致——``SkillManager.unbind`` 按实例的
-    ``id`` 匹配，不一致就卸载不掉。
+    本类同时承担"临时能力到回合结束就收回"的收尾。``id`` 必须与 SkillDef
+    一致——``SkillManager.unbind`` 按实例 id 匹配。
     """
 
     id = "jilue"
     name = "极略"
 
     def bindings(self):
-        return (SkillBinding(EventType.TURN_END, priority=-80),)
+        return (
+            SkillBinding(EventType.CARD_USED, priority=10),
+            SkillBinding(EventType.DAMAGE_TARGET_AFTER, priority=25),
+            SkillBinding(EventType.PHASE_START, priority=35),
+            SkillBinding(EventType.TURN_END, priority=-80),
+        )
 
     def can_trigger(self, context, event):
-        return event.source is self.owner and bool(
-            self.owner.skill_state.get("jilue", "temporary", None))
+        game = context.state
+        if event.name is EventType.TURN_END:
+            # 回收临时能力不花标记：没标记也要把上回合临时获得的技能收回去。
+            return bool(self.owner.skill_state.get("jilue", "temporary", None))
+        if not self.owner.alive or not game.skills.has(self.owner, self.id):
+            return False
+        if not _jilue_can_pay(self.owner):
+            return False
+        if event.name is EventType.CARD_USED:
+            return (event.source is self.owner
+                    and _is_non_delay_trick(event.payload.get("card")))
+        if event.name is EventType.DAMAGE_TARGET_AFTER:
+            damage = event.payload.get("damage")
+            if damage is None or damage.target is not self.owner:
+                return False
+            if int(event.payload.get("amount", 0) or 0) <= 0:
+                return False
+            return bool(other_alive_players(game, self.owner))
+        if event.source is not self.owner:
+            return False
+        if event.payload.get("phase") is not TurnPhase.PLAY:
+            return False
+        if event.payload.get("skipped"):
+            return False
+        return not self.owner.skill_state.get("jilue", "wansha_used", 0)
 
     def resolve(self, context, event):
         game = context.state
-        for skill_id in list(self.owner.skill_state.get("jilue", "temporary", ()) or ()):
-            if skill_id == "jilue":
-                continue
-            if game.skills.has(self.owner, skill_id):
-                game.skills.unbind(self.owner, skill_id)
-        self.owner.skill_state.clear("jilue", "temporary")
+        if event.name is EventType.TURN_END:
+            for skill_id in list(
+                    self.owner.skill_state.get("jilue", "temporary", None) or ()):
+                if skill_id == self.id:
+                    continue
+                if game.skills.has(self.owner, skill_id):
+                    game.skills.unbind(self.owner, skill_id)
+            self.owner.skill_state.clear("jilue", "temporary")
+            return
+        engine = context.services["engine"]
+        if event.name is EventType.CARD_USED:
+            JilueJizhiFlow(engine, self.owner).start()
+            return
+        if event.name is EventType.DAMAGE_TARGET_AFTER:
+            JilueFangzhuFlow(engine, self.owner).start()
+            return
+        JilueWanshaFlow(engine, self.owner).start()
+
+
+def _gain_until_turn_end(game, owner, skill_id):
+    """临时获得一个技能直到回合结束（由 Jilue 的 TURN_END 分支统一收回）。"""
+
+    gain_skill(game, owner, skill_id)
+    temporary = list(owner.skill_state.get("jilue", "temporary", None) or ())
+    if skill_id not in temporary:
+        temporary.append(skill_id)
+    owner.skill_state.set("jilue", "temporary", tuple(temporary),
+                          ResetScope.TURN)
+
+
+class JilueJizhiFlow(Flow):
+    """极略·集智：使用非延时锦囊时，弃一枚「忍」摸一张牌（可以放弃）。"""
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【极略·集智】：是否弃一枚「忍」标记摸一张牌？",
+                    reason="jilue")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if (response is None or not response.confirmed
+                or not _jilue_can_pay(self.owner)):
+            return self.complete({"applied": False})
+        remove_mark(self.game, self.owner, "renjie", 1, "ren")
+        self.context.apply(DrawCardsAtom(self.owner, 1))
+        self.game.add_log("%s 的【极略·集智】弃一枚「忍」标记摸一张牌"
+                          % self.owner.name)
+        return self.complete({"applied": True})
+
+
+class JilueFangzhuFlow(Flow):
+    """极略·放逐：受到伤害后弃一枚「忍」，令一名其他角色摸 X 张牌并翻面。"""
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.stage = "confirm"
+
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【极略·放逐】：是否弃一枚「忍」标记发动【放逐】？",
+                    reason="jilue")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "confirm":
+            if (response is None or not response.confirmed
+                    or not _jilue_can_pay(self.owner)):
+                return self.complete({"applied": False})
+            remove_mark(self.game, self.owner, "renjie", 1, "ren")
+            self.stage = "target"
+            ask_targets(self.engine, self, source=self.owner, target=self.owner,
+                        prompt="【极略·放逐】：请选择摸牌并翻面的角色",
+                        reason="jilue",
+                        candidates=other_alive_players(self.game, self.owner),
+                        min_targets=1, max_targets=1)
+            return self.current_result()
+        targets = list(getattr(response, "targets", ()) or ())
+        if not targets:
+            return self.complete({"applied": False})
+        target = targets[0]
+        x = max(1, lost_hp(self.owner))
+        self.context.apply(DrawCardsAtom(target, x))
+        flip_player(self.game, target, reason="放逐")
+        self.game.add_log("%s 的【极略·放逐】令 %s 摸 %d 张牌并翻面"
+                          % (self.owner.name, target.name, x))
+        return self.complete({"applied": True})
+
+
+class JilueWanshaFlow(Flow):
+    """极略·完杀：出牌阶段开始时弃一枚「忍」，直到回合结束获得【完杀】。"""
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【极略·完杀】：是否弃一枚「忍」标记，"
+                           "直到回合结束获得【完杀】？",
+                    reason="jilue")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if (response is None or not response.confirmed
+                or not _jilue_can_pay(self.owner)):
+            return self.complete({"applied": False})
+        remove_mark(self.game, self.owner, "renjie", 1, "ren")
+        self.owner.skill_state.set("jilue", "wansha_used", 1, ResetScope.TURN)
+        _gain_until_turn_end(self.game, self.owner, "wansha")
+        self.game.add_log("%s 的【极略·完杀】生效直到回合结束" % self.owner.name)
+        return self.complete({"applied": True})
+
+
+class LianpoFlow(Flow):
+    """连破：额外回合**由玩家决定**（可以拒绝）。"""
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【连破】：是否进行一个额外的回合？",
+                    reason="lianpo")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if (response is None or not response.confirmed
+                or not self.owner.alive or self.game.game_over):
+            self.game.add_log("%s 放弃【连破】" % self.owner.name)
+            return self.complete({"applied": False})
+        grant_extra_turn(self.game, self.owner)
+        self.game.add_log("%s 的【连破】获得一个额外回合" % self.owner.name)
+        return self.complete({"applied": True})
 
 
 class Lianpo(Skill):
@@ -368,6 +610,8 @@ class Lianpo(Skill):
         if event.name is EventType.DEATH:
             self.owner.skill_state.set(self.id, "killed", 1, ResetScope.ROUND)
             return
+        # 本回合的击杀标记先清掉再问：同一次击杀只问一次，拒绝之后也不会
+        # 在别的时机被再问一遍。
         self.owner.skill_state.set(self.id, "killed", 0, ResetScope.ROUND)
         # 官方：「一名角色的回合结束时，若你本回合杀死过角色，你可以执行一个
         # 额外回合」——**自己的回合结束时同样成立**（FAQ：本回合内击杀 → 该回合
@@ -375,8 +619,7 @@ class Lianpo(Skill):
         # 等于把连破的滚雪球核心砍掉，只剩回合外击杀能用。
         if not self.owner.alive or game.game_over:
             return
-        game.queue_extra_turn(self.owner)
-        game.add_log("%s 的【连破】获得一个额外回合" % self.owner.name)
+        LianpoFlow(context.services["engine"], self.owner).start()
 
 
 # ==================================================
@@ -588,6 +831,8 @@ class ShenfenFlow(Flow):
         self.game = engine.game
         self.player = player
         self.targets = list(targets)
+        self.index = 0
+        self.stage = "run"
 
     def begin(self):
         from src.game.flows.chain_damage import ChainDamageFlow
@@ -599,24 +844,58 @@ class ShenfenFlow(Flow):
         return self.advance()
 
     def advance(self, response=None):
+        if self.stage == "discard":
+            return self._after_discard(response)
         guard = self.guard_child_flows()
         if guard is not None:
             return guard
-        return self._discard_and_flip()
+        return self._discard_equipment()
 
-    def _discard_and_flip(self):
+    def _discard_equipment(self):
+        """先弃置装备区（规则本身没有选择），再逐名角色问手牌。"""
+
         game = self.game
         for other in self.targets:
-            for slot in list(other.equipment):
+            for slot in list(getattr(other, "equipment", {})):
                 if other.get_equipment(slot) is not None:
                     self.context.apply(UnequipAtom(
                         other, slot, game.deck.discard_pile))
-            for _ in range(4):
-                hand = list(getattr(other, "hand", ()) or ())
-                if not hand:
-                    break
+        self.stage = "discard"
+        self.index = 0
+        return self._next_discard()
+
+    def _next_discard(self):
+        """逐名角色各问一次"弃哪四张"——弃哪几张必须由他自己挑。"""
+
+        while self.index < len(self.targets):
+            player = self.targets[self.index]
+            self.index += 1
+            if not getattr(player, "alive", True) or int(player.hp) <= 0:
+                continue
+            hand = list(getattr(player, "hand", ()) or ())
+            if not hand:
+                continue
+            count = min(4, len(hand))
+            ask_cards(self.engine, self, source=self.player, target=player,
+                      prompt="【神愤】：请选择要弃置的 %d 张手牌" % count,
+                      reason="shenfen", candidates=hand,
+                      min_cards=count, max_cards=count)
+            return self.current_result()
+        return self._flip()
+
+    def _after_discard(self, response):
+        player = self.targets[self.index - 1] if self.index else None
+        for card in list(getattr(response, "cards", ()) or ()):
+            if player is None:
+                break
+            if any(item is card for item in getattr(player, "hand", ())):
                 self.context.apply(MoveCardAtom(
-                    hand[-1], source=other.hand, destination=game.deck.discard_pile))
+                    card, source=player.hand,
+                    destination=self.game.deck.discard_pile))
+        return self._next_discard()
+
+    def _flip(self):
+        game = self.game
         flip_player(game, self.player, reason="神愤")
         game.add_log("%s 的【神愤】结算完毕：对 %d 名角色造成伤害、弃牌后翻面"
                      % (self.player.name, len(self.targets)))
@@ -634,33 +913,131 @@ def _can_shelie(game, player):
     return len(game.deck.draw_pile) >= 1
 
 
-def _apply_shelie(game, player):
-    """涉猎：放弃摸牌，亮出牌堆顶五张，拿走不同花色的各一张，其余弃掉。"""
+def _shelie_flow(game, player):
+    return ShelieFlow(game.engine, player)
 
-    count = min(5, len(game.deck.draw_pile))
-    revealed = []
-    for _ in range(count):
-        card = game.deck.draw()
-        if card is None:
-            break
-        revealed.append(card)
-    taken, seen_suits = [], set()
-    for card in revealed:
-        suit = getattr(card, "suit", None)
-        if suit in seen_suits:
-            continue
-        seen_suits.add(suit)
-        taken.append(card)
-    for card in revealed:
-        if any(card is item for item in taken):
-            player.hand.append(card)
-        else:
-            game.deck.discard(card)
-    names = "、".join((getattr(card, "identity_label", "") or "?") for card in revealed)
-    game.add_log("%s 发动【涉猎】，亮出 %s，取走 %d 张"
-                 % (player.name, names, len(taken)))
-    game.message = "%s 的【涉猎】拿走了 %d 张不同花色的牌。" % (player.name, len(taken))
-    return True
+
+def _suit_label(suit):
+    from src.card import suit_name
+
+    return suit_name(suit) or "这个花色的"
+
+
+class ShelieFlow(Flow):
+    """涉猎：放弃摸牌，亮出牌堆顶五张，每种花色各取一张。
+
+    同花色不止一张时，"取哪一张"由拥有者决定——官方把"摸到的牌质量可控、
+    按场上局势取舍"当作涉猎的玩法；以前是代码按"每花色第一次出现"固定留
+    第一张，玩家的取舍整条被吃掉。
+    """
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.revealed = []
+        self.groups = {}
+        self.taken = []
+        self.queue = []
+        self.index = 0
+        self.stage = "begin"
+
+    # ---- 1. 亮牌（亮出的五张进公共牌池，结算完再各自归位）----
+
+    def begin(self):
+        count = min(5, len(self.game.deck.draw_pile))
+        if count <= 0:
+            return self.complete({"applied": False})
+        pool = self.game.public_card_pool
+        for _ in range(count):
+            card = self.game.deck.draw()
+            if card is None:
+                break
+            self.revealed.append(card)
+            pool.append(card)
+        if not self.revealed:
+            return self.complete({"applied": False})
+        names = "、".join(
+            (getattr(card, "identity_label", "") or "?") for card in self.revealed)
+        self.game.add_log("%s 的【涉猎】亮出 %d 张：%s"
+                          % (self.owner.name, len(self.revealed), names))
+        for card in self.revealed:
+            self.groups.setdefault(getattr(card, "suit", None), []).append(card)
+        # 唯一的那张必须拿（没有选择）；同花色多张才需要问。
+        self.taken = [cards[0] for cards in self.groups.values()
+                      if len(cards) == 1]
+        self.queue = [suit for suit, cards in self.groups.items()
+                      if len(cards) > 1]
+        self.index = 0
+        return self._next()
+
+    def advance(self, response=None):
+        return self._after_choice(response)
+
+    # ---- 2. 逐花色问"要哪一张" ----
+
+    def _next(self):
+        while self.index < len(self.queue):
+            suit = self.queue[self.index]
+            self.index += 1
+            cards = [card for card in self.groups.get(suit, ())
+                     if self._in_pool(card)]
+            if len(cards) <= 1:
+                if cards:
+                    self.taken.append(cards[0])
+                continue
+            self.stage = "choose:%s" % suit
+            ask_cards(self.engine, self, source=self.owner, target=self.owner,
+                      prompt="【涉猎】：请选择要获得的%s牌（同花色只取一张）"
+                             % _suit_label(suit),
+                      reason="shelie", candidates=cards,
+                      min_cards=1, max_cards=1, zone="public_pool")
+            return self.current_result()
+        return self._settle()
+
+    def _after_choice(self, response):
+        suit = str(self.stage).split(":", 1)[-1]
+        cards = [card for card in self.groups.get(suit, ()) if self._in_pool(card)]
+        chosen = [card for card in (getattr(response, "cards", ()) or ())
+                  if any(card is item for item in cards)]
+        if chosen:
+            self.taken.append(chosen[0])
+        elif cards:
+            # 回答里没有合法牌（牌在这期间被移走一类）：保住这个花色的一张，
+            # 绝不让"每种花色各一张"少给一张。
+            self.taken.append(cards[0])
+        return self._next()
+
+    # ---- 3. 所选入手，其余进弃牌堆 ----
+
+    def _settle(self):
+        pool = self.game.public_card_pool
+        taken_ids = {id(card) for card in self.taken}
+        for card in list(self.revealed):
+            if not self._in_pool(card):
+                continue
+            if id(card) in taken_ids:
+                self.context.apply(MoveCardAtom(
+                    card, source=pool, destination=self.owner.hand))
+            else:
+                self.context.apply(MoveCardAtom(
+                    card, source=pool,
+                    destination=self.game.deck.discard_pile,
+                    # 这类牌是"置入弃牌堆"，不是**弃置**：不能触发【落英】
+                    # 一类只认"因弃置或判定进入弃牌堆"的技能。
+                    reason="shelie", owner=self.owner))
+        labels = "、".join(
+            (getattr(card, "display_name", "") or "?") for card in self.taken)
+        self.game.add_log("%s 的【涉猎】取走 %s，其余 %d 张置入弃牌堆"
+                          % (self.owner.name, labels,
+                             len(self.revealed) - len(self.taken)))
+        self.game.message = "%s 的【涉猎】拿走了 %d 张不同花色的牌。" % (
+            self.owner.name, len(self.taken))
+        return self.complete({"applied": True})
+
+    def _in_pool(self, card):
+        return any(item is card for item in self.game.public_card_pool)
 
 
 def _can_gongxin(game, player):
@@ -698,12 +1075,18 @@ class GongxinFlow(Flow):
     def begin(self):
         self.game.add_log("%s 发动【攻心】，观看 %s 的手牌"
                           % (self.owner.name, self.target.name))
+        # 候选是目标的**全部手牌**：官方的攻心是"先观看全部手牌，再展示其中
+        # 一张红桃牌"。以前候选被过滤成"只有红桃"，拥有者看不到其他花色，
+        # 目标手里没红桃时还会看到一个空列表——那不是观看手牌，是看答案。
+        #
+        # 展示仍然只能是红桃：选到非红桃 = 这次不展示（不处理任何牌）。
         ask_cards(self.engine, self, source=self.owner, target=self.owner,
-                  prompt="【攻心】：请选择展示 %s 的一张红桃牌" % self.target.name,
+                  prompt="【攻心】：观看 %s 的手牌，选择其中一张红桃牌展示"
+                         "（选择其他花色 = 不展示）" % self.target.name,
                   reason="gongxin",
-                  candidates=hand_cards(self.target, _is_heart),
+                  candidates=hand_cards(self.target),
                   min_cards=0, max_cards=1, zone="public_pool",
-                  context={"zone_owner": self.target})
+                  context={"zone_owner": self.target, "cancellable": True})
         return self.current_result()
 
     def advance(self, response=None):
@@ -714,8 +1097,19 @@ class GongxinFlow(Flow):
     def _after_reveal(self, response):
         cards = list(getattr(response, "cards", ()) or ())
         if not cards:
+            self.game.add_log("%s 没有展示 %s 的牌" % (self.owner.name, self.target.name))
             return self.complete({"applied": True})
-        self.card = cards[0]
+        card = cards[0]
+        if not any(card is item for item in self.target.hand):
+            # 选牌期间这张牌已经离开他的手牌：什么都不处理。
+            return self.complete({"applied": True})
+        if not _is_heart(card):
+            # 非红桃只能被"看到"，不能被展示 / 处理。
+            self.game.message = "【攻心】：只能展示红桃牌，本次不展示。"
+            self.game.add_log("【攻心】：%s 选择了非红桃牌，本次不展示"
+                              % self.owner.name)
+            return self.complete({"applied": True})
+        self.card = card
         self.stage = "action"
         ask_option(self.engine, self, source=self.owner, target=self.owner,
                    prompt="【攻心】：请选择处理这张红桃牌的方式",
@@ -927,8 +1321,8 @@ class YeyanFlow(Flow):
 
 
 class Guixin(Skill):
-    """每受到 1 点伤害，可以分别从每名其他角色的手牌、装备区与判定区
-    各获得一张牌；若如此做，将你的武将牌翻面。"""
+    """每受到 1 点伤害后，**可以**分别从每名其他角色区域里各获得一张牌，
+    然后将你的武将牌翻面。"""
 
     id = "guixin"
     name = "归心"
@@ -942,74 +1336,123 @@ class Guixin(Skill):
             return False
         if int(event.payload.get("amount", 0) or 0) <= 0 or not self.owner.alive:
             return False
-        return any(_cards_of(other) for other in other_alive_players(context.state, self.owner))
+        return any(_cards_of(other)
+                   for other in other_alive_players(context.state, self.owner))
 
-    def repeat_times(self, context, event):
-        """官方：每受到 **1 点**伤害就可以发动一次（2 点伤害 = 发动 2 次）。
-
-        引擎的技能回调一次事件只调用一次 resolve，所以这里把"点数"换算成
-        需要重复的次数，由 resolve 自己循环——否则 2 点伤害只能拿一半的牌，
-        而且必然翻面（跳过自己的下个回合），两个方向都吃亏。
-        """
+    def points(self, context, event):
+        """这次伤害有几个"1 点"要分别问（官方：每受 1 点伤害可发动一次）。"""
 
         return max(1, int(event.payload.get("amount", 0) or 0))
 
     def resolve(self, context, event):
-        engine = context.services["engine"]
-        game = context.state
-        # 每 1 点伤害各发动一次（2 点 = 拿两轮牌、翻两次面 = 回到正面）。
-        for _ in range(self.repeat_times(context, event)):
-            if not self.owner.alive or game.game_over:
-                break
-            GuixinFlow(engine, self.owner).start()
+        GuixinFlow(context.services["engine"], self.owner,
+                   points=self.points(context, event)).start()
 
 
 class GuixinFlow(Flow):
-    """归心：逐名角色各获一张牌（装备区 / 判定区的牌由规则指定，手牌由对方给）。"""
+    """归心：**逐点**询问（可以拒绝），每一轮逐名角色各选一张牌，最后翻面。
 
-    def __init__(self, engine, owner):
+    三件事必须在玩家手里：
+
+    * 每 1 点伤害**独立**问一次"要不要发动"（可以拒绝）——翻面会跳过自己的
+      下个回合，这是必须由玩家自己承担代价的决定，不是系统替他发动；
+    * 对每名角色选**哪个区域、哪一张牌**（手牌是暗牌，按隐藏信息规则随机取）；
+    * 一轮拿完、翻面结算完成之后才问下一点伤害。
+    """
+
+    def __init__(self, engine, owner, points=1):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
         self.owner = owner
+        self.points = max(1, int(points))
+        self.point = 0
         self.order = []
         self.index = 0
-        self.stage = "run"
+        self.current = None
+        self.applied = False
+        self.stage = "confirm"
 
     def begin(self):
-        self.order = other_alive_players(self.game, self.owner)
-        self.index = 0
-        seen = False
-        for player in self.order:
-            if self._take_one(player):
-                seen = True
-        if seen:
-            flip_player(self.game, self.owner, reason="归心")
-            self.game.add_log("%s 发动【归心】，获得若干牌并翻面" % self.owner.name)
-        return self.complete({"applied": seen})
+        return self._ask_point()
+
+    # ---- 每一点伤害一次 ----
+
+    def _ask_point(self):
+        if (self.point >= self.points or not self.owner.alive
+                or self.game.game_over):
+            return self.complete({"applied": self.applied})
+        self.order = [other for other in other_alive_players(self.game, self.owner)
+                      if _cards_of(other)]
+        if not self.order:
+            # 没人有牌可取：没有可拿的东西，不翻面，也不问。
+            return self.complete({"applied": self.applied})
+        self.stage = "confirm"
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【归心】：是否发动？（第 %d / %d 点伤害；"
+                           "发动后你的武将牌翻面）" % (self.point + 1, self.points),
+                    reason="guixin")
+        return self.current_result()
 
     def advance(self, response=None):
-        return self.complete({"applied": True})
+        if self.stage == "confirm":
+            if response is None or not response.confirmed:
+                # 拒绝：不拿牌、**不翻面**，直接问下一点。
+                self.point += 1
+                return self._ask_point()
+            self.applied = True
+            self.index = 0
+            return self._take_next()
+        return self._after_take(response)
 
-    def _take_one(self, player):
-        """从这名角色的公开区域拿一张牌（手牌内容不可读，按最后一张取）。"""
+    # ---- 逐名角色选一张 ----
 
-        for slot, equipped in list((player.equipment or {}).items()):
-            if equipped is not None:
-                self.context.apply(UnequipAtom(player, slot))
-                self.owner.hand.append(equipped)
-                return True
-        if getattr(player, "judgement_zone", None):
-            card = player.judgement_zone[-1]
-            self.context.apply(MoveCardAtom(
-                card, source=player.judgement_zone, destination=self.owner.hand))
-            return True
-        if getattr(player, "hand", None):
-            card = player.hand[-1]
-            self.context.apply(MoveCardAtom(
-                card, source=player.hand, destination=self.owner.hand))
-            return True
-        return False
+    def _take_next(self):
+        while self.index < len(self.order):
+            player = self.order[self.index]
+            self.index += 1
+            if not player.alive or not _cards_of(player):
+                continue
+            options = zone_take_options(player)
+            if not options:
+                continue
+            self.current = player
+            self.stage = "take"
+            ask_option(self.engine, self, source=self.owner, target=self.owner,
+                       prompt="【归心】：获得 %s 区域里的一张牌" % player.name,
+                       reason="guixin", options=tuple(options),
+                       context={"zone_holder_id": getattr(player, "player_id", None)})
+            return self.current_result()
+        return self._end_round()
+
+    def _after_take(self, response):
+        player = self.current
+        self.current = None
+        option = str(getattr(response, "option", "") or "")
+        card = self._take_card(player, option)
+        if card is not None:
+            engine = self.engine
+            shower = getattr(engine, "show_taken_card", None)
+            if callable(shower):
+                # 拿走的是别人的牌：亮在桌面停一下，让对手看清是哪张。
+                shower(card, player, self.owner, to_hand=True)
+            self.game.add_log("【归心】：%s 获得 %s 的一张牌"
+                              % (self.owner.name, player.name))
+        return self._take_next()
+
+    def _take_card(self, player, option):
+        """按选择的区域拿牌（手牌是暗牌，按隐藏信息规则随机取）。"""
+
+        return take_card_from_zone(
+            self.context, self.game, self.owner, player, option)
+
+    # ---- 一轮结束：翻面，然后问下一点 ----
+
+    def _end_round(self):
+        flip_player(self.game, self.owner, reason="归心")
+        self.game.add_log("%s 发动【归心】，获得若干牌并翻面" % self.owner.name)
+        self.point += 1
+        return self._ask_point()
 
 
 # ==================================================
@@ -1036,16 +1479,20 @@ GOD_SKILLS = (
         id="wushen",
         name="武神",
         description="锁定技，你的红桃手牌均视为【杀】；你使用红桃【杀】无距离限制。",
-        kind=SkillKind.VIEW_AS,
+        # 锁定技：这不是"可以点技能选择转化"，而是**替换**——手里的红桃牌
+        # 就是【杀】，因此 ① 技能栏不该给一个可选的发动入口，② 原牌名那条路
+        # （红桃【桃】救人、红桃【闪】当闪）必须彻底关掉。
+        kind=SkillKind.LOCKED,
         conversions=(
             CardConversion(skill_id="wushen", matches=_is_heart, name="SHA",
-                           contexts=(PLAY_CONTEXT, RESPONSE_CONTEXT)),
+                           contexts=(PLAY_CONTEXT, RESPONSE_CONTEXT),
+                           locks_source=True),
         ),
         modifiers=(
             ModifierSpec(kind=ModifierKind.SLASH_DISTANCE_IGNORE, value=True,
                          roles=("player",), condition=_wushen_ignores_distance),
         ),
-        tags=("conversion",),
+        tags=("conversion", "locked"),
     ),
     triggered(
         "wuhun",
@@ -1078,10 +1525,15 @@ GOD_SKILLS = (
         description="你可以弃一枚「忍」标记，发动下列一项技能："
         "【鬼才】【放逐】【完杀】【集智】【制衡】。",
         kind=SkillKind.ACTIVE,
-        factory=JilueCleanup,
+        factory=Jilue,
         can_activate=_can_jilue,
         activate=_activate_jilue,
-        active_spec=ActiveSkillSpec(),
+        active_spec=JILUE_ZHI_HENG_SPEC,
+        judge_replacement=JudgeReplacement(
+            candidates=_jilue_guicai_candidates,
+            prompt="【极略·鬼才】：是否弃一枚「忍」标记改判？",
+            on_use=_jilue_guicai_cost,
+        ),
         tags=("active", "granted"),
     ),
     triggered(
@@ -1148,7 +1600,9 @@ GOD_SKILLS = (
             phase=TurnPhase.DRAW,
             prompt="【涉猎】：是否放弃摸牌，改为亮出牌堆顶五张牌？",
             can_offer=_can_shelie,
-            apply=_apply_shelie,
+            # 同花色取哪一张要玩家自己挑：用**流程**替代纯数据替代，
+            # 阶段结算会挂起等选择完成，期间摸牌阶段绝不悄悄推进。
+            flow=_shelie_flow,
         ),
     ),
     active(

@@ -209,12 +209,20 @@ class JudgeFlow(Flow):
             if not self._replacement_is_legal(player, new_card, skill_id, response.request):
                 self.game.add_log("%s 的改判请求已失效，本次视为不替换" % player.name)
                 return self._next_replacer()
+            if not self._pay_replacement_cost(player, new_card, skill_id):
+                # 代价付不出（【极略】的鬼才没有「忍」标记）：这次不替换，
+                # 牌一张都不动，判定按原牌结算。
+                return self._next_replacer()
             old_card = self.judge_context.current_card
             if any(item is old_card for item in self.game.processing_zone):
                 context.apply(MoveCardAtom(
                     old_card,
                     source=self.game.processing_zone,
                     destination=self.game.deck.discard_pile,
+                    # 被替换掉的判定牌同样属于"因判定进入弃牌堆"，归属是被判定的
+                    # 角色（处理区查不出归属，必须显式给）。
+                    reason="judge",
+                    owner=self.owner,
                 ))
             context.apply(MoveCardAtom(
                 new_card,
@@ -247,6 +255,24 @@ class JudgeFlow(Flow):
             ))
 
         return self._next_replacer()
+
+    def _pay_replacement_cost(self, player, card, skill_id):
+        """改判声明里的可选代价（【极略】的鬼才：弃一枚「忍」标记）。
+
+        声明方返回 False（付不出代价）时判定按原牌结算——代价没付、牌也没动，
+        不能出现"标记不够却照样改判了"。
+        """
+
+        definition = self.game.skill_registry.get(skill_id)
+        replacement = getattr(definition, "judge_replacement", None) if definition else None
+        hook = getattr(replacement, "on_use", None)
+        if not callable(hook):
+            return True
+        try:
+            return bool(hook(self.game, player, card))
+        except Exception as error:                        # noqa: BLE001
+            self.game.add_log("改判代价结算出错：" + str(error))
+            return False
 
     def _replacement_is_legal(self, player, card, skill_id, request):
         """改判的引擎侧校验：窗口、技能归属、存活、实体牌位置。"""
@@ -317,6 +343,9 @@ class JudgeFlow(Flow):
                     card,
                     source=self.game.processing_zone,
                     destination=self.game.deck.discard_pile,
+                    # 判定牌进弃牌堆：这是【落英】一类时机的正例之一。
+                    reason="judge",
+                    owner=self.owner,
                 ))
         self.game.judge_context = None
         self.game.judge_card = None

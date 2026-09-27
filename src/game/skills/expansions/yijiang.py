@@ -21,6 +21,7 @@ from ..definitions import (
     triggered,
 )
 from ..mechanics import (
+    optional_trigger,
     ask_cards,
     ask_confirm,
     ask_option,
@@ -545,14 +546,24 @@ class Pojun(Skill):
         return target is not None and target is not self.owner and target.alive
 
     def resolve(self, context, event):
-        game = context.state
-        target = event.payload["damage"].target
+        damage = event.payload["damage"]
+        optional_trigger(
+            context, self.owner,
+            prompt="【破军】：是否令 %s 摸牌并翻面？" % damage.target.name,
+            reason="pojun", label="破军",
+            effect=lambda flow: self._break(flow, damage.target)).start()
+
+    def _break(self, flow, target):
+        game = flow.game
+        if target is None or not target.alive:
+            return False
         count = max(0, min(5, int(target.hp)))
         if count:
-            context.apply(DrawCardsAtom(target, count))
+            flow.context.apply(DrawCardsAtom(target, count))
         flip_player(game, target, reason="破军")
         game.add_log("%s 的【破军】令 %s 摸 %d 张牌并翻面"
                      % (self.owner.name, target.name, count))
+        return True
 
 
 # ==================================================
@@ -561,10 +572,23 @@ class Pojun(Skill):
 
 
 class Luoying(Skill):
-    """其他角色的梅花牌因弃置或判定进入弃牌堆时，你可以获得之。"""
+    """其他角色的梅花牌因弃置或判定进入弃牌堆时，你可以获得之。
+
+    "因弃置或判定"是硬约束（官方 FAQ）：**使用 / 打出 / 重铸 / 拼点后置入
+    弃牌堆都不算**，无主的牌（五谷没人要的、不屈牌）也不算。所以这里读规则层
+    给的 ``reason`` 与 ``owner``，不自己猜牌是怎么进弃牌堆的。
+
+    以前只看"牌在弃牌堆里、不是我的"——而使用后的牌经过处理区（
+    ``game.processing_zone``，不属于任何角色）进入弃牌堆时归属查不出来，
+    于是曹植会把自己刚用掉的梅花牌**收回来**：【铁索连环】因此能无限次使用，
+    整局永远打不完（Phase 18.5 批量试玩实测到了这个死循环）。
+    """
 
     id = "luoying"
     name = "落英"
+
+    #: 只有这两种原因算"因弃置或判定进入弃牌堆"（见 ``MoveCardAtom.reason``）。
+    REASONS = ("discard", "judge")
 
     def bindings(self):
         return (SkillBinding(EventType.CARD_DISCARDED, priority=15),)
@@ -574,21 +598,31 @@ class Luoying(Skill):
             return False
         card = event.payload.get("card")
         owner = event.payload.get("owner")
-        if card is None or owner is self.owner:
+        if card is None or owner is None or owner is self.owner:
+            return False
+        if str(event.payload.get("reason") or "discard") not in self.REASONS:
             return False
         if getattr(card, "suit", None) != "club":
             return False
         return any(item is card for item in context.state.deck.discard_pile)
 
     def resolve(self, context, event):
-        game = context.state
         card = event.payload["card"]
-        if not any(item is card for item in game.deck.discard_pile):
-            return
-        game.deck.discard_pile.remove(card)
-        self.owner.hand.append(card)
-        game.add_log("%s 的【落英】获得了【%s】"
-                     % (self.owner.name, getattr(card, "display_name", "?")))
+        optional_trigger(
+            context, self.owner,
+            prompt="【落英】：是否获得【%s】？" % getattr(card, "display_name", "梅花牌"),
+            reason="luoying", label="落英",
+            effect=lambda flow: self._gain(flow, card)).start()
+
+    def _gain(self, flow, card):
+        pile = flow.game.deck.discard_pile
+        if not any(item is card for item in pile):
+            return False
+        flow.context.apply(MoveCardAtom(
+            card, source=pile, destination=self.owner.hand))
+        flow.game.add_log("%s 的【落英】获得了【%s】"
+                          % (self.owner.name, getattr(card, "display_name", "?")))
+        return True
 
 
 def _can_jiushi(game, player):
@@ -1014,59 +1048,117 @@ def _can_xinzhan(game, player):
 
 
 def _activate_xinzhan(game, player, target=None, cards=None):
-    """心战：观看牌堆顶三张，获得其中任意数量的红桃牌，其余按任意顺序放回。"""
+    """心战：观看牌堆顶三张，获得其中任意数量的红桃牌，其余按任意顺序放回。
+
+    观看与选择都走**统一请求通道**（不再用只有本地界面才有的选牌通道），
+    因此本地真人 / 远程真人 / AI 三条路完全一致：牌堆顶内容只发给技能拥有者，
+    公开战报不写出牌面。
+    """
 
     count = min(3, len(game.deck.draw_pile))
+    if count <= 0:
+        return False
     viewed = list(game.deck.draw_pile[-count:])
     player.skill_state.set("xinzhan", "used", 1, ResetScope.TURN)
-    names = "、".join((getattr(card, "identity_label", "") or "?") for card in viewed)
-    game.add_log("%s 发动【心战】，观看牌堆顶 %d 张：%s" % (player.name, count, names))
-    hearts = [card for card in viewed if getattr(card, "suit", None) == "heart"]
-    others = [card for card in viewed if card not in hearts]
-    game.start_card_selection(
-        zone="public_pool",
-        candidates=[(card, None) for card in viewed],
-        number=len(hearts),
-        prompt="【心战】：请选择要获得的红桃牌（其余以原顺序放回牌堆顶）",
-        on_complete=lambda ordered: _apply_xinzhan(
-            game, player, viewed, hearts, ordered),
-        owner=player,
-        cancellable=True,
-    )
+    game.add_log("%s 发动【心战】，观看牌堆顶 %d 张牌" % (player.name, count))
+    XinzhanFlow(game.engine, player, viewed).start()
     return True
 
 
-def _apply_xinzhan(game, owner, viewed, hearts, ordered):
-    """把选中的红桃牌收进手牌，其余按玩家给出的顺序（或原顺序）放回牌堆顶。
+def _xinzhan_hearts(cards):
+    return [card for card in cards if getattr(card, "suit", None) == "heart"]
 
-    这三张牌**从未离开牌堆**——洗牌、抽牌、判定的语义都不受影响，
-    这里只做"从顶部取走几张、再把剩下的按顺序放回去"。
-    """
 
-    ordered_cards = [card for card, _rect, _key in (ordered or ())]
-    if ordered_cards and set(id(card) for card in ordered_cards) == set(id(card) for card in viewed):
-        chosen = [card for card in ordered_cards
-                  if any(card is heart for heart in hearts)]
-        rest = [card for card in ordered_cards if card not in chosen]
-    else:
-        chosen = list(hearts)
-        rest = [card for card in viewed if card not in chosen]
+class XinzhanFlow(Flow):
+    """心战：先取红桃（0 到全部，只有红桃可作候选），再按任意顺序放回其余。"""
 
-    pile = game.deck.draw_pile
-    for card in viewed:
-        for index, item in enumerate(pile):
-            if item is card:
-                pile.pop(index)
-                break
-    # 放回：``pile[-1]`` 是下一个被摸到的牌，因此按顺序 append 就能保持顺序。
-    for card in rest:
-        pile.append(card)
-    for card in chosen:
-        owner.hand.append(card)
+    def __init__(self, engine, owner, viewed):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.viewed = list(viewed)
+        self.taken = []
+        self.stage = "take"
 
-    game.message = "【心战】：获得了 %d 张红桃牌。" % len(chosen)
-    game.add_log("%s 的【心战】获得了 %d 张红桃牌，%d 张放回牌堆顶"
-                 % (owner.name, len(chosen), len(rest)))
+    def begin(self):
+        hearts = _xinzhan_hearts(self.viewed)
+        if not hearts:
+            return self._ask_order()
+        self.stage = "take"
+        ask_cards(self.engine, self, source=self.owner, target=self.owner,
+                  prompt="【心战】：请选择要获得的红桃牌（可一张都不拿）",
+                  reason="xinzhan", candidates=hearts,
+                  min_cards=0, max_cards=len(hearts), zone="public_pool",
+                  context={"cancellable": True})
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "take":
+            return self._after_take(response)
+        ordered = () if response is None or response.passed else response.cards
+        self._apply(ordered)
+        return self.complete({"applied": True})
+
+    def _after_take(self, response):
+        wanted = list(getattr(response, "cards", ()) or ())
+        hearts = _xinzhan_hearts(self.viewed)
+        # 只认红桃候选（引擎已校验，这里再兜一次"牌被换走"的极端）。
+        self.taken = [card for card in wanted
+                      if any(card is heart for heart in hearts)]
+        return self._ask_order()
+
+    def _ask_order(self):
+        """剩下的牌按玩家给的顺序放回；放弃 = 保持原序。"""
+
+        rest = [card for card in self.viewed
+                if not any(card is item for item in self.taken)]
+        if len(rest) <= 1:
+            return self._finish(())
+        self.stage = "order"
+        ask_cards(self.engine, self, source=self.owner, target=self.owner,
+                  prompt="【心战】：请按放回牌堆顶的顺序依次选择（先选的在上）",
+                  reason="xinzhan_order", candidates=rest,
+                  min_cards=len(rest), max_cards=len(rest), zone="public_pool",
+                  context={"cancellable": True})
+        return self.current_result()
+
+    def _finish(self, ordered):
+        self._apply(ordered)
+        return self.complete({"applied": True})
+
+    def _apply(self, ordered):
+        """取走的进手牌；其余的按玩家顺序放回牌堆顶。
+
+        这三张牌**从未离开牌堆**——洗牌、抽牌、判定的语义都不受影响，
+        这里只做"从顶部取走几张、再把剩下的按顺序放回去"。
+        顺序约定与【观星】一致：``draw_pile[-1]`` 是下一张被摸到的牌，
+        玩家提交的第一张是"最先摸到"的那张，所以显式顺序要反向 append；
+        **放弃排序则保持原来的牌堆顺序**，不做任何重排。
+        """
+
+        taken = list(self.taken)
+        pile = self.game.deck.draw_pile
+        rest = [card for card in self.viewed
+                if not any(card is item for item in taken)]
+        chosen = [card for card in list(ordered or ())
+                  if any(card is item for item in rest)]
+        explicit = len(chosen) == len(rest)
+        if not explicit:
+            # 放弃排序（或顺序不完整）：保持原顺序，不冒险重排。
+            chosen = rest
+        for card in self.viewed:
+            for index, item in enumerate(pile):
+                if item is card:
+                    pile.pop(index)
+                    break
+        for card in (reversed(chosen) if explicit else rest):
+            pile.append(card)
+        for card in taken:
+            self.owner.hand.append(card)
+        self.game.message = "【心战】：获得了 %d 张红桃牌。" % len(taken)
+        self.game.add_log("%s 的【心战】获得了 %d 张红桃牌，%d 张放回牌堆顶"
+                          % (self.owner.name, len(taken), len(rest)))
 
 
 class Huilei(Skill):
@@ -1382,7 +1474,6 @@ YIJIANG_SKILLS = (
         activate=_activate_xinzhan,
         spec=ActiveSkillSpec(),
         tags=("active",),
-        needs_local_ui=True,
     ),
     triggered(
         "huilei",

@@ -2,7 +2,7 @@
 
 from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, UnequipAtom
 from src.game.conversion import PLAY_CONTEXT, CardConversion
-from src.game.engine import EventType, Flow
+from src.game.engine import EventType, Flow, FlowStatus
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
@@ -28,6 +28,7 @@ from ..mechanics import (
     lose_hp,
     lost_hp,
     other_alive_players,
+    sha_use_options,
     start_pindian,
     use_virtual,
 )
@@ -63,32 +64,49 @@ def _all_cards_of(player):
 # ==================================================
 
 
-def _can_yinghun(game, player):
-    if game.game_over or not player.alive:
-        return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "prepare":
-        return False, "只能在你的回合开始阶段发动"
-    if player.skill_state.get("yinghun", "used", 0):
-        return False, "本回合已经发动过"
-    if lost_hp(player) <= 0:
-        return False, "你未受伤，不能发动"
-    if not other_alive_players(game, player):
-        return False, "没有其他角色"
-    return True, ""
+class Yinghun(Skill):
+    """英魂：**准备阶段**（回合开始阶段）的可选流程。
 
+    官方时机是"回合开始阶段"，而回合驱动会自动跑完准备、判定、摸牌阶段才
+    把操作交回出牌阶段——所以旧的"出牌阶段里点技能名发动"永远不可达：
+    受伤的孙坚在自己的真实回合里，技能查询的回答是"只能在你的回合开始阶段
+    发动"。改由 PHASE_START(PREPARE) 打开窗口（与【观星】【凿险】同型），
+    确认、目标、抉择全部发生在准备阶段之内，结束后回合才继续判定 / 摸牌。
+    """
 
-def _activate_yinghun(game, player, target=None, cards=None):
-    if target is None:
-        return False
-    player.skill_state.set("yinghun", "used", 1, ResetScope.TURN)
-    YinghunFlow(game.engine, player, target).start()
-    return True
+    id = "yinghun"
+    name = "英魂"
+
+    def bindings(self):
+        return (SkillBinding(EventType.PHASE_START, priority=45),)
+
+    def can_trigger(self, context, event):
+        if event.source is not self.owner or not self.owner.alive:
+            return False
+        if context.state.game_over:
+            return False
+        if event.payload.get("phase") is not TurnPhase.PREPARE:
+            return False
+        if event.payload.get("skipped"):
+            return False
+        if self.owner.skill_state.get(self.id, "used", 0):
+            return False
+        if lost_hp(self.owner) <= 0:
+            return False
+        return bool(other_alive_players(context.state, self.owner))
+
+    def resolve(self, context, event):
+        YinghunFlow(context.services["engine"], self.owner).start()
 
 
 class YinghunFlow(Flow):
-    """英魂：两项选一 —— 摸 X 弃 1，或摸 1 弃 X（X = 孙坚已损失体力）。"""
+    """英魂全过程：选目标（取消 = 不发动）→ 两项选一 → 目标自己弃牌。
 
-    def __init__(self, engine, owner, target):
+    官方文本："准备阶段，若你已受伤，你可以令一名其他角色摸X张牌，然后弃置
+    一张牌；或令其摸一张牌，然后弃置X张牌（X 为你已损失的体力值）。"
+    """
+
+    def __init__(self, engine, owner, target=None):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
@@ -96,20 +114,52 @@ class YinghunFlow(Flow):
         self.target = target
         self.x = max(1, lost_hp(owner))
         self.mode = ""
-        self.stage = "choose"
+        self.stage = "target" if target is None else "choose"
 
     def begin(self):
+        if self.target is not None:
+            self.owner.skill_state.set("yinghun", "used", 1, ResetScope.TURN)
+            return self._ask_mode()
+        ask_targets(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【英魂】：X = %d，是否令一名其他角色摸牌并弃牌？"
+                           % self.x,
+                    reason="yinghun",
+                    candidates=other_alive_players(self.game, self.owner),
+                    min_targets=0, max_targets=1)
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "target":
+            return self._after_target(response)
+        if self.stage == "choose":
+            return self._after_choice(response)
+        return self._after_discard(response)
+
+    # ---- 1. 选目标（不选 = 不发动，什么都不结算）----
+
+    def _after_target(self, response):
+        chosen = [target for target in (getattr(response, "targets", None) or ())
+                  if any(target is other for other in
+                         other_alive_players(self.game, self.owner))]
+        if not chosen:
+            # 取消选目标 = 这次不发动：不写 used（本回合仍可再考虑），
+            # 也不摸牌、不弃牌。
+            self.game.add_log("%s 放弃发动【英魂】" % self.owner.name)
+            return self.complete({"applied": False})
+        self.target = chosen[0]
+        self.owner.skill_state.set("yinghun", "used", 1, ResetScope.TURN)
+        return self._ask_mode()
+
+    # ---- 2. 两项选一 ----
+
+    def _ask_mode(self):
+        self.stage = "choose"
         ask_option(self.engine, self, source=self.owner, target=self.owner,
                    prompt="【英魂】：X = %d，请选择一项" % self.x,
                    reason="yinghun",
                    options=(("draw_x", "令其摸 %d 张牌，然后弃一张牌" % self.x),
                             ("discard_x", "令其摸一张牌，然后弃 %d 张牌" % self.x)))
         return self.current_result()
-
-    def advance(self, response=None):
-        if self.stage == "choose":
-            return self._after_choice(response)
-        return self._after_discard(response)
 
     def _after_choice(self, response):
         option = str(getattr(response, "option", "") or "")
@@ -707,7 +757,17 @@ def _activate_luanwu(game, player, target=None, cards=None):
 
 
 class LuanwuFlow(Flow):
-    """乱武：除自己以外的所有角色依次对最近的角色使用【杀】，不行则失去 1 点体力。"""
+    """乱武：其他角色依次"对距离最近的角色使用一张【杀】，否则失去 1 点体力"。
+
+    三个决定全部在被问的角色手里：**出不出**【杀】、**用哪一张**（实体【杀】
+    / 火杀 / 【武圣】一类转化）、**并列最近时打谁**。技能只负责问。
+
+    出过【杀】就不再失去体力——以前 `_make_them_sha` 提交动作后没有返回，
+    调用方以为"没出成"，紧接着又扣了他 1 点体力（实测 AI 出杀后体力 4 → 3）。
+    """
+
+    SHA = "sha"
+    PUNISH = "punish"
 
     def __init__(self, engine, owner):
         super().__init__(engine.context)
@@ -717,6 +777,11 @@ class LuanwuFlow(Flow):
         self.order = []
         self.index = 0
         self.stage = "run"
+        #: 正在被问的角色 / 他这次可选的最近目标 / 可用的【杀】方式。
+        self.current = None
+        self.victims = []
+        self.victim = None
+        self.options = []
 
     def begin(self):
         self.order = [
@@ -728,6 +793,12 @@ class LuanwuFlow(Flow):
         return self._next()
 
     def advance(self, response=None):
+        if self.stage == "choice":
+            return self._after_choice(response)
+        if self.stage == "victim":
+            return self._after_victim(response)
+        if self.stage == "source":
+            return self._after_source(response)
         return self._next()
 
     # ---- 逐个结算 ----
@@ -740,33 +811,139 @@ class LuanwuFlow(Flow):
             self.index += 1
             if not getattr(player, "alive", True) or int(player.hp) <= 0:
                 continue
-            if self._make_them_sha(player):
-                return self._wait_for_child()
-            self._punish(player)
+            self.current = player
+            self.victims = self._legal_victims(player)
+            if not self.victims:
+                # 没有合法目标，或手里没有一张**真的能用**的【杀】（距离不够
+                # 也算用不了）：直接失去体力。不摆一个只能点"不杀"的假入口。
+                self.current = None
+                self._punish(player)
+                continue
+            self.stage = "choice"
+            ask_option(self.engine, self, source=self.owner, target=player,
+                       prompt="【乱武】：对 %s 使用一张【杀】，否则失去 1 点体力"
+                              % self._victim_label(),
+                       reason="luanwu",
+                       options=((self.SHA, "对距离最近的角色使用一张【杀】"),
+                                (self.PUNISH, "不使用【杀】，失去 1 点体力")))
+            return self.current_result()
+        self.current = None
         return self.complete({"applied": True})
 
-    def _wait_for_child(self):
-        """把本流程挂起，等这次出牌的流程跑完再继续问下一个人。"""
-
-        from src.game.engine import FlowStatus
-
-        self.status = FlowStatus.WAITING
-        self.pending_request = {"reason": "luanwu_child"}
+    def _after_choice(self, response):
+        if (str(getattr(response, "option", "") or "") != self.SHA
+                or self.current is None):
+            return self._give_up()
+        if len(self.victims) == 1:
+            self.victim = self.victims[0]
+            return self._ask_source()
+        self.stage = "victim"
+        ask_targets(self.engine, self, source=self.owner, target=self.current,
+                    prompt="【乱武】：请选择这次【杀】的目标（距离并列）",
+                    reason="luanwu", candidates=list(self.victims),
+                    min_targets=1, max_targets=1)
         return self.current_result()
 
-    def _resume_child(self):
-        from src.game.engine import FlowStatus
+    def _after_victim(self, response):
+        chosen = [
+            target for target in (getattr(response, "targets", None) or ())
+            if any(target is candidate for candidate in self.victims)
+        ]
+        if self.current is None or not chosen:
+            # 取消选目标 = 这次不出【杀】，按规则失去 1 点体力。
+            return self._give_up()
+        self.victim = chosen[0]
+        return self._ask_source()
 
-        self.pending_request = None
-        self.status = FlowStatus.RUNNING
+    # ---- 用哪一种【杀】 ----
+
+    def _ask_source(self):
+        self.options = sha_use_options(self.game, self.current, self.victim)
+        if not self.options:
+            return self._give_up()
+        if len(self.options) == 1:
+            return self._submit(self.options[0])
+        cards = []
+        for option in self.options:
+            for card in option.source_cards:
+                if not any(card is other for other in cards):
+                    cards.append(card)
+        self.stage = "source"
+        ask_cards(self.engine, self, source=self.owner, target=self.current,
+                  prompt="【乱武】：请选择对 %s 使用的【杀】" % self.victim.name,
+                  reason="luanwu", candidates=cards, min_cards=1, max_cards=1)
+        return self.current_result()
+
+    def _after_source(self, response):
+        cards = list(getattr(response, "cards", ()) or ())
+        if not cards:
+            return self._give_up()
+        chosen = cards[0]
+        option = next(
+            (item for item in self.options
+             if any(card is chosen for card in item.source_cards)), None)
+        if option is None:
+            # 素材在收集期间被移走：按"无法使用【杀】"处理，不硬来。
+            return self._give_up()
+        return self._submit(option)
+
+    # ---- 真正使用（走正常 UseCardFlow，闪 / 伤害 / 濒死全由它负责）----
+
+    def _submit(self, option):
+        actions = self.game.card_actions
+        virtual = actions.effective_card(option)
+        player, victim = self.current, self.victim
+        if (virtual is None or player is None or victim is None
+                or not player.alive or not victim.alive or victim.hp <= 0):
+            return self._give_up()
+        for card in option.source_cards:
+            if not any(item is card for item in player.hand):
+                return self._give_up()
+        from src.game.engine import UseCardAction
+
+        self.stage = "using"
+        self.game.add_log("【乱武】：%s 对 %s 使用【%s】"
+                          % (player.name, victim.name,
+                             getattr(virtual, "display_name", "杀")))
+        self.engine.submit(UseCardAction(
+            player, virtual, [victim], ignore_usage_limit=True,
+            on_complete=lambda _result: self._after_sha()))
+        if self.status is FlowStatus.RUNNING:
+            # 【杀】的子流程还在跑（等闪 / 结算伤害）：把自己标成等待，
+            # 别让调用方以为乱武已经结束。它结束时由 on_complete 接回。
+            self.status = FlowStatus.WAITING
+        return self.current_result()
+
+    def _after_sha(self):
+        """【杀】按正常流程结算完了（含闪 / 伤害 / 濒死）：**不再失去体力**。"""
+
+        self.current = None
+        self.victim = None
+        self.options = []
+        self.stage = "run"
         return self._next()
+
+    def _give_up(self):
+        """这名角色不出【杀】：失去 1 点体力，换下一个人。"""
+
+        player = self.current
+        self.current = None
+        self.victim = None
+        self.options = []
+        self.stage = "run"
+        if player is not None and getattr(player, "alive", True):
+            self._punish(player)
+        return self._next()
+
+    # ---- 查询 ----
 
     def _nearest_targets(self, player):
         """与这名角色距离最近的其他存活角色（可能并列）。"""
 
         from src.game.rules import DistanceRule
 
-        others = [other for other in self.game.get_alive_players() if other is not player]
+        others = [other for other in self.game.get_alive_players()
+                  if other is not player]
         if not others:
             return []
         distances = [(DistanceRule.distance(self.game, player, other), other)
@@ -774,30 +951,23 @@ class LuanwuFlow(Flow):
         best = min(item[0] for item in distances)
         return [other for value, other in distances if value == best]
 
-    def _sha_for(self, player):
-        card = next(
-            (item for item in getattr(player, "hand", ())
-             if getattr(item, "name", None) == "SHA"), None)
-        return card
+    def _legal_victims(self, player):
+        """并列最近者里**真的能杀到**的那些（不在攻击范围内的不算）。"""
 
-    def _make_them_sha(self, player):
-        """让这名角色对最近的角色使用一张【杀】；做不到返回 False。"""
+        result = []
+        for victim in self._nearest_targets(player):
+            if not getattr(victim, "alive", True) or victim.hp <= 0:
+                continue
+            if sha_use_options(self.game, player, victim):
+                result.append(victim)
+        return result
 
-        candidates = self._nearest_targets(player)
-        if not candidates:
-            return False
-        card = self._sha_for(player)
-        if card is None:
-            return False
-        from src.game.engine import UseCardAction
-
-        self.game.add_log("【乱武】：%s 对 %s 使用【杀】" % (player.name, candidates[0].name))
-        self.engine.submit(UseCardAction(
-            player, card, [candidates[0]], ignore_usage_limit=True,
-            on_complete=lambda _result: self._resume_child()))
+    def _victim_label(self):
+        names = "、".join(victim.name for victim in self.victims)
+        return ("距离最近的 " + names) if names else "距离最近的角色"
 
     def _punish(self, player):
-        self.game.add_log("【乱武】：%s 无法使用【杀】，失去 1 点体力" % player.name)
+        self.game.add_log("【乱武】：%s 没有使用【杀】，失去 1 点体力" % player.name)
         lose_hp(self.game, player, 1, source=self.owner, reason="乱武")
 
 
@@ -1000,19 +1170,12 @@ class DimengFlow(Flow):
 # ==================================================
 
 FOREST_SKILLS = (
-    active(
+    triggered(
         "yinghun",
         "英魂",
-        "回合开始阶段，若你已受伤，你可以令一名其他角色执行一项："
+        "准备阶段，若你已受伤，你可以令一名其他角色执行一项："
         "摸 X 张牌然后弃一张牌；或摸一张牌然后弃 X 张牌（X 为你已损失的体力值）。",
-        can_activate=_can_yinghun,
-        activate=_activate_yinghun,
-        spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=lambda game, player: other_alive_players(game, player),
-            target_prompt="【英魂】：请选择目标角色",
-        ),
-        tags=("active",),
+        factory=Yinghun,
     ),
     SkillDef(
         id="huoshou",

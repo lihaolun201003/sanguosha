@@ -583,14 +583,22 @@ class AIController(PlayerController):
                 return 1
             return 2
 
+        # 技能清单与真人看到的**同一份**：自己拥有的主动技，加上别人拥有、
+        # 现在由我发动的授予型技能（【黄天】）。AI 不为这两类各写一套判断。
+        entries = []
         for skill_id in sorted(game.skills.activatable_skills(self.player), key=_priority):
             allowed, _reason = game.skills.can_activate(self.player, skill_id)
-            if not allowed:
-                continue
+            if allowed:
+                entries.append((skill_id, None))
+        for definition, owners in game.skills.granted_offers(self.player):
+            entries.append((definition.id, list(owners)))
+
+        for skill_id, grant_owners in entries:
             if skill_id in self._used_skills_this_turn:
                 continue
             definition = game.skill_registry.get(skill_id)
-            inputs = self._available_actions().skill_inputs(self.player, skill_id)
+            inputs = self._available_actions().skill_inputs(
+                self.player, skill_id, grant_owners=grant_owners)
             if definition is not None and getattr(definition, "needs_local_ui", False):
                 # 这个技能的交互还挂在"只有本地真人界面才有"的选牌通道上
                 # （心战 / 观星）：AI 发出去只会一直等一个永远不会出现的答案，
@@ -601,7 +609,10 @@ class AIController(PlayerController):
                 # 「极略」这类"临时获得别的技能"的主动技：AI 没有能力判断
                 # 鬼才 / 放逐的发动时机，盲目发动只会白扣「忍」标记。
                 continue
-            target = self._active_skill_target(skill_id)
+            if grant_owners is not None:
+                target = self._granted_skill_target(grant_owners)
+            else:
+                target = self._active_skill_target(skill_id)
             if inputs.get("needs_target") and target is None:
                 # 需要目标却没找到合法目标 → 这条不发动。**不需要目标**的
                 # 主动技（神愤 / 业炎）以前也被这里一刀切掉，AI 从来放不出
@@ -625,6 +636,18 @@ class AIController(PlayerController):
                 return True
             self._used_skills_this_turn.discard(skill_id)
         return False
+
+    def _granted_skill_target(self, owners):
+        """授予型技能（【黄天】）把牌交给谁：只交给自己人。
+
+        没有阵营概念的模式（自由混战 / 1v1）里谁都不是自己人，所以 AI 不交——
+        把【闪】白送给别人不是"帮助"，是净亏。
+        """
+
+        for owner in owners:
+            if self.is_ally(owner):
+                return owner
+        return None
 
     # ---- 赠予类技能（card_transfer）的自我伤害防护 ----
 
@@ -1121,7 +1144,27 @@ class AIController(PlayerController):
             return
         count = max(1, request.min_cards)
 
-        if reason == "wugu":
+        if reason == "gongxin":
+            # 攻心：候选是目标的**全部手牌**（引擎只允许拥有者看到），
+            # 但只有红桃能展示。挑对方最有用的红桃弃掉；没有红桃就放弃。
+            hearts = [card for card in candidates
+                      if getattr(card, "suit", None) == "heart"]
+            if not hearts:
+                self._pass(request)
+                return
+            picked = [max(hearts, key=self.card_value)]
+            self.submit(SelectCardsAction(
+                request.target, request.request_id, picked))
+            return
+
+        if reason == "xinzhan":
+            # 心战：红桃是白拿的牌，候选全都是红桃（引擎只给红桃），全取。
+            picked = sorted(candidates, key=self.card_value, reverse=True)
+            self.submit(SelectCardsAction(
+                request.target, request.request_id, picked))
+            return
+
+        if reason in ("wugu", "guanxing_order", "xinzhan_order", "shelie"):
             picked = sorted(candidates, key=self.card_value, reverse=True)[:count]
         elif reason in ("guohe", "shunshou"):
             picked = self._pick_from_opponent(request, candidates)[:count]

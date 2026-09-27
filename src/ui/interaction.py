@@ -176,13 +176,22 @@ def handle_game_click(position, game, renderer, human=None):
                 human.toggle_card_source(card, tuple(slot_rects[hit_slot]))
         return True
 
-    # 主动技能输入：点击角色选目标，点击手牌选费用牌；
+    # 主动技能输入：点击角色选目标，点击手牌 / 装备牌选费用牌；
     # 确认 / 取消由固定按钮负责，所以这里把其余点击都吃掉。
     state = game.pending_skill_input
     if state is not None:
-        if state["cost_cards"] and hand_card is not None:
+        # 费用可变（制衡 / 举荐）时 ``cost_cards`` 是 0，判据必须连同
+        # ``variable_cost`` 一起看——否则点手牌什么都不会发生。
+        costing = bool(state["cost_cards"]) or bool(state.get("variable_cost"))
+        if costing and hand_card is not None:
             human.select_skill_cost_card(
                 hand_card, _hand_rect(renderer, game, hand_index))
+            return True
+        if costing and hit_slot is not None:
+            # 【制衡】的费用可以是装备区的牌——点装备槽走同一条入口。
+            card = game.player.get_equipment(hit_slot)
+            if card is not None:
+                human.select_skill_cost_card(card, tuple(slot_rects[hit_slot]))
             return True
         if hit_player is not None:
             human.toggle_target(hit_player)
@@ -202,6 +211,13 @@ def handle_game_click(position, game, renderer, human=None):
                 rects = renderer.get_public_card_rects(cards)
                 human.select_card(entries[index][0], tuple(rects[index]),
                                   key=entries[index][1], zone=zone)
+            elif hand_card is not None and any(hand_card is card for card in cards):
+                # 候选被画在公共池里，但它同时也是**本机玩家自己的手牌**
+                # （【补益】让玩家展示自己的一张手牌就是这种局面）。这张牌
+                # 于是同时出现在手牌与池子里，而点手牌那一份以前什么都不
+                # 会发生——同一张牌两处显示、只有一处能点。这里让两处等价。
+                human.select_card(hand_card, _hand_rect(renderer, game, hand_index),
+                                  zone=zone)
             return True
 
         if zone in ("hand", "player_hand"):

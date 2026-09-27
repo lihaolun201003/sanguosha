@@ -11,6 +11,7 @@ from src.game.engine import EventType
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
+from ..mechanics import optional_trigger
 from ..definitions import (
     ActiveSkillSpec,
     ModifierSpec,
@@ -154,9 +155,16 @@ class Biyue(Skill):
         return not self.owner.skill_state.get(self.id, "used", 0)
 
     def resolve(self, context, event):
+        optional_trigger(
+            context, self.owner,
+            prompt="【闭月】：是否摸一张牌？", reason="biyue", label="闭月",
+            effect=self._draw).start()
+
+    def _draw(self, flow):
         self.owner.skill_state.set(self.id, "used", 1, ResetScope.TURN)
-        context.apply(DrawCardsAtom(self.owner, 1))
-        context.state.add_log(self.owner.name + " 发动【闭月】，摸一张牌")
+        flow.context.apply(DrawCardsAtom(self.owner, 1))
+        flow.game.add_log(self.owner.name + " 发动【闭月】，摸一张牌")
+        return True
 
 
 QUN_SKILLS = (

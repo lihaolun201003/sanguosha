@@ -22,6 +22,15 @@ from .interaction import (                                          # noqa: F401
     group_interaction,
     pending_member_id,
 )
+from .local_input import (                                          # noqa: F401
+    LOCAL_SLOT_ATTRS,
+    SLOT_LABELS,
+    describe_slots,
+    local_awaiting_input,
+    local_interaction_slots,
+    local_response_live,
+    request_targets_player,
+)
 from .presentation import (                                         # noqa: F401
     BLOCKING_KINDS,
     KIND_BY_ENGINE_EVENT,
@@ -42,6 +51,13 @@ __all__ = [
     "build_play_interaction",
     "group_interaction",
     "pending_member_id",
+    "LOCAL_SLOT_ATTRS",
+    "SLOT_LABELS",
+    "describe_slots",
+    "local_awaiting_input",
+    "local_interaction_slots",
+    "local_response_live",
+    "request_targets_player",
     "PresentationSchema",
     "PresentationGate",
     "RuntimeState",

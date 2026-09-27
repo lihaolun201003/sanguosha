@@ -129,6 +129,12 @@ class CardConversion:
     # 结果与正常使用完全相同时，是否仍然保留这个转化 Action。
     # 默认 False：同一张牌的同名同结果只显示正常使用，避免 Picker 出现重复项。
     keep_with_normal: bool = False
+    # 锁定技的替换：源牌**只能**按 ``name`` 使用或打出，不能再按原牌名走。
+    # 【武神】"你的红桃手牌均视为【杀】"就是这条——一张红桃【桃】在手牌里
+    # 是【杀】而不是【桃】，因此它既不能拿来救人，也不能当【闪】打出。
+    # 声明它之后，发现层不再为这些牌生成"普通使用"那一条，引擎侧的两个
+    # 权威入口（用牌 / 响应）也一起拒绝按原牌名提交。
+    locks_source: bool = False
     # 时机条件：callable(game, player) -> bool。例如【急救】只在回合外可用。
     # None 表示任何时候都可用。只影响"能否被选中"，不改变牌本身。
     available: Any = None
@@ -269,6 +275,23 @@ class ConversionRegistry:
 
     def sorted_items(self):
         return sorted(self._items, key=lambda item: item.order)
+
+    def locked_name_for(self, owner, card):
+        """这张牌对这名角色被**锁定技**替换成了什么牌名（没有则 None）。
+
+        查询入口只有这一个：发现层（能不能按原牌名使用）、出牌流程与响应
+        校验读的都是它，因此"界面点不到、引擎却接受"的分叉不可能出现。
+        """
+
+        if card is None or getattr(card, "_virtual", False):
+            return None
+        for item in self._items:
+            conversion = item.conversion
+            if item.owner is not owner or not conversion.locks_source:
+                continue
+            if conversion.matches(card):
+                return conversion.name
+        return None
 
     def options_for(self, game, actor, card, context=None):
         """某张实体牌当前有哪些转换用法：[(conversion, VirtualCard)]。"""

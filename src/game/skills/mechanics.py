@@ -17,6 +17,10 @@ PendingRequest 一样共用同一套规则。
 from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom
 
 from ..engine.events import Event, EventType
+# 直接取子模块里的 Flow：``..engine`` 包本身会在导入链中途被牵进来
+# （engine → card_effects → flows → turn → skills → … → 本模块），
+# 从子模块导入不受那条链的初始化顺序影响。
+from ..engine.flows import Flow
 from ..engine.pending import PendingRequestType
 
 
@@ -468,7 +472,10 @@ class PindianFlow:
                 continue
             if any(item is card for item in getattr(owner, "hand", ())):
                 self.engine.context.apply(MoveCardAtom(
-                    card, source=owner.hand, destination=self.game.deck.discard_pile))
+                    card, source=owner.hand, destination=self.game.deck.discard_pile,
+                    # 拼点牌进弃牌堆既不是弃置也不是判定（官方 FAQ：拼点不能
+                    # 触发【落英】一类时机）。
+                    reason="pindian", owner=owner))
 
         self.result = result
         if not result.cancelled:
@@ -761,6 +768,207 @@ def use_virtual(game, actor, name, *, sources=(), targets=(), nature="normal",
         metadata=metadata,
     )
     return game.engine.submit(action)
+
+
+#: "从某名角色的区域里拿一张牌"包含哪些区域。
+TAKE_ZONES = ("hand", "equipment", "judgement")
+
+
+def zone_take_options(player, zones=TAKE_ZONES):
+    """"从这名角色的区域里拿一张牌"的可选项（值, 文案）。
+
+    手牌是**暗牌**：不列出具体牌名，只给一个"一张手牌（随机）"的选项，
+    由 ``take_card_from_zone`` 按隐藏信息规则随机取（见 random_hand_card）。
+    装备区与判定区是公开信息，逐张列出，让玩家自己决定拿哪一张。
+    """
+
+    options = []
+    if "hand" in zones and getattr(player, "hand", None):
+        options.append(("hand", "一张手牌（随机）"))
+    if "equipment" in zones:
+        for slot in ("weapon", "armor", "offensive_horse", "defensive_horse"):
+            card = player.get_equipment(slot)
+            if card is not None:
+                options.append(("equip:" + slot,
+                                "装备区的【%s】" % getattr(card, "display_name", "装备")))
+    if "judgement" in zones:
+        for index, card in enumerate(
+                list(getattr(player, "judgement_zone", ()) or ())):
+            options.append(("judge:%d" % index,
+                            "判定区的【%s】" % getattr(card, "display_name", "牌")))
+    return options
+
+
+def take_card_from_zone(context, game, taker, player, option, *,
+                        zones=TAKE_ZONES):
+    """按选项把 ``player`` 的一张牌移进 ``taker`` 手里；返回实际拿到的牌。
+
+    区域已经被清空 / 选项失效时返回 None（不硬来、不凭空造牌）。
+    移动全部走统一原子：装备离场会照常发"失去装备"事件。
+    """
+
+    if player is None or taker is None or not option:
+        return None
+    if not getattr(player, "alive", True) or not getattr(taker, "alive", True):
+        return None
+    if option == "hand":
+        if "hand" not in zones:
+            return None
+        card = random_hand_card(game, player)
+        if card is None:
+            return None
+        context.apply(MoveCardAtom(
+            card, source=player.hand, destination=taker.hand))
+        return card
+    if option.startswith("equip:"):
+        if "equipment" not in zones:
+            return None
+        slot = option.split(":", 1)[1]
+        card = player.get_equipment(slot)
+        if card is None:
+            return None
+        from src.game.atoms_v2 import UnequipAtom
+
+        context.apply(UnequipAtom(player, slot, taker.hand))
+        return card
+    if option.startswith("judge:"):
+        if "judgement" not in zones:
+            return None
+        try:
+            index = int(option.split(":", 1)[1])
+        except (TypeError, ValueError):
+            return None
+        zone = list(getattr(player, "judgement_zone", ()) or ())
+        if index < 0 or index >= len(zone):
+            return None
+        card = zone[index]
+        context.apply(MoveCardAtom(
+            card, source=player.judgement_zone, destination=taker.hand))
+        return card
+    return None
+
+
+def is_non_delay_trick(card):
+    """这张牌是不是**非延时**类锦囊（集智一类技能的判据）。
+
+    卡牌目录里延时锦囊的 ``category`` 也是 ``trick``（这是有意的：【帷幕】
+    "不能成为黑色锦囊牌的目标"必须覆盖【乐不思蜀】），所以"非延时"只能按
+    牌名判断，不能按类别判断。
+    """
+
+    if getattr(card, "category", None) != "trick":
+        return False
+    return getattr(card, "name", None) not in ("LEBU", "BINGLIANG", "SHANDIAN")
+
+
+class OptionalTriggerFlow(Flow):
+    """通用的"你可以…"窗口：先问一句，同意后才执行效果。
+
+    非锁定技与锁定技的唯一区别就是"这一次要不要发动"。``effect`` 在玩家
+    答复之后被调用一次（参数是流程自己，用 ``flow.context`` 应用原子），
+    返回真值表示确实结算了；**拒绝时什么都不做**——不写状态、不动牌。
+
+    以前一批非锁定技（天妒 / 遗计 / 奸雄 / 破军 / 连营 / 闭月 / 激昂 /
+    落英 / 集智…）的描述里写着"可以"，``resolve`` 里却直接结算，玩家没有
+    任何拒绝的机会：不想发动的技能照样替他发动。
+    """
+
+    def __init__(self, engine, owner, *, prompt, reason, effect, label=""):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.prompt = prompt
+        self.reason = reason
+        self.effect = effect
+        self.label = label
+        self.applied = False
+
+    def begin(self):
+        if self.owner is None or not getattr(self.owner, "alive", True):
+            return self.complete({"applied": False})
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt=self.prompt, reason=self.reason)
+        return self.current_result()
+
+    def advance(self, response=None):
+        if response is None or not response.confirmed:
+            if self.label:
+                self.game.add_log("%s 放弃发动【%s】" % (self.owner.name, self.label))
+            return self.complete({"applied": False})
+        self.applied = bool(self.effect(self))
+        return self.complete({"applied": self.applied})
+
+
+def optional_trigger(context, owner, *, prompt, reason, effect, label=""):
+    """从 ``Skill.resolve`` 里起一个"你可以…"窗口的便捷入口（返回流程，未启动）。
+
+    调用方照常 ``.start()``——与 ``Skill.resolve`` 里其它流程的写法一致。
+    """
+
+    return OptionalTriggerFlow(
+        context.services["engine"], owner, prompt=prompt, reason=reason,
+        effect=effect, label=label)
+
+
+def random_hand_card(game, player):
+    """从一名角色的手牌里随机取一张（**暗牌取牌的统一样式**）。
+
+    ``Player.hand`` 是列表，取首元素会让"获得一张手牌"变成可预测的行为——
+    对手能记住自己手牌的顺序，等于提前知道自己会丢哪张。真实对局里这张牌
+    是未知的，所以用对局的随机源抽。
+    """
+
+    hand = list(getattr(player, "hand", ()) or ())
+    if not hand:
+        return None
+    rng = getattr(game, "rng", None)
+    if rng is None:                                      # pragma: no cover - 防御
+        return hand[0]
+    return hand[rng.randrange(len(hand))]
+
+
+def sha_use_options(game, wielder, victim):
+    """``wielder`` 现在能对 ``victim`` 使用的**全部**【杀】使用方式。
+
+    规则上"令某人对某人使用一张【杀】"的技能（借刀杀人 / 乱武）都必须先问
+    "他到底能不能用、能用哪一张"，而不是"手里有没有名叫【杀】的牌"：火杀 /
+    雷杀、【武圣】【龙胆】一类转化、酒 / 武器 / 技能改写的攻击范围全部要在
+    候选里体现。统一走 Card Action Discovery，本函数不重写任何一条判断。
+    """
+
+    actions = getattr(game, "card_actions", None)
+    if actions is None:                                   # pragma: no cover
+        return []
+    context = actions.play_context(wielder)
+    result = []
+    seen = set()
+    for card in list(getattr(wielder, "hand", ()) or ()):
+        for option in actions.actions_for_card(wielder, card, context):
+            if option.result_name != "SHA" or not option.complete or not option.enabled:
+                continue
+            if not context.allows(option.result_name):
+                continue
+            virtual = actions.effective_card(option)
+            if virtual is None:
+                continue
+            from src.game.engine import UseCardAction
+
+            effect = game.engine.card_effects.get(virtual)
+            if effect is None:
+                continue
+            probe = UseCardAction(wielder, virtual, [victim],
+                                  ignore_usage_limit=True)
+            valid, _reason = effect.can_use(game, probe)
+            if not valid:
+                continue
+            token = (option.action_id,
+                     tuple(id(item) for item in option.source_cards))
+            if token in seen:
+                continue
+            seen.add(token)
+            result.append(option)
+    return result
 
 
 def attack_range_targets(game, player, *, include_self=False):

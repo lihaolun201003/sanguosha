@@ -7,9 +7,10 @@ from src.game.conversion import (
     RESPONSE_CONTEXT,
     CardConversion,
 )
-from src.game.engine import EventType, FlowStatus
+from src.game.engine import EventType, Flow, FlowStatus
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.flows.judge import JudgeFlow
+from src.game.rules import TurnPhase
 
 from ..definitions import (
     ActiveSkillSpec,
@@ -20,6 +21,12 @@ from ..definitions import (
     triggered,
 )
 from ..modifiers import ModifierKind
+from ..mechanics import (
+    ask_cards,
+    ask_confirm,
+    is_non_delay_trick,
+    optional_trigger,
+)
 from ..state import ResetScope
 
 
@@ -47,7 +54,13 @@ class Paoxiao(Skill):
 
 
 class Jizhi(Skill):
-    """使用锦囊牌时摸一张牌。"""
+    """使用**非延时**类锦囊牌时，**可以**摸一张牌。
+
+    官方经典版文本明确是"非延时类锦囊"：以前只判 ``category == "trick"``，
+    而卡牌目录里【乐不思蜀】【闪电】【兵粮寸断】的类别同样是锦囊（那是为了
+    【帷幕】"黑色锦囊"要覆盖它们），于是使用延时锦囊也会白摸一张。
+    描述里的"可以"以前也没落地——``resolve`` 直接摸牌，玩家无法拒绝。
+    """
 
     id = "jizhi"
     name = "集智"
@@ -56,14 +69,21 @@ class Jizhi(Skill):
         return (SkillBinding(EventType.CARD_USED),)
 
     def can_trigger(self, context, event):
-        if event.source is not self.owner:
+        if event.source is not self.owner or not self.owner.alive:
             return False
-        card = event.payload.get("card")
-        return card is not None and getattr(card, "category", None) == "trick"
+        return is_non_delay_trick(event.payload.get("card"))
 
     def resolve(self, context, event):
-        context.apply(DrawCardsAtom(self.owner, 1))
+        optional_trigger(
+            context, self.owner,
+            prompt="【集智】：是否摸一张牌？", reason="jizhi", label="集智",
+            effect=self._draw).start()
+
+    def _draw(self, flow):
+        flow.context.apply(DrawCardsAtom(self.owner, 1))
         self.owner.skill_state.add(self.id, "drawn", 1, ResetScope.TURN)
+        flow.game.add_log(self.owner.name + " 发动【集智】，摸一张牌")
+        return True
 
 
 # ==================================================
@@ -105,7 +125,7 @@ SHU_SKILLS = (
     SkillDef(
         id="jizhi",
         name="集智",
-        description="当你使用一张锦囊牌时，你可以摸一张牌。",
+        description="当你使用一张非延时类锦囊牌时，你可以摸一张牌。",
         kind=SkillKind.PASSIVE,
         factory=Jizhi,
     ),
@@ -287,45 +307,64 @@ def _empty_hand(game, query):
     return 1 if getattr(card, "name", None) in ("SHA", "JUEDOU") else 0
 
 
-def _can_guanxing(game, player):
-    if game.game_over or not player.alive:
-        return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "prepare":
-        return False, "只能在你的准备阶段发动"
-    if player.skill_state.get("guanxing", "used", 0):
-        return False, "本回合已经发动过"
-    if len(game.deck.draw_pile) < 1:
-        return False, "牌堆没有牌"
-    return True, ""
+class Guanxing(Skill):
+    """准备阶段打开可选窗口，在排好牌堆顶前暂停回合。"""
+
+    id = "guanxing"
+    name = "观星"
+
+    def bindings(self):
+        return (SkillBinding(EventType.PHASE_START),)
+
+    def can_trigger(self, context, event):
+        game = context.services["engine"].game
+        return (event.source is self.owner and self.owner.alive
+                and event.payload.get("phase") is TurnPhase.PREPARE
+                and not event.payload.get("skipped")
+                and not self.owner.skill_state.get(self.id, "used", 0)
+                and bool(game.deck.draw_pile))
+
+    def resolve(self, context, event):
+        GuanxingFlow(context.services["engine"], self.owner).start()
 
 
-def _activate_guanxing(game, player, target=None, cards=None):
-    """观星：查看牌堆顶 N 张，并按玩家选择的顺序放回牌堆顶。
+class GuanxingFlow(Flow):
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.viewed = []
+        self.stage = "confirm"
 
-    牌**从未离开牌堆**：这里只记录查看的牌并打开排序通道，真正的顺序由
-    玩家点选的先后决定（先点的更靠上）。放弃排序即保持原序，不丢牌。
-    """
+    def begin(self):
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【观星】：是否查看并排列牌堆顶的牌？", reason="guanxing")
+        return self.current_result()
 
-    alive = len([p for p in game.get_alive_players() if getattr(p, "alive", True)])
-    count = max(1, min(5, alive))
-    pile = game.deck.draw_pile
-    if not pile:
-        return False
-    count = min(count, len(pile))
-    viewed = list(pile[-count:])
-    player.skill_state.set("guanxing", "used", 1, ResetScope.TURN)
-    names = "、".join(card.display_name for card in viewed)
-    game.add_log(player.name + " 发动【观星】，查看牌堆顶 " + str(count) + " 张：" + names)
-    game.start_card_selection(
-        zone="public_pool",
-        candidates=[(card, None) for card in viewed],
-        number=count,
-        prompt="【观星】：请按放回牌堆顶的顺序依次选择（先选的在上）",
-        on_complete=lambda ordered: _apply_guanxing(game, viewed, ordered),
-        owner=player,
-        cancellable=True,
-    )
-    return True
+    def advance(self, response=None):
+        if self.stage == "confirm":
+            if response is None or not response.confirmed:
+                return self.complete({"applied": False})
+            pile = self.game.deck.draw_pile
+            count = min(5, len(self.game.get_alive_players()), len(pile))
+            if count == 0:
+                return self.complete({"applied": False})
+            self.viewed = list(pile[-count:])
+            self.owner.skill_state.set("guanxing", "used", 1, ResetScope.TURN)
+            self.game.add_log("%s 发动【观星】，查看牌堆顶 %d 张" %
+                              (self.owner.name, count))
+            self.stage = "order"
+            ask_cards(
+                self.engine, self, source=self.owner, target=self.owner,
+                prompt="【观星】：请按放回牌堆顶的顺序依次选择（先选的在上）",
+                reason="guanxing_order", candidates=self.viewed,
+                min_cards=count, max_cards=count, zone="public_pool",
+                context={"cancellable": True})
+            return self.current_result()
+        ordered = () if response is None or response.passed else response.cards
+        _apply_guanxing(self.game, self.viewed, ordered)
+        return self.complete({"applied": True})
 
 
 def _apply_guanxing(game, viewed, ordered):
@@ -336,7 +375,7 @@ def _apply_guanxing(game, viewed, ordered):
     表示保持原序，不做任何移动。
     """
 
-    chosen = [card for card, _rect, _key in (ordered or ())]
+    chosen = list(ordered or ())
     pile = game.deck.draw_pile
     count = len(viewed)
     if not chosen or count == 0 or len(pile) < count:
@@ -431,16 +470,12 @@ SHU_EXTRA_SKILLS = (
         tags=("active", "lord"),
         is_lord_skill=True,
     ),
-    active(
+    triggered(
         "guanxing",
         "观星",
         "准备阶段开始时，你可以查看牌堆顶的若干张牌（数量为存活角色数，至多五张），"
         "并将它们以任意顺序放回牌堆顶。",
-        can_activate=_can_guanxing,
-        activate=_activate_guanxing,
-        spec=ActiveSkillSpec(),
-        tags=("active",),
-        needs_local_ui=True,       # 排序仍走本地选牌通道，见 SkillDef.needs_local_ui
+        factory=Guanxing,
     ),
     SkillDef(
         id="kongcheng",

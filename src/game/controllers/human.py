@@ -198,6 +198,7 @@ class HumanController(PlayerController):
             allowed_cards=request.allowed_cards,
             reason=str(request.context.get("reason") or ""),
             responder=self.player,
+            request_id=request.request_id,
             on_card=(
                 lambda index, card, rect, request_id=request.request_id:
                 self.submit(RespondCardAction(

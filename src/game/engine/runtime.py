@@ -195,6 +195,7 @@ class GameEngine:
             # 实体牌必须在响应者的合法区域里：手牌，或技能声明允许的装备区。
             if self.game.source_container(action.actor, card) is None:
                 raise ValueError("response card is no longer in responder zones")
+        self._reject_locked_response(action.actor, action.card, material_cards)
 
         self.pending.take(action.request_id)
         self.game.response.clear()
@@ -207,6 +208,10 @@ class GameEngine:
                     card,
                     source=self.game.processing_zone,
                     destination=self.game.deck.discard_pile,
+                    # 打出的响应牌（闪 / 无懈）进入弃牌堆是"打出后置入"，
+                    # 不是"弃置"；归属要显式给（处理区不属于任何人）。
+                    reason="respond",
+                    owner=action.actor,
                 )
             )
         self.animate_response_card(action.card, action.source_rect, action.actor)
@@ -254,6 +259,7 @@ class GameEngine:
         for card in material_cards:
             if self.game.source_container(actor, card) is None:
                 raise ValueError("response card is no longer in responder zones")
+        self._reject_locked_response(actor, action.card, material_cards)
 
         # 先锁定本轮结果：别人手里的牌**一张都不动**。
         request.set_member_status(actor, "used")
@@ -269,6 +275,10 @@ class GameEngine:
                     card,
                     source=self.game.processing_zone,
                     destination=self.game.deck.discard_pile,
+                    # 打出的响应牌（闪 / 无懈）进入弃牌堆是"打出后置入"，
+                    # 不是"弃置"；归属要显式给（处理区不属于任何人）。
+                    reason="respond",
+                    owner=actor,
                 )
             )
         self.animate_response_card(action.card, action.source_rect, actor)
@@ -321,6 +331,24 @@ class GameEngine:
         self._prune_flows()
         self._drive_pending_front()
         return result
+
+    def _reject_locked_response(self, actor, card, materials):
+        """锁定替换（【武神】"红桃手牌均视为【杀】"）的引擎侧校验。
+
+        界面与 AI 读的候选来自发现层，本来就不会列出这些牌；走到这里的只可能
+        是绕过界面的提交（远程客户端 / 脚本）。拒绝而不是静默接受——否则同一
+        张红桃【闪】在本地打不出、换个客户端就能当【闪】用。
+        """
+
+        registry = getattr(self.game, "conversions", None)
+        if registry is None:                              # pragma: no cover
+            return
+        name = getattr(card, "name", "")
+        for material in materials:
+            locked = registry.locked_name_for(actor, material)
+            if locked is not None and locked != name:
+                raise ValueError(
+                    "card is locked to another identity for this player")
 
     def _withdraw_group_asks(self, request, reason=""):
         """撤销所有还在等答案的成员的询问（界面 + 网络请求）。"""

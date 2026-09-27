@@ -22,29 +22,36 @@ class CardActionSessionMixin:
     # 入口：点击一张实体牌
     # ==================================================
 
-    def begin_card_action(self, card, source_rect=None, index=None):
+    def begin_card_action(self, card, source_rect=None, index=None, *,
+                          allow_busy=False):
         """UI / AI 点击一张实体牌时的统一入口。
 
         返回本次点击被判定成的结果字符串：
         ``"disabled"`` / ``"picker"`` / ``"direct"`` / ``"collect"``。
+
+        ``allow_busy=True`` 只给"本机玩家正在回答"的响应窗口用：动作队列还在
+        播上一张牌的余波时，响应窗口里的点击照样要能提交（见
+        ``CombatMixin.respond_with_card``）。其余路径保持原样——出牌 / 弃牌
+        仍然要求队列空，避免连点。
         """
 
-        context = self.current_card_action_context()
+        context = self.current_card_action_context(allow_busy=allow_busy)
         if context is None:
             return "disabled"
 
-        options = self.card_action_options(card, context)
+        options = self.card_action_options(card, context, allow_busy=allow_busy)
         return self._begin_with_options(
-            card, tuple(options), context, source_rect, index)
+            card, tuple(options), context, source_rect, index,
+            allow_busy=allow_busy)
 
-    def card_action_options(self, card, context=None):
+    def card_action_options(self, card, context=None, *, allow_busy=False):
         """普通点击一张实体牌时的动作。
 
         **只包含正常使用**：技能转化（View-As）必须先点「发动技能」，
         不允许点一张牌就自动当别的牌用。
         """
 
-        context = context or self.current_card_action_context()
+        context = context or self.current_card_action_context(allow_busy=allow_busy)
         if context is None:
             return []
         options = []
@@ -83,10 +90,15 @@ class CardActionSessionMixin:
             return self.player
         return request.target
 
-    def current_card_action_context(self):
-        """当前 UI 状态对应的 Action 场合（PLAY / RESPONSE / RESCUE）。"""
+    def current_card_action_context(self, *, allow_busy=False):
+        """当前 UI 状态对应的 Action 场合（PLAY / RESPONSE / RESCUE）。
 
-        if self.game_over or self.busy:
+        ``allow_busy=True``：动作队列还在播动画时也算数——**只有响应窗口**
+        需要它。响应窗口是"轮到我回答"的槽位，与队列在播什么无关；队列忙
+        只是上一张牌的余波（见 ``contracts.local_input.local_response_live``）。
+        """
+
+        if self.game_over or (self.busy and not allow_busy):
             return None
         request = self.pending_request
         if request is not None:
@@ -121,7 +133,8 @@ class CardActionSessionMixin:
     # 内部：动作选择
     # ==================================================
 
-    def _begin_with_options(self, card, options, context, source_rect, index=None):
+    def _begin_with_options(self, card, options, context, source_rect, index=None,
+                            *, allow_busy=False):
         if not options:
             hint = self.conversion_hint(card, context)
             if hint:
@@ -139,12 +152,14 @@ class CardActionSessionMixin:
         if len(options) == 1:
             option = options[0]
             if option.complete:
-                return self._resolve_card_action(option, source_rect, index)
+                return self._resolve_card_action(option, source_rect, index,
+                                                 allow_busy=allow_busy)
             # 多 source 的第一张：进入收集状态
             return self._begin_source_collection(option, context, source_rect, index)
 
         if len(complete) == 1 and len(options) == 1:
-            return self._resolve_card_action(complete[0], source_rect, index)
+            return self._resolve_card_action(complete[0], source_rect, index,
+                                             allow_busy=allow_busy)
 
         self.pending_card_action = {
             "context": context,
@@ -312,9 +327,10 @@ class CardActionSessionMixin:
     # 执行
     # ==================================================
 
-    def _resolve_card_action(self, option, source_rect=None, index=None):
+    def _resolve_card_action(self, option, source_rect=None, index=None, *,
+                             allow_busy=False):
         context = self.pending_card_action["context"] if self.pending_card_action else None
-        context = context or self.current_card_action_context()
+        context = context or self.current_card_action_context(allow_busy=allow_busy)
         if context is None:
             return "disabled"
 
@@ -448,6 +464,23 @@ class CardActionSessionMixin:
             required = max(option.min_sources for option in options)
             self.message = "现在不能发动【%s】：至少需要 %d 张可以转化的牌。" % (
                 definition.name, required)
+            return False
+        if not self.card_actions.usable_combination(context.actor, options, context):
+            # 素材凑得齐、但**没有一组能用**：本回合已经出过【杀】、攻击距离
+            # 不够一类。放进去玩家只会选满两张牌再被告知不行（实测死胡同），
+            # 所以在这里就把原因说出来。
+            reason = ""
+            for option in options:
+                for candidate in self.card_actions.actions_for_sources(
+                        context.actor, list(option.source_cards), context):
+                    if candidate.skill_id != skill_id:
+                        continue
+                    if candidate.disabled_reason:
+                        reason = candidate.disabled_reason
+                        break
+                if reason:
+                    break
+            self.message = reason or ("现在不能发动【%s】。" % definition.name)
             return False
 
         from .view_as import ViewAsSession

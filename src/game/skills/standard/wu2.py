@@ -19,8 +19,10 @@ from src.game.engine.pending import PendingRequestType
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
 
+from ..mechanics import optional_trigger
 from ..definitions import (
     ActiveSkillSpec,
+    CostZone,
     ModifierSpec,
     PhaseReplacement,
     SkillDef,
@@ -37,6 +39,25 @@ from ..state import ResetScope
 # ==================================================
 
 
+#: 【制衡】的输入契约：弃**任意张牌**（手牌 + 装备区），然后摸等量的牌。
+#: ``allowed_zones`` 是这条规则唯一的一处声明——候选、界面高亮、引擎校验、
+#: 远程下发的都从它派生；没有声明区域的技能（例如【举荐】）仍然是原来的
+#: "只能用手牌"，不会被这条改动顺带放宽。
+ZHI_HENG_SPEC = ActiveSkillSpec(
+    variable_cost=True,
+    cost_prompt="【制衡】：请选择要弃置的牌",
+    allowed_zones=(CostZone.HAND, CostZone.EQUIPMENT),
+)
+
+
+def _zhiheng_cost_candidates(game, player):
+    """这次发动可以支付的牌（与引擎校验、界面高亮同一份判断）。"""
+
+    from src.game.skills.activation import cost_candidates
+
+    return cost_candidates(game, player, ZHI_HENG_SPEC)
+
+
 def _can_zhiheng(game, player):
     if game.game_over or not player.alive:
         return False, "无法发动"
@@ -44,13 +65,15 @@ def _can_zhiheng(game, player):
         return False, "只能在你的出牌阶段发动"
     if player.skill_state.get("zhiheng", "used", 0):
         return False, "本阶段已经发动过"
-    if not player.hand:
-        return False, "没有可以弃置的手牌"
+    # 费用是"任意张**牌**"（手牌 + 装备区都算），不是"任意张手牌"：
+    # 手牌空、装备区有牌时【制衡】照样能发动。
+    if not _zhiheng_cost_candidates(game, player):
+        return False, "没有可以弃置的牌"
     return True, ""
 
 
 def _activate_zhiheng(game, player, target=None, cards=None):
-    """费用牌已由引擎弃置；按弃置数量摸牌。"""
+    """费用牌已由引擎弃置；按**实际弃置数量**摸牌。"""
 
     count = len(cards or ())
     if count <= 0:
@@ -151,10 +174,26 @@ def _liuli_targets(game, source, owner):
     ]
 
 
+def _liuli_cost_cards(owner):
+    """流离的费用：**一张牌**——手牌或装备区的牌都可以（卡面只说"弃置一张牌"）。"""
+
+    cards = list(getattr(owner, "hand", ()) or ())
+    for slot in ("weapon", "armor", "offensive_horse", "defensive_horse"):
+        card = owner.get_equipment(slot)
+        if card is not None:
+            cards.append(card)
+    return cards
+
+
 class Liuli(Skill):
     """成为【杀】的目标时，弃一张牌把这张【杀】转移给攻击范围内的另一名角色。
 
-    第一版自动选择最合适的目标（按座次取第一个合法角色）并弃一张手牌；
+    两件事必须在玩家手里，而且**顺序**不能反：
+
+    * 先选"转移给谁"（取消 = 不发动：不弃牌、不改目标）；
+    * 再选"弃哪一张牌"——以前固定弃第一张手牌，装备区的牌连碰都碰不到，
+      玩家对代价没有任何选择权。
+
     转移通过修改当前 CardAction 的目标完成，**不会取消原杀再生成一张新的杀**。
     """
 
@@ -170,7 +209,7 @@ class Liuli(Skill):
         card = event.payload.get("card")
         if card is None or getattr(card, "name", None) != "SHA":
             return False
-        if not self.owner.hand:
+        if not _liuli_cost_cards(self.owner):
             return False
         game = getattr(flow_of(event), "game", None) or _game_of(context)
         if game is None:
@@ -210,29 +249,67 @@ class Liuli(Skill):
                 "zone_owner": self.owner,
             },
         )
-        flow.redirect_resolver = lambda target_flow, resolution: self._apply(
-            game, target_flow, resolution)
+        flow.redirect_resolver = (
+            lambda target_flow, resolution:
+            self._ask_cost(engine, game, target_flow, resolution))
         # 交由 UseCardFlow 挂起并进入"目标重定向"阶段（通用扩展点）。
         flow.target_redirect = request
 
-    def _apply(self, game, flow, resolution):
-        """窗口结论落地：放弃则原样继续；选了目标才支付代价并改目标。"""
+    # ---- 第一步之后：选要弃的那张牌 ----
 
+    def _ask_cost(self, engine, game, flow, resolution):
         chosen = list(getattr(resolution, "targets", None) or ())
         if not chosen:
             game.add_log(self.owner.name + " 放弃发动【流离】")
             return True
-
         new_target = chosen[0]
-        cost = next(iter(self.owner.hand), None)
-        if cost is None or not self.owner.alive:
+        if not any(item is new_target for item in _liuli_targets(
+                game, flow.actor, self.owner)):
+            # 目标在窗口期间已经不再合法：原杀照常结算，不弃牌。
+            return True
+        cards = _liuli_cost_cards(self.owner)
+        if not cards:
+            return True
+        request = engine.pending.create(
+            PendingRequestType.SELECT_CARDS,
+            source=flow.actor,
+            target=self.owner,
+            prompt="【流离】：请选择要弃置的一张牌（手牌或装备牌；可放弃）",
+            owner_flow=flow,
+            min_cards=0,
+            max_cards=1,
+            request_context={
+                "reason": "liuli",
+                "candidates": cards,
+                "zone": "hand",
+                "zone_owner": self.owner,
+                # 支付这一步也可以放弃：放弃 = 不弃牌、不改目标，
+                # 原【杀】照常落在自己身上（规则上流离是"可以"）。
+                "cancellable": True,
+                "redirect_target": new_target,
+            },
+        )
+        flow.redirect_resolver = (
+            lambda target_flow, resolution, target=new_target:
+            self._apply_cost(game, target_flow, resolution, target))
+        flow.target_redirect = request
+        # 还要再问一次：保持挂起，等这张牌选定后才改目标。
+        return False
+
+    # ---- 第二步：支付费用并改目标 ----
+
+    def _apply_cost(self, game, flow, resolution, new_target):
+        cards = list(getattr(resolution, "cards", ()) or ())
+        cost = next((card for card in cards if _owns_card(self.owner, card)), None)
+        if cost is None:
+            game.add_log(self.owner.name + " 没有弃牌，【流离】不生效")
+            return True
+        self._discard_cost(game, cost)
+        if not self.owner.alive:
             return True
         if not any(item is new_target for item in _liuli_targets(
                 game, flow.actor, self.owner)):
             return True
-
-        game.engine.context.apply(MoveCardAtom(
-            cost, source=self.owner.hand, destination=game.deck.discard_pile))
 
         # 直接改当前这次用牌的结算目标：原杀不取消、不重建，
         # 属性 / 酒 / 武器修正等 context 全部原样保留。
@@ -249,6 +326,29 @@ class Liuli(Skill):
             self.owner.name + " 发动【流离】：弃置 " + cost.display_name
             + "，将【杀】转移给 " + new_target.name)
         return True
+
+    def _discard_cost(self, game, card):
+        """弃掉费用：手牌直接进弃牌堆，装备区的牌走统一离场入口。"""
+
+        if any(item is card for item in getattr(self.owner, "hand", ())):
+            game.engine.context.apply(MoveCardAtom(
+                card, source=self.owner.hand,
+                destination=game.deck.discard_pile))
+            return
+        for slot in ("weapon", "armor", "offensive_horse", "defensive_horse"):
+            if self.owner.get_equipment(slot) is card:
+                from src.game.atoms_v2 import UnequipAtom
+
+                game.engine.context.apply(UnequipAtom(
+                    self.owner, slot, game.deck.discard_pile))
+                return
+
+
+def _owns_card(player, card):
+    if any(item is card for item in getattr(player, "hand", ())):
+        return True
+    return any(card is equipped
+               for equipped in (getattr(player, "equipment", None) or {}).values())
 
 
 # ==================================================
@@ -305,9 +405,16 @@ class Lianying(Skill):
         # 一次结算只触发一次：搬牌本身会把新摸的牌再搬一次，这里用回合标记去重。
         if self.owner.skill_state.get(self.id, "armed", 0):
             return
+        optional_trigger(
+            context, self.owner,
+            prompt="【连营】：是否摸一张牌？", reason="lianying", label="连营",
+            effect=self._draw).start()
+
+    def _draw(self, flow):
         self.owner.skill_state.set(self.id, "armed", 1, ResetScope.PHASE)
-        context.apply(DrawCardsAtom(self.owner, 1))
-        context.state.add_log(self.owner.name + " 发动【连营】，摸一张牌")
+        flow.context.apply(DrawCardsAtom(self.owner, 1))
+        flow.game.add_log(self.owner.name + " 发动【连营】，摸一张牌")
+        return True
 
 
 # ==================================================
@@ -354,10 +461,7 @@ WU_EXTRA_SKILLS = (
         "出牌阶段限一次，你可以弃置任意数量的牌，然后摸等量的牌。",
         can_activate=_can_zhiheng,
         activate=_activate_zhiheng,
-        spec=ActiveSkillSpec(
-            variable_cost=True,
-            cost_prompt="【制衡】：请选择要弃置的牌",
-        ),
+        spec=ZHI_HENG_SPEC,
         tags=("active",),
     ),
     triggered(

@@ -7,6 +7,7 @@ from src.game.engine.skills import Skill, SkillBinding
 from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.rules import TurnPhase
 
+from ..mechanics import optional_trigger
 from ..definitions import ActiveSkillSpec, ModifierSpec, SkillDef, SkillKind, active, triggered
 from ..modifiers import ModifierKind
 from ..state import ResetScope
@@ -68,9 +69,16 @@ class Xiaoji(Skill):
         return card is not None
 
     def resolve(self, context, event):
-        context.apply(DrawCardsAtom(self.owner, 2))
+        optional_trigger(
+            context, self.owner,
+            prompt="【枭姬】：是否摸两张牌？", reason="xiaoji", label="枭姬",
+            effect=self._draw).start()
+
+    def _draw(self, flow):
+        flow.context.apply(DrawCardsAtom(self.owner, 2))
         self.owner.skill_state.add(self.id, "drawn", 2, ResetScope.TURN)
-        context.state.add_log(self.owner.name + " 发动【枭姬】，摸两张牌")
+        flow.game.add_log(self.owner.name + " 发动【枭姬】，摸两张牌")
+        return True
 
 
 def _can_jieyin(game, player):

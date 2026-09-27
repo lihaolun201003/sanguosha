@@ -38,6 +38,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
+from .local_input import local_awaiting_input
+
 # ==================================================
 # 演出种类
 # ==================================================
@@ -323,24 +325,22 @@ class PresentationGate:
     def holds_local_input(self) -> bool:
         """本机界面要不要为演出让路。
 
-        唯一的例外：**本机玩家正在被要求回答**。演出让开，否则那条请求
-        没有界面可以回答，流程与演出互相等——这正是"改判窗口被判定面板
-        压死"的形态（见 ``judge_gate`` 模块头对 REPLACEMENT 的说明）。
+        唯一的例外：**本机玩家正在被要求做一件事**——演出让开，否则那条请求
+        没有界面可以回答，流程与演出互相等；更常见的是玩家干等一大段演出，
+        点哪都没反应。
+
+        "正在被要求做一件事"必须问 :func:`contracts.local_input.
+        local_interaction_slots`，而不是只看 ``pending_request``：**出牌选目标**
+        根本不是引擎请求（它是本地收集状态），旧写法把"轮到我选目标"判成
+        "没人回答"→ 让路 → 点击全被吞（Phase 18.5 批量试玩实测）。
+
+        判定期间的输入压制不归这里管：``JudgeGate`` 在点击路由的最前面先判
+        "现在只允许判定自己要的输入"，那道闸门优先（见 ``ui.interaction``）。
         """
 
         if not self._presenting:
             return False
-        request = getattr(self.game, "pending_request", None)
-        if request is None:
-            return True
-        local = getattr(self.game, "player", None)
-        if local is None:
-            return True
-        if request.is_group:
-            if request.is_member(local) and request.member_status(local) == "pending":
-                return False
-            return True
-        return request.target is not local
+        return not local_awaiting_input(self.game)
 
     def describe(self) -> str:
         kinds = self.kinds()

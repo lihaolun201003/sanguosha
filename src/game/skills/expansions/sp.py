@@ -286,37 +286,93 @@ class Danqi(Skill):
 # ==================================================
 
 
-def _can_xiuluo(game, player):
-    if game.game_over or not player.alive:
-        return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "prepare":
-        return False, "只能在你的回合开始阶段发动"
-    if player.skill_state.get("xiuluo", "used", 0):
-        return False, "本回合已经发动过"
-    if not player.hand:
-        return False, "需要一张手牌"
-    if not _delay_tricks(player):
-        return False, "判定区里没有延时锦囊"
-    return True, ""
+def _xiuluo_candidates(player):
+    """可以与判定区里某张延时锦囊**同花色**弃置的手牌。"""
+
+    suits = {getattr(card, "suit", None) for card in _delay_tricks(player)}
+    suits.discard(None)
+    return hand_cards(
+        player, lambda card: getattr(card, "suit", None) in suits)
 
 
-def _activate_xiuluo(game, player, target=None, cards=None):
-    # 弃一张手牌是技能的**费用**（cost_cards=1），已由引擎支付；
-    # 这里只按花色挑出要被弃置的延时锦囊。
-    chosen = list(cards or [])
-    suit = getattr(chosen[0], "suit", None) if chosen else None
-    matching = [card for card in _delay_tricks(player)
-                if suit is not None and getattr(card, "suit", None) == suit]
-    if not matching:
-        game.message = "【修罗】：没有与弃牌同花色的延时锦囊。"
-        return False
-    game.engine.context.apply(MoveCardAtom(
-        matching[0], source=player.judgement_zone,
-        destination=game.deck.discard_pile))
-    player.skill_state.set("xiuluo", "used", 1, ResetScope.TURN)
-    game.add_log("%s 发动【修罗】，弃置一张同花色手牌并弃掉判定区里的【%s】"
-                 % (player.name, getattr(matching[0], "display_name", "?")))
-    return True
+class Xiuluo(Skill):
+    """修罗：**准备阶段**的可选流程。
+
+    官方时机是"回合开始阶段"，而回合驱动会自动跑完准备、判定、摸牌阶段才
+    把操作交回出牌阶段——旧的"出牌阶段里点技能名发动"永远不可达（实测技能
+    查询回答"只能在你的回合开始阶段发动"）。改由 PHASE_START(PREPARE) 打开
+    窗口（与【英魂】【凿险】同型），确认与费用都在准备阶段之内完成。
+    """
+
+    id = "xiuluo"
+    name = "修罗"
+
+    def bindings(self):
+        return (SkillBinding(EventType.PHASE_START, priority=45),)
+
+    def can_trigger(self, context, event):
+        if event.source is not self.owner or not self.owner.alive:
+            return False
+        if context.state.game_over:
+            return False
+        if event.payload.get("phase") is not TurnPhase.PREPARE:
+            return False
+        if event.payload.get("skipped"):
+            return False
+        if self.owner.skill_state.get(self.id, "used", 0):
+            return False
+        return bool(_xiuluo_candidates(self.owner))
+
+    def resolve(self, context, event):
+        XiuluoFlow(context.services["engine"], self.owner).start()
+
+
+class XiuluoFlow(Flow):
+    """修罗：选一张手牌弃置（取消 = 不发动）→ 判定区同花色的延时锦囊一并进弃牌堆。"""
+
+    def __init__(self, engine, owner):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+
+    def begin(self):
+        candidates = _xiuluo_candidates(self.owner)
+        if not candidates:
+            return self.complete({"applied": False})
+        ask_cards(self.engine, self, source=self.owner, target=self.owner,
+                  prompt="【修罗】：请选择一张手牌弃置，"
+                         "以此弃掉判定区里同花色的延时锦囊（可放弃）",
+                  reason="xiuluo", candidates=candidates,
+                  min_cards=0, max_cards=1,
+                  context={"cancellable": True})
+        return self.current_result()
+
+    def advance(self, response=None):
+        cards = list(getattr(response, "cards", ()) or ())
+        cost = cards[0] if cards else None
+        if cost is None or not any(item is cost for item in self.owner.hand):
+            self.game.add_log("%s 放弃发动【修罗】" % self.owner.name)
+            return self.complete({"applied": False})
+        suit = getattr(cost, "suit", None)
+        matching = [card for card in _delay_tricks(self.owner)
+                    if getattr(card, "suit", None) == suit]
+        if not matching:
+            # 支付之前花色对得上、现在对不上了（判定区的牌被换走）：这次不发动，
+            # 一张牌都不弃——绝不能"付了费用却什么也没消掉"。
+            self.game.add_log("【修罗】没有与所选牌同花色的延时锦囊，本次不发动")
+            return self.complete({"applied": False})
+        self.context.apply(MoveCardAtom(
+            cost, source=self.owner.hand,
+            destination=self.game.deck.discard_pile))
+        self.context.apply(MoveCardAtom(
+            matching[0], source=self.owner.judgement_zone,
+            destination=self.game.deck.discard_pile))
+        self.owner.skill_state.set("xiuluo", "used", 1, ResetScope.TURN)
+        self.game.add_log("%s 发动【修罗】，弃置一张手牌并弃掉判定区里的【%s】"
+                          % (self.owner.name,
+                             getattr(matching[0], "display_name", "?")))
+        return self.complete({"applied": True})
 
 
 def _shenji_extra(game, query):
@@ -457,17 +513,11 @@ SP_SKILLS = (
         factory=Danqi,
         tags=("awakening",),
     ),
-    active(
+    triggered(
         "xiuluo",
         "修罗",
-        "回合开始阶段，你可以弃一张手牌来弃置你判定区里的延时类锦囊（必须花色相同）。",
-        can_activate=_can_xiuluo,
-        activate=_activate_xiuluo,
-        spec=ActiveSkillSpec(
-            cost_cards=1,
-            cost_prompt="【修罗】：请选择一张手牌弃置（需与目标延时锦囊花色相同）",
-        ),
-        tags=("active",),
+        "准备阶段，你可以弃一张手牌来弃置你判定区里的延时类锦囊（必须花色相同）。",
+        factory=Xiuluo,
     ),
     SkillDef(
         id="shenwei",

@@ -19,6 +19,19 @@ class SkillKind(str, Enum):
     VIEW_AS = "view_as"      # 视为技：玩家主动进入"把这张牌当那张牌"的选牌模式
 
 
+class CostZone(str, Enum):
+    """技能费用可以从哪个区域支付。
+
+    默认只有手牌——**这是兼容承诺**：【制衡】的"弃置任意张牌"允许装备区的
+    牌支付，但别的技能（眩惑只交红桃手牌、直谏只能给装备牌…）不会因为这条
+    改动跟着变宽。字符串值与 ``conversion.HAND_ZONE`` / ``EQUIPMENT_ZONE``
+    一致，所以区域判据可以和 ``CardActionDiscovery.zone_of`` 的返回值直接比。
+    """
+
+    HAND = "hand"
+    EQUIPMENT = "equipment"
+
+
 SkillFactory = Callable[[Any], Any]
 SkillCondition = Callable[..., bool]
 SkillAction = Callable[..., Any]
@@ -29,11 +42,15 @@ class JudgeReplacement:
     """判定替换能力：在判定牌生效前打出一张牌替换它（鬼才 / 鬼道一类）。
 
     ``candidates`` 返回本次可以使用的替换牌；返回空列表表示这次不能发动。
+    ``on_use`` 是可选的一次性代价钩子（``callable(game, player, card) -> bool``）：
+    返回 False 表示这次发动不成立（【极略】的鬼才要弃一枚「忍」标记，
+    标记不够就不能发动），判定照常按原牌结算。
     """
 
     candidates: Any                # callable(game, player, judge_context) -> list
     prompt: str = "是否替换判定牌？"
     source_zone: str = "hand"
+    on_use: Any = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +101,30 @@ class ActiveSkillSpec:
     # "这张牌就是这次技能动作本身"。把它当费用先弃掉，技能只能凭空造出
     # 结果；把它交给技能、由技能决定去向，才是真实规则。
     keep_cards: bool = False
+    #: 费用牌允许来自哪些区域（``CostZone``）。默认只有手牌：官方文本写
+    #: "弃置任意张牌"的【制衡】显式声明"手牌 + 装备区"，其余技能不声明就
+    #: 还是原来的手牌语义。装备牌被费用支付时走 ``UnequipAtom``（失去装备
+    #: 事件 / 装备技能卸载 / 修正移除全部照常发生），不从装备字典里硬删。
+    allowed_zones: Tuple[str, ...] = (CostZone.HAND,)
+
+
+@dataclass(frozen=True)
+class GrantedSpec:
+    """授予型主动技（【黄天】）：技能属于拥有者，发动权在**别的角色**手里。
+
+    官方文本"其他群势力角色的出牌阶段限一次，该角色可以将一张【闪】或
+    【闪电】交给你"里有两个主体：技能拥有者（张角）与发动者（那名群势力
+    角色）。把它塞进"拥有者自己发动"的主动技模型会同时错两件事——技能
+    拥有者会在自己的回合伸手拿别人的牌，而真正该做决定的那个人没有任何
+    入口（这正是【黄天】"阶段开始时自动弹一次、放弃后再也发不出来"的根因）。
+
+    ``can_offer`` 回答"这个拥有者的这个技能，现在能不能被这位角色发动"，
+    ``spec`` 是它的输入契约——费用从**发动者**身上支付，目标就是技能
+    拥有者本人（多个拥有者 = 多一个"交给谁"的候选）。
+    """
+
+    can_offer: Any                                  # callable(game, owner, actor) -> bool | (bool, str)
+    spec: Optional[ActiveSkillSpec] = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +180,10 @@ class SkillDef:
     #: 把技能的选牌改成 ``PendingRequest``（像【突袭】那样开一个小 Flow）之后
     #: 这个标记就可以去掉；分析见 Phase 11.4 报告“仍存在的限制”。
     needs_local_ui: bool = False
+    #: 授予型主动技（【黄天】）：技能属于这个拥有者，但发动权与费用在**别的
+    #: 角色**手里。声明了它，``SkillManager`` 就不再把它当作"拥有者能自己
+    #: 发动的主动技"，而是由 ``granted_offers`` 把它交给符合条件的角色。
+    grant: Optional[GrantedSpec] = None
 
     @property
     def is_lord(self):
@@ -147,6 +192,12 @@ class SkillDef:
     @property
     def is_active(self):
         return self.kind is SkillKind.ACTIVE
+
+    @property
+    def is_granted(self):
+        """授予型主动技：拥有者自己发不动，入口在别人身上。"""
+
+        return self.grant is not None
 
     @property
     def is_view_as(self):

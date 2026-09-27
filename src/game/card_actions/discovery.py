@@ -88,6 +88,14 @@ class CardActionDiscovery:
             return [card for card in equipment.values() if card is not None]
         return []
 
+    def locked_name(self, actor, card):
+        """这张牌被锁定技替换成了什么牌名（【武神】；没有则 None）。"""
+
+        registry = getattr(self.game, "conversions", None)
+        if registry is None:                              # pragma: no cover
+            return None
+        return registry.locked_name_for(actor, card)
+
     def source_zones_in_use(self, actor):
         """actor 的转换声明涉及哪些区域（UI 据此决定装备牌能否被点击）。"""
 
@@ -159,6 +167,40 @@ class CardActionDiscovery:
             option for option in self._dedupe(result)
             if option.skill_id == skill_id and context.allows(option.result_name)
         ]
+
+    def usable_combination(self, actor, options, context):
+        """这些候选里有没有一组素材**真的能提交**（含结果牌自身的可用性）。
+
+        与"素材凑得齐"是两件事：多 source 转化（丈八蛇矛 = 两张手牌当【杀】）
+        在结果牌用不了时（本回合已经出过【杀】、攻击距离不够）照样凑得齐，
+        玩家于是停在一个**只能点「取消技能」**的界面里——实测到了这个死胡同
+        （选满两张牌后提示"本回合已经使用过【杀】"，界面原地不动）。
+
+        枚举组合，规模是"手牌里符合条件的牌数"，上限很小；只在玩家点技能 /
+        点装备时调用一次，不在每帧路径上。
+        """
+
+        cards = []
+        for option in options:
+            for card in option.source_cards:
+                if card is not None and not any(item is card for item in cards):
+                    cards.append(card)
+        if not cards:
+            return False
+        sizes = set()
+        for option in options:
+            low = max(1, int(option.min_sources))
+            high = max(low, int(option.max_sources))
+            for size in range(low, min(high, len(cards)) + 1):
+                sizes.add(size)
+        from itertools import combinations
+
+        for size in sorted(sizes):
+            for chosen in combinations(cards, size):
+                for candidate in self.actions_for_sources(actor, chosen, context):
+                    if candidate.complete and candidate.enabled:
+                        return True
+        return False
 
     def is_operable(self, actor, card, context):
         """灰化判定：还有可达成动作，或能作为某个多 source 转换的候选。"""
@@ -302,6 +344,10 @@ class CardActionDiscovery:
     # ==================================================
 
     def _normal_option(self, actor, card, context):
+        if self.locked_name(actor, card) is not None:
+            # 锁定技把这张牌换成了别的牌名（【武神】：红桃手牌均视为【杀】）：
+            # 它不再是原来那张牌，因此不存在"按原牌名使用 / 打出"这条路。
+            return None
         if context.is_play:
             enabled, reason = self.effect_usable(actor, card)
         else:

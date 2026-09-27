@@ -7,7 +7,8 @@ class ResponseRequest:
         on_card=None,
         on_pass=None,
         reason="",
-        responder=None
+        responder=None,
+        request_id=None
     ):
         self.prompt = prompt
         self.allowed_cards = set(allowed_cards)
@@ -22,6 +23,10 @@ class ResponseRequest:
         #: 单机永远等于本机真人；双边手动测试用它把视角切到回答者身上。
         #: 只用于界面归属，规则判定不看它。
         self.responder = responder
+        #: 这条面板对应的引擎请求 id（旧版 1v1 响应链没有请求，为 None）。
+        #: 它让"面板是否还对应一条活着的请求"可被查询——过期的面板不该再
+        #: 提交任何东西（见 ``contracts.local_input.local_response_live``）。
+        self.request_id = request_id
 
 
 class ResponseSystem:
@@ -46,7 +51,8 @@ class ResponseSystem:
         on_card,
         on_pass=None,
         reason="",
-        responder=None
+        responder=None,
+        request_id=None
     ):
 
         self.current = ResponseRequest(
@@ -56,6 +62,7 @@ class ResponseSystem:
             on_pass,
             reason=reason,
             responder=responder,
+            request_id=request_id,
         )
 
 

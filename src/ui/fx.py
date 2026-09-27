@@ -707,10 +707,12 @@ class Effects:
 
         两条判据：
 
-        * 队列正在播"压界面的演出"（``holds_ui``）；
+        * 队列正在播"压界面的演出"（``holds_ui``）**且本机玩家没被要求做事**；
         * 演出闸门开着（重要演出在飞），**且本机玩家没有被请求回答**。
-          后半句是关键：改判窗口就开在判定演出中间，压住它判定永远拿不到
-          结果（死锁）。判定期间的输入压制另由 ``JudgeGate`` 负责。
+
+        两处"且"的分量比看上去重：本机玩家正被要求做决定时，演出一律让开，
+        否则那条决定只能干等演出（积压几十条时能等几分钟）。判定期间的输入
+        压制另由 ``JudgeGate`` 负责——它在点击路由最前面，优先级高于这里。
         """
 
         if self.storyboard.holds_interaction():
@@ -719,6 +721,19 @@ class Effects:
         if gate is None:
             return False
         return bool(gate.holds_local_input())
+
+    def hold_source(self):
+        """此刻是哪一层在让路：``""`` / ``storyboard`` / ``presentation_gate``。
+
+        只用于日志与试玩报告——"被让路吞掉"必须能一眼看出是哪一层干的。
+        """
+
+        if self.storyboard.holds_interaction():
+            return "storyboard"
+        gate = getattr(self.game, "presentation_gate", None)
+        if gate is not None and gate.holds_local_input():
+            return "presentation_gate"
+        return ""
 
     # ---- 指向箭头 ----
 

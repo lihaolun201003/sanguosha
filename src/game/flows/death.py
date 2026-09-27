@@ -1,6 +1,6 @@
 """Death cleanup; the outcome itself is decided by the active GameMode."""
 
-from src.game.engine import Event, EventType, Flow
+from src.game.engine import Event, EventType, Flow, FlowStatus
 from src.game.atoms_v2 import MoveCardAtom, UnequipAtom
 
 
@@ -12,8 +12,30 @@ class DeathFlow(Flow):
         self.dead_player = dead_player
         self.source = source
         self.cause = cause
+        #: "清理与宣告"只做一次。DEATH 事件里的技能窗口（【武魂】这类）
+        #: 会把本流程挂起，恢复时**绝不能重放**——重放会再发一次 DEATH
+        #: 事件，所有"死亡时"技能都会触发两次，模式死亡奖惩也结算两次。
+        self.stage = "cleanup"
+        self._result = None
 
     def advance(self, response=None):
+        if self.stage != "cleanup":
+            return self._settle(self._result)
+        self.stage = "announced"
+        self._result = self._cleanup_and_announce()
+        # 行殇一类"阵亡时"技能在这条事件里开窗口：遗物分配没定下来之前，
+        # 死亡清理就不能算结束（技能卸载、回合推进都要等）。
+        guard = self.guard_child_flows()
+        if guard is not None:
+            return guard
+        return self._settle(self._result)
+
+    def resume_from_child(self, result):
+        """DEATH 事件里的技能窗口答完了：只做收尾，绝不重放清理与事件。"""
+
+        return self._settle(self._result)
+
+    def _cleanup_and_announce(self):
         request = self.engine.pending.current
         if request is not None and request.target is self.dead_player:
             self.engine.clear_pending_ui()
@@ -56,14 +78,11 @@ class DeathFlow(Flow):
                 },
             )
         )
-        # 行殇一类"阵亡时"技能在这条事件里开窗口：遗物分配没定下来之前，
-        # 死亡清理就不能算结束（技能卸载、回合推进都要等）。
-        guard = self.guard_child_flows()
-        if guard is not None:
-            return guard
-        return self._settle(result)
+        return result
 
     def _settle(self, result):
+        if self.status is FlowStatus.COMPLETED:
+            return self.current_result()
         # 死亡结算完毕后再卸载普通技能：DEATH 事件期间"死亡时"类技能
         # 仍然有机会响应，卸载顺序不会把死亡结算技能一起掐掉。
         skills = getattr(self.game, "skills", None)

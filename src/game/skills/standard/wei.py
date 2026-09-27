@@ -8,7 +8,16 @@ from src.game.flows.damage import DamageContext, DamageFlow
 from src.game.flows.judge import JudgeFlow
 from src.game.rules import TurnPhase
 
-from ..mechanics import ask_cards, ask_confirm, ask_option, judge
+from ..mechanics import (
+    ask_cards,
+    ask_confirm,
+    ask_option,
+    judge,
+    optional_trigger,
+    random_hand_card,
+    take_card_from_zone,
+    zone_take_options,
+)
 from ..definitions import (
     JudgeReplacement,
     PhaseReplacement,
@@ -202,7 +211,7 @@ class GanglieFlow(Flow):
 
 
 class Fankui(Skill):
-    """受到伤害后获得伤害来源的一张牌（手牌优先，否则装备）。"""
+    """受到伤害后**可以**获得伤害来源的一张牌（手牌或装备区的牌，自己挑）。"""
 
     id = "fankui"
     name = "反馈"
@@ -219,47 +228,69 @@ class Fankui(Skill):
         source = damage.source
         if source is None or source is self.owner or not source.alive:
             return False
-        return bool(source.hand) or any(card is not None for card in source.equipment.values())
+        return bool(fankui_options(source))
 
     def resolve(self, context, event):
-        source = event.payload["damage"].source
-        card = None
-        if source.hand:
-            # 手牌是**暗牌**：规则上玩家不指定具体哪一张，所以在真实牌堆里
-            # 随机取一张。固定取第一张会让双方都能靠记牌预测，等于泄露暗牌。
-            card = _random_hand_card(context.state, source)
-            context.apply(MoveCardAtom(card, source=source.hand, destination=self.owner.hand))
-        else:
-            for slot, equipped in source.equipment.items():
-                if equipped is None:
-                    continue
-                # 装备离场走统一入口：失去装备事件照常发出。
-                card = equipped
-                context.apply(UnequipAtom(source, slot, self.owner.hand))
-                break
-        if card is not None:
-            # 拿走的是别人的牌：亮在桌面停一下，让对手看清是哪张。
-            engine = context.services.get("engine")
-            if engine is not None:
-                engine.show_taken_card(card, source, self.owner, to_hand=True)
-            context.state.add_log(self.owner.name + " 发动【反馈】，获得 " + source.name + " 一张牌")
+        FankuiFlow(context.services["engine"], self.owner,
+                   event.payload["damage"].source).start()
 
 
-def _random_hand_card(game, player):
-    """从一名角色的手牌里随机取一张（暗牌取牌的统一样式）。
+def fankui_options(source):
+    """反馈可以拿的区域：手牌（暗牌随机）与装备区（公开，逐张列出）。"""
 
-    ``Player.hand`` 是列表，取首元素会让"获得一张手牌"变成可预测的行为——
-    对手能记住自己手牌的顺序，等于提前知道自己会丢哪张。真实对局里这张牌
-    是未知的，所以用对局的随机源抽。
+    return zone_take_options(source, zones=("hand", "equipment"))
+
+
+class FankuiFlow(Flow):
+    """反馈：先问"是否发动"，再由拥有者决定拿**哪一张**。
+
+    以前没有"是否发动"，而且只要来源有手牌就必定随机取一张手牌——装备区的
+    牌一张也拿不到，等于把"拿哪张"这个决定从玩家手里拿走了。
     """
 
-    hand = list(getattr(player, "hand", ()) or ())
-    if not hand:
-        return None
-    rng = getattr(game, "rng", None)
-    if rng is None:                                      # pragma: no cover - 防御
-        return hand[0]
-    return hand[rng.randrange(len(hand))]
+    def __init__(self, engine, owner, source):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.source = source
+        self.stage = "confirm"
+
+    def begin(self):
+        if not fankui_options(self.source):
+            return self.complete({"applied": False})
+        ask_confirm(self.engine, self, source=self.owner, target=self.owner,
+                    prompt="【反馈】：是否获得 %s 的一张牌？" % self.source.name,
+                    reason="fankui")
+        return self.current_result()
+
+    def advance(self, response=None):
+        if self.stage == "confirm":
+            if response is None or not response.confirmed:
+                self.game.add_log("%s 放弃发动【反馈】" % self.owner.name)
+                return self.complete({"applied": False})
+            options = fankui_options(self.source)
+            if not options:
+                return self.complete({"applied": False})
+            self.stage = "take"
+            ask_option(self.engine, self, source=self.owner, target=self.owner,
+                       prompt="【反馈】：选择要获得的牌", reason="fankui",
+                       options=tuple(options),
+                       context={"zone_holder_id": getattr(
+                           self.source, "player_id", None)})
+            return self.current_result()
+        option = str(getattr(response, "option", "") or "")
+        card = take_card_from_zone(
+            self.context, self.game, self.owner, self.source, option,
+            zones=("hand", "equipment"))
+        if card is not None:
+            # 拿走的是别人的牌：亮在桌面停一下，让对手看清是哪张。
+            shower = getattr(self.engine, "show_taken_card", None)
+            if callable(shower):
+                shower(card, self.source, self.owner, to_hand=True)
+            self.game.add_log("%s 发动【反馈】，获得 %s 一张牌"
+                              % (self.owner.name, self.source.name))
+        return self.complete({"applied": card is not None})
 
 
 def guicai_candidates(game, player, judge_context):
@@ -293,12 +324,21 @@ class Tiandu(Skill):
 
     def resolve(self, context, event):
         card = event.payload["result"].card
-        context.apply(MoveCardAtom(
-            card,
-            source=context.state.processing_zone,
-            destination=self.owner.hand,
-        ))
-        context.state.add_log(self.owner.name + " 发动【天妒】，获得判定牌")
+        optional_trigger(
+            context, self.owner,
+            prompt="【天妒】：是否获得此判定牌？", reason="tiandu", label="天妒",
+            effect=lambda flow: self._gain(flow, card)).start()
+
+    def _gain(self, flow, card):
+        """同意之后才真正取牌：判定牌可能已经被别的技能取走。"""
+
+        if not any(item is card for item in flow.game.processing_zone):
+            return False
+        flow.context.apply(MoveCardAtom(
+            card, source=flow.game.processing_zone,
+            destination=self.owner.hand))
+        flow.game.add_log(self.owner.name + " 发动【天妒】，获得判定牌")
+        return True
 
 
 class Yiji(Skill):
@@ -321,9 +361,18 @@ class Yiji(Skill):
 
     def resolve(self, context, event):
         amount = int(event.payload.get("amount", 0))
-        context.apply(DrawCardsAtom(self.owner, amount * 2))
+        optional_trigger(
+            context, self.owner,
+            prompt="【遗计】：是否摸 %d 张牌？" % (amount * 2),
+            reason="yiji", label="遗计",
+            effect=lambda flow, n=amount: self._draw(flow, n)).start()
+
+    def _draw(self, flow, amount):
+        flow.context.apply(DrawCardsAtom(self.owner, amount * 2))
         self.owner.skill_state.add(self.id, "drawn", amount * 2, ResetScope.TURN)
-        context.state.add_log(self.owner.name + " 发动【遗计】，摸 " + str(amount * 2) + " 张牌")
+        flow.game.add_log(self.owner.name + " 发动【遗计】，摸 "
+                          + str(amount * 2) + " 张牌")
+        return True
 
 
 # ==================================================
@@ -365,16 +414,25 @@ class Jianxiong(Skill):
         return False
 
     def resolve(self, context, event):
-        game = context.state
+        damage = event.payload["damage"]
+        optional_trigger(
+            context, self.owner,
+            prompt="【奸雄】：是否获得造成伤害的牌？", reason="jianxiong",
+            label="奸雄",
+            effect=lambda flow: self._gain(flow, damage)).start()
+
+    def _gain(self, flow, damage):
         gained = 0
-        for card in _jianxiong_cards(event.payload["damage"]):
-            source = _pile_containing(game, card)
+        for card in _jianxiong_cards(damage):
+            source = _pile_containing(flow.game, card)
             if source is None:
                 continue
-            context.apply(MoveCardAtom(card, source=source, destination=self.owner.hand))
+            flow.context.apply(MoveCardAtom(
+                card, source=source, destination=self.owner.hand))
             gained += 1
         if gained:
-            game.add_log(self.owner.name + " 发动【奸雄】，获得造成伤害的牌")
+            flow.game.add_log(self.owner.name + " 发动【奸雄】，获得造成伤害的牌")
+        return bool(gained)
 
 
 def _pile_containing(game, card):
@@ -461,7 +519,7 @@ class TuxiFlow(Flow):
             if target is self.player or not target.alive or not target.hand:
                 continue
             # 同上：突袭拿的也是暗牌，随机取一张。
-            card = _random_hand_card(self.game, target)
+            card = random_hand_card(self.game, target)
             if card is None:
                 continue
             self.context.apply(

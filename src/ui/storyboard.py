@@ -35,6 +35,7 @@
 
 from collections import deque
 
+from src.game.contracts.local_input import local_awaiting_input
 from src.game.contracts.presentation import KIND_BY_STEP, PresentationSchema
 
 # ==================================================
@@ -785,11 +786,18 @@ class PresentationQueue:
     def holds_interaction(self):
         """现在要不要让**操作界面**先别出现（技能提示还没播完）。
 
+        **本机玩家正被要求做决定时一律不让路**：那条决定是流程停下来的原因，
+        被演出压住就是"点了没反应，只能干等"——演出积压到几十条时（实测
+        63 条）能等几分钟。判据与另外两处闸门共用
+        （``contracts.local_input.local_interaction_slots``）。
+
         判定面板不在这里判：它开着改判窗口时必须放行，那个判据在
         ``JudgeGate.allows_local_input`` 里（见 ``Effects.interaction_hold``）。
         """
 
-        return bool(self.current is not None and self.current.holds_ui)
+        if self.current is None or not self.current.holds_ui:
+            return False
+        return not local_awaiting_input(getattr(self.effects, "game", None))
 
     def speed_for(self, owner):
         speed = _local_speed(owner)

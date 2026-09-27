@@ -30,9 +30,16 @@ class MoveCardAtom(Atom):
     card: object
     source: object = None
     destination: object = None
-    #: 为什么会移动（"discard" / "judge" / "lose" / ""）。只用于事件 payload，
-    #: 不参与任何判定——技能需要区分"弃置"与"判定进入弃牌堆"时读它。
+    #: 为什么会移动（"discard" 弃置 / "judge" 判定 / "use" 使用后置入 /
+    #: "respond" 打出后置入 / "pindian" 拼点 / "lose"）。它进 CARD_DISCARDED /
+    #: CARD_LOST 的 payload，**规则的差异确实看它**——【落英】只认"因弃置或
+    #: 判定进入弃牌堆"，使用 / 打出 / 重铸 / 拼点都不算（官方 FAQ）。
     reason: str = ""
+    #: 这张牌原本属于谁。只有在区域查不出归属时才需要它：处理区
+    #: （``game.processing_zone``）不属于任何角色，而**使用后的牌**与
+    #: **判定牌**都要经过处理区才进弃牌堆——不传就等于告诉订阅者"这牌没人
+    #: 要"（实测：【落英】据此把自己刚用掉的牌收回手里，那张牌因此永远用不完）。
+    owner: object = None
 
     def apply(self, context):
         if self.source is not None and not _remove_identity(self.source, self.card):
@@ -50,6 +57,15 @@ class MoveCardAtom(Atom):
         self._notify_lost(context)
         return result
 
+    def _discard_owner(self, game):
+        """这次移动的"牌原本属于谁"：显式声明优先，其次按来源区域反查。"""
+
+        finder = getattr(game, "owner_of_zone", None)
+        owner = self.owner
+        if owner is None and callable(finder):
+            owner = finder(self.source)
+        return owner
+
     def _notify_discard(self, context):
         """目的地是弃牌堆时发一条统一的「有牌进弃牌堆」通知。
 
@@ -63,10 +79,7 @@ class MoveCardAtom(Atom):
             return
         from .engine.events import Event, EventType
 
-        owner = None
-        finder = getattr(game, "owner_of_zone", None)
-        if callable(finder):
-            owner = finder(self.source)
+        owner = self._discard_owner(game)
         context.emit(Event(
             EventType.CARD_DISCARDED,
             source=owner,
@@ -91,8 +104,7 @@ class MoveCardAtom(Atom):
         deck = getattr(game, "deck", None)
         if deck is None or self.destination is deck.discard_pile:
             return
-        finder = getattr(game, "owner_of_zone", None)
-        owner = finder(self.source) if callable(finder) else None
+        owner = self._discard_owner(game)
         if owner is None:
             return
         from .engine.events import Event, EventType

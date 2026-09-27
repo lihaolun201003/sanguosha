@@ -88,7 +88,8 @@ class SkillManager:
             raise ValueError(
                 "skill already bound to " + player.name + ": " + definition.id
             )
-        if definition.is_active and definition.id in self._active.get(player.player_id, {}):
+        if (definition.is_active and not definition.is_granted
+                and definition.id in self._active.get(player.player_id, {})):
             raise ValueError(
                 "active skill already bound to " + player.name + ": " + definition.id
             )
@@ -119,7 +120,10 @@ class SkillManager:
             self.game.conversions.register(
                 conversion.for_owner(player, self.game), player)
 
-        if definition.is_active:
+        if definition.is_active and not definition.is_granted:
+            # 授予型主动技（【黄天】）不进这张表：发动它的从来不是拥有者，
+            # 把它列进"拥有者可发动的主动技"会让技能栏在张角自己的回合
+            # 亮起一个他点不动的按钮。
             self._active.setdefault(player.player_id, {})[definition.id] = definition
 
         # 记录全部已绑定技能（含只有 modifier 的锁定技），供 UI 与查询使用。
@@ -348,6 +352,56 @@ class SkillManager:
             for skill_id in self.active_skill_ids(player)
             if self.can_activate(player, skill_id)[0]
         )
+
+    # ---- 授予型主动技（【黄天】）----
+    #
+    # 技能属于拥有者，发动权在别的角色手里。判据只有这一份：技能栏 /
+    # AvailableActions / AI / 远程下发全部从这里取，所以四条入口看到的
+    # 永远是同一个答案。
+
+    def granted_state(self, owner, actor, skill_id):
+        """这位角色现在能不能发动 ``owner`` 的授予型技能；返回 (ok, reason)。"""
+
+        definition = self.registry.get(skill_id)
+        if definition is None or not definition.is_granted:
+            return False, "这个技能不是授予型技能"
+        if not self.has(owner, skill_id):
+            return False, "该角色没有这个技能"
+        result = definition.grant.can_offer(self.game, owner, actor)
+        if isinstance(result, tuple):
+            return bool(result[0]), str(result[1])
+        return bool(result), ""
+
+    def granted_offers(self, actor):
+        """这位角色现在可以发动的**别人的**授予型技能：[(definition, owners)]。
+
+        按座次收集，同一个技能的多位拥有者（两张张角）聚成一条：它是同一个
+        动作，只是"交给谁"多了一个候选。判据来自 ``granted_state``。
+        """
+
+        grouped: Dict[str, Tuple[SkillDef, List[Any]]] = {}
+        for owner in self.game.seats.alive_players_in_order(
+                start_after=actor, include_start=False):
+            for skill_id in self.skill_ids_of(owner):
+                definition = self.registry.get(skill_id)
+                if definition is None or not definition.is_granted:
+                    continue
+                if not self.granted_state(owner, actor, skill_id)[0]:
+                    continue
+                entry = grouped.get(skill_id)
+                if entry is None:
+                    grouped[skill_id] = (definition, [owner])
+                else:
+                    entry[1].append(owner)
+        return tuple(grouped.values())
+
+    def granted_owners(self, actor, skill_id):
+        """这位角色现在能发动哪一个（或哪几个）拥有者的授予型技能。"""
+
+        for definition, owners in self.granted_offers(actor):
+            if definition.id == str(skill_id):
+                return definition, list(owners)
+        return None, []
 
     def activate(self, player, skill_id, **params):
         """直接发动（AI 或已收集好参数的调用方）。

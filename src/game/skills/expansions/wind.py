@@ -18,6 +18,7 @@ from src.game.rules import TurnPhase
 
 from ..definitions import (
     ActiveSkillSpec,
+    GrantedSpec,
     JudgeReplacement,
     ModifierSpec,
     SkillDef,
@@ -691,50 +692,73 @@ def _guidao_candidates(game, player, judge_context):
         player, lambda card: getattr(card, "suit", None) in ("spade", "club"))
 
 
-def _can_huangtian(game, player):
-    if game.game_over or not player.alive:
+def _huangtian_cards(donor):
+    """这名角色可以交给张角的牌：【闪】或【闪电】（手里的实体牌）。"""
+
+    return hand_cards(
+        donor, lambda card: getattr(card, "name", None) in ("SHAN", "SHANDIAN"))
+
+
+def _huangtian_candidate(game, player, card):
+    """这次发动里能被挑的牌：这名角色手里的【闪】/【闪电】。"""
+
+    return any(card is item for item in _huangtian_cards(player))
+
+
+def _huangtian_can_offer(game, owner, actor):
+    """这名角色现在能不能把一张【闪】/【闪电】交给持有【黄天】的张角。
+
+    判据只有这一份：技能栏能不能按、AvailableActions 列不列出来、AI 会不会
+    发、房主接不接受远程提交，全部读它。**没有**任何一条判据是"出牌阶段
+    开始时"——官方限定的是"出牌阶段限一次"，不是"出牌阶段开始时"。所以
+    阶段中途拿到的牌一样能交，阶段开始时放弃过也还能再交。
+    """
+
+    if game.game_over or not getattr(actor, "alive", True) or int(actor.hp) <= 0:
         return False, "无法发动"
-    if game.current_turn_player is not player or game.phase != "play":
+    if actor is owner:
+        return False, "不能交给自己"
+    if not getattr(owner, "alive", True):
+        return False, "对方已阵亡"
+    if game.current_turn_player is not actor or getattr(game, "phase", "") != "play":
         return False, "只能在你的出牌阶段发动"
-    if not _huangtian_donors(game, player):
-        return False, "没有持有【闪】或【闪电】的群势力角色"
+    if getattr(actor, "kingdom", None) != "qun":
+        return False, "只有群势力角色可以发动"
+    if actor.skill_state.get("huangtian", "used", 0):
+        return False, "本出牌阶段已经交过一次"
+    if not _huangtian_cards(actor):
+        return False, "没有可以交出的【闪】或【闪电】"
     return True, ""
 
 
-def _huangtian_donors(game, player):
-    """可以给张角【闪】或【闪电】的其他群势力角色（按座次）。"""
-
-    result = []
-    for other in game.seats.alive_players_in_order(start_after=player):
-        if other is player or getattr(other, "kingdom", None) != "qun":
-            continue
-        if any(getattr(card, "name", None) in ("SHAN", "SHANDIAN")
-               for card in other.hand):
-            result.append(other)
-    return result
-
-
 def _activate_huangtian(game, player, target=None, cards=None):
-    """黄天：群雄同伴在各自的出牌阶段把一张【闪】或【闪电】交给张角。
+    """黄天：``player`` 是交牌的那名角色，``target`` 是持有【黄天】的张角。
 
-    同伴是 AI 时不会自己"主动给"，因此由张角点名一位持有者，由他交出牌——
-    这与卡面"群雄角色可在他们各自的出牌阶段给你"的结算结果一致。
+    牌已经由引擎从交牌者手里移到张角手牌（``transfer_cards``）。这里只记
+    "本出牌阶段已经交过一次"——它写在**交牌者**身上，因为次数限制属于他，
+    而不是张角。放弃 / 取消走不到这里，所以不会替他消耗次数。
     """
 
-    donors = _huangtian_donors(game, player)
-    if not donors:
+    if target is None or not (cards or ()):
         return False
-    donor = target if target in donors else donors[0]
-    card = next((item for item in donor.hand
-                 if getattr(item, "name", None) in ("SHAN", "SHANDIAN")), None)
-    if card is None:
-        return False
-    game.engine.context.apply(MoveCardAtom(
-        card, source=donor.hand, destination=player.hand))
-    game.add_log("%s 发动【黄天】，%s 交给他一张【%s】"
-                 % (player.name, donor.name, getattr(card, "display_name", "?")))
+    player.skill_state.set("huangtian", "used", 1, ResetScope.PHASE)
+    game.add_log("%s 的【黄天】：把一张【%s】交给 %s"
+                 % (player.name, getattr(cards[0], "display_name", "?"),
+                    target.name))
     return True
 
+
+#: 黄天的输入契约：交一张牌给持有者。费用牌用 ``transfer_cards`` 直接进
+#: 张角手牌，不是"先弃置再凭空造一张给他"——那张牌就是同一次移动。
+HUANGTIAN_SPEC = ActiveSkillSpec(
+    needs_target=True,
+    target_prompt="【黄天】：请选择要交给谁",
+    cost_cards=1,
+    cost_prompt="【黄天】：请选择要交给张角的【闪】或【闪电】",
+    transfer_cards=True,
+    # 费用从**交牌者**手里出：只有他的【闪】/【闪电】能交。
+    cost_candidates=_huangtian_candidate,
+)
 
 # ==================================================
 # 曹仁 · 据守（两个版本）
@@ -974,18 +998,21 @@ WIND_SKILLS = (
             prompt="【鬼道】：是否用一张黑桃 / 梅花牌替换判定牌？",
         ),
     ),
-    active(
-        "huangtian",
-        "黄天",
-        "主公技，出牌阶段你可以指定一名其他群势力角色，将其一张【闪】或【闪电】交给你。",
-        can_activate=_can_huangtian,
+    SkillDef(
+        id="huangtian",
+        name="黄天",
+        description="主公技，其他群势力角色的出牌阶段限一次，"
+                    "该角色可以将一张【闪】或【闪电】交给你。",
+        kind=SkillKind.ACTIVE,
         activate=_activate_huangtian,
-        spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=_huangtian_donors,
-            target_prompt="【黄天】：请选择给你【闪】或【闪电】的群势力角色",
+        # 授予型：技能属于张角，发动权与决定权在**那名群势力角色**手里。
+        # 它整个出牌阶段都是合法时点——阶段中途摸到【闪】当场就能交，
+        # 阶段开始时放弃过也还能再交（放弃不会消耗次数，只有真的交出去才算）。
+        grant=GrantedSpec(
+            can_offer=_huangtian_can_offer,
+            spec=HUANGTIAN_SPEC,
         ),
-        tags=("active", "lord"),
+        tags=("active", "granted_to_others", "card_transfer"),
         is_lord_skill=True,
     ),
     triggered(

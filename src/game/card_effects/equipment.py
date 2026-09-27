@@ -39,7 +39,8 @@ class EquipEffect(CardEffect):
             # 旧装备先按「失去装备」离场：回血 / 枭姬一类由事件订阅者处理。
             flow.context.apply(UnequipAtom(actor, card.subtype))
             flow.context.apply(
-                MoveCardAtom(old, destination=flow.game.deck.discard_pile)
+                MoveCardAtom(old, destination=flow.game.deck.discard_pile,
+                             owner=actor)
             )
         flow.context.apply(EquipCardAtom(actor, card))
 

@@ -18,6 +18,7 @@ from ..definitions import (
     triggered,
 )
 from ..mechanics import (
+    optional_trigger,
     add_mark,
     ask_cards,
     ask_confirm,
@@ -236,8 +237,15 @@ class Jiang(Skill):
         return event.target is self.owner and event.source is not self.owner
 
     def resolve(self, context, event):
-        context.apply(DrawCardsAtom(self.owner, 1))
-        context.state.add_log("%s 的【激昂】摸一张牌" % self.owner.name)
+        optional_trigger(
+            context, self.owner,
+            prompt="【激昂】：是否摸一张牌？", reason="jiang", label="激昂",
+            effect=self._draw).start()
+
+    def _draw(self, flow):
+        flow.context.apply(DrawCardsAtom(self.owner, 1))
+        flow.game.add_log("%s 的【激昂】摸一张牌" % self.owner.name)
+        return True
 
 
 class Hunzi(Skill):
@@ -472,38 +480,65 @@ class Guzheng(Skill):
 
 
 class GuzhengFlow(Flow):
+    """固政：获得该角色于此阶段弃置的牌，然后把其中的一张交还给他。
+
+    官方结算顺序是"**先返还其中一张**，才可拿其余牌"，所以：
+
+    * 放弃 = 一张都不动。以前请求写 ``min_cards=0``，空回答会被当成"一张都
+      不还"，紧接着却把整堆牌塞进固政拥有者手里（实测点放弃后二张拿到两张、
+      弃牌者一张未得）；
+    * 返还的那张必须此刻**还在弃牌堆里**，否则这次发动整体作废（不吞牌）；
+    * 单张牌的场景只能返还，不能自己留下。
+    """
+
     def __init__(self, engine, owner, loser, pile):
         super().__init__(engine.context)
         self.engine = engine
         self.game = engine.game
         self.owner = owner
         self.loser = loser
-        self.pile = pile
+        self.pile = list(pile)
         self.stage = "select"
 
     def begin(self):
+        candidates = [card for card in self.pile if self._in_pile(card)]
+        if not candidates:
+            return self.complete({"applied": False})
         ask_cards(self.engine, self, source=self.owner, target=self.owner,
                   prompt="【固政】：请选择交还给 %s 的一张牌（其余归你）" % self.loser.name,
-                  reason="guzheng", candidates=list(self.pile),
-                  min_cards=0, max_cards=1, zone="public_pool")
+                  reason="guzheng", candidates=candidates,
+                  min_cards=1, max_cards=1, zone="public_pool",
+                  # 可以放弃：放弃就是这次不发动，任何牌都不移动。
+                  context={"cancellable": True})
         return self.current_result()
 
     def advance(self, response=None):
         cards = list(getattr(response, "cards", ()) or ())
         returned = cards[0] if cards else None
-        moved = 0
+        if returned is None or not self._in_pile(returned):
+            self.game.add_log("%s 放弃发动【固政】，这些弃牌留在弃牌堆"
+                              % self.owner.name)
+            return self.complete({"applied": False})
+        # 先返还：这一步不成立就没有"获得其余牌"这回事。
+        self._move(returned, self.loser)
+        taken = 0
         for card in list(self.pile):
-            if not any(item is card for item in self.game.deck.discard_pile):
+            if card is returned or not self._in_pile(card):
                 continue
-            self.game.deck.discard_pile.remove(card)
-            if card is returned:
-                self.loser.hand.append(card)
-            else:
-                self.owner.hand.append(card)
-                moved += 1
-        self.game.add_log("%s 的【固政】交还 1 张牌给 %s，并获得其余 %d 张"
-                          % (self.owner.name, self.loser.name, moved))
-        return self.complete({"applied": True})
+            self._move(card, self.owner)
+            taken += 1
+        self.game.add_log("%s 的【固政】交还 %s 一张牌，并获得其余 %d 张"
+                          % (self.owner.name, self.loser.name, taken))
+        return self.complete({"applied": True, "taken": taken})
+
+    def _in_pile(self, card):
+        return any(item is card for item in self.game.deck.discard_pile)
+
+    def _move(self, card, player):
+        # 弃牌堆里的牌换主人：走统一原子（raw list 操作不发任何事件）。
+        self.context.apply(MoveCardAtom(
+            card, source=self.game.deck.discard_pile,
+            destination=player.hand, reason="guzheng"))
 
 
 class Beige(Skill):
@@ -553,6 +588,11 @@ class BeigeFlow(Flow):
         return self.current_result()
 
     def advance(self, response=None):
+        if self.stage == "club":
+            return self._after_club(response)
+        return self._after_cost(response)
+
+    def _after_cost(self, response):
         cards = list(getattr(response, "cards", ()) or ())
         if not cards:
             return self.complete({"applied": False})
@@ -590,17 +630,53 @@ class BeigeFlow(Flow):
             self.context.apply(DrawCardsAtom(victim, 2))
             game.add_log("【悲歌】方块：%s 摸两张牌" % victim.name)
         elif suit == "club" and source is not None:
-            for _ in range(2):
-                remaining = list(getattr(source, "hand", ()) or ())
-                if not remaining:
-                    break
-                self.context.apply(MoveCardAtom(
-                    remaining[-1], source=source.hand,
-                    destination=game.deck.discard_pile))
-            game.add_log("【悲歌】梅花：%s 弃两张牌" % source.name)
+            return self._ask_club_discard(source)
         elif suit == "spade" and source is not None:
             flip_player(game, source, reason="悲歌")
             game.add_log("【悲歌】黑桃：%s 的武将牌翻面" % source.name)
+        return self.complete({"applied": True})
+
+    # ---- 梅花：弃哪两张由**伤害来源自己**挑 ----
+
+    def _ask_club_discard(self, source):
+        """判定完成后向伤害来源询问——以前是代码反复取他手牌的最后一张。
+
+        候选是手牌与装备区的全部可弃牌；不足两张时按实际数量处理。
+        """
+
+        candidates = _cards_of(source)
+        if not candidates:
+            self.game.add_log("【悲歌】梅花：%s 没有牌可弃" % source.name)
+            return self.complete({"applied": True})
+        count = min(2, len(candidates))
+        self.stage = "club"
+        ask_cards(self.engine, self, source=self.owner, target=source,
+                  prompt="【悲歌】梅花：请选择要弃置的 %d 张牌" % count,
+                  reason="beige", candidates=candidates,
+                  min_cards=count, max_cards=count)
+        return self.current_result()
+
+    def _after_club(self, response):
+        game = self.game
+        source = getattr(self.damage, "source", None)
+        discarded = 0
+        for card in list(getattr(response, "cards", ()) or ()):
+            if source is None:
+                break
+            if any(item is card for item in source.hand):
+                self.context.apply(MoveCardAtom(
+                    card, source=source.hand,
+                    destination=game.deck.discard_pile))
+                discarded += 1
+                continue
+            for slot, equipped in (source.equipment or {}).items():
+                if equipped is card:
+                    self.context.apply(UnequipAtom(
+                        source, slot, game.deck.discard_pile))
+                    discarded += 1
+                    break
+        name = getattr(source, "name", "伤害来源")
+        game.add_log("【悲歌】梅花：%s 弃置 %d 张牌" % (name, discarded))
         return self.complete({"applied": True})
 
 
@@ -740,6 +816,36 @@ class Zaoxian(Skill):
                gain=("jixi",), name="凿险")
 
 
+def _tian_cards(player):
+    """邓艾武将牌上的「田」（实体牌）。"""
+
+    return list(player.placed_zone(TIAN_ZONE))
+
+
+def _jixi_targets(game, player):
+    """【急袭】的合法目标 = 【顺手牵羊】的合法目标（距离 1 以内、区域里有牌）。
+
+    以前候选是"全部其他存活角色"，距离 2 以上或没有牌可拿的人也会被列出来，
+    玩家点得中、提交却被引擎拒——目标合法性必须与【顺手牵羊】本身同一判据。
+    """
+
+    from src.game.engine import UseCardAction
+
+    from ..mechanics import virtual_card
+
+    probe = virtual_card("SHUNSHOU", player, (), category="trick")
+    effect = game.engine.card_effects.get(probe)
+    if effect is None:                                    # pragma: no cover
+        return []
+    result = []
+    for other in other_alive_players(game, player):
+        valid, _reason = effect.can_use(
+            game, UseCardAction(player, probe, [other], ignore_usage_limit=True))
+        if valid:
+            result.append(other)
+    return result
+
+
 def _can_jixi(game, player):
     if game.game_over or not player.alive:
         return False, "无法发动"
@@ -747,34 +853,78 @@ def _can_jixi(game, player):
         return False, "只能在你的出牌阶段发动"
     if not game.skills.has(player, "jixi"):
         return False, "还没有获得【急袭】"
-    if not player.placed_zone(TIAN_ZONE):
+    if not _tian_cards(player):
         return False, "没有「田」"
-    if not other_alive_players(game, player):
-        return False, "没有其他角色"
+    if not _jixi_targets(game, player):
+        return False, "没有符合【顺手牵羊】条件的目标"
     return True, ""
 
 
 def _activate_jixi(game, player, target=None, cards=None):
-    """急袭：把一张「田」当【顺手牵羊】使用。"""
+    """急袭：把一张「田」当【顺手牵羊】使用。
 
-    pile = list(player.placed_zone(TIAN_ZONE))
-    if not pile or target is None:
+    用哪一张「田」由邓艾自己选（以前默认拿第一张）：这里开一个选牌窗口，
+    选完才真正把「田」移出武将牌区。取消 = 什么都不发生，那张「田」留在
+    原区域（旧实现会先把它塞进手牌，用不出去也回不去）。
+    """
+
+    if target is None or not any(
+            other is target for other in _jixi_targets(game, player)):
         return False
-    chosen = list(cards or ())
-    card = chosen[0] if chosen and any(item is chosen[0] for item in pile) else pile[0]
-    player.take_placed_card(TIAN_ZONE, card)
-    # 「田」先回到手牌，再作为【顺手牵羊】的实体来源牌进入处理区；
-    # 出牌的来源牌移动、结算、进弃牌堆全部交给通用流程。
-    player.hand.append(card)
-    from src.game.engine import UseCardAction
-
-    from ..mechanics import virtual_card
-
-    virtual = virtual_card("SHUNSHOU", player, (card,), category="trick")
-    game.engine.submit(UseCardAction(
-        player, virtual, [target], ignore_usage_limit=True))
-    game.add_log("%s 发动【急袭】，将一张「田」当【顺手牵羊】使用" % player.name)
+    if not _tian_cards(player):
+        return False
+    JixiFlow(game.engine, player, target).start()
     return True
+
+
+class JixiFlow(Flow):
+    """急袭：先选一张「田」，再当作【顺手牵羊】使用。"""
+
+    def __init__(self, engine, owner, target):
+        super().__init__(engine.context)
+        self.engine = engine
+        self.game = engine.game
+        self.owner = owner
+        self.target = target
+
+    def begin(self):
+        candidates = _tian_cards(self.owner)
+        if not candidates:
+            return self.complete({"applied": False})
+        ask_cards(self.engine, self, source=self.owner, target=self.owner,
+                  prompt="【急袭】：请选择要当【顺手牵羊】使用的一张「田」",
+                  reason="jixi", candidates=candidates,
+                  min_cards=0, max_cards=1,
+                  context={"cancellable": True})
+        return self.current_result()
+
+    def advance(self, response=None):
+        cards = list(getattr(response, "cards", ()) or ())
+        card = cards[0] if cards else None
+        if card is None:
+            self.game.add_log("%s 放弃发动【急袭】" % self.owner.name)
+            return self.complete({"applied": False})
+        pile = _tian_cards(self.owner)
+        if not any(item is card for item in pile):
+            # 选牌期间这张「田」已经不在武将牌上：这次不发动，不动任何牌。
+            return self.complete({"applied": False})
+        if not any(other is self.target for other in _jixi_targets(self.game, self.owner)):
+            self.game.add_log("【急袭】的目标已经不再合法，本次不发动")
+            return self.complete({"applied": False})
+        from src.game.engine import UseCardAction
+
+        from ..mechanics import virtual_card
+
+        # 「田」先回到手牌，再作为【顺手牵羊】的实体来源牌进入处理区；
+        # 出牌的来源牌移动、结算、进弃牌堆全部交给通用流程（只移动这一次）。
+        self.owner.take_placed_card(TIAN_ZONE, card)
+        self.owner.hand.append(card)
+        virtual = virtual_card("SHUNSHOU", self.owner, (card,), category="trick")
+        self.engine.submit(UseCardAction(
+            self.owner, virtual, [self.target], ignore_usage_limit=True))
+        self.game.add_log("%s 发动【急袭】，将一张「田」当【顺手牵羊】使用"
+                          % self.owner.name)
+        return self.complete({"applied": True})
 
 
 # ==================================================
@@ -904,7 +1054,7 @@ MOUNTAIN_SKILLS = (
         activate=_activate_jixi,
         spec=ActiveSkillSpec(
             needs_target=True,
-            target_candidates=lambda game, player: other_alive_players(game, player),
+            target_candidates=_jixi_targets,
             target_prompt="【急袭】：请选择【顺手牵羊】的目标",
         ),
         tags=("active", "granted"),

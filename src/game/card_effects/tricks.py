@@ -49,6 +49,13 @@ class _ChooseTargetCardEffect(CardEffect):
     def begin(self, flow):
         target = flow.targets[0]
         candidates = list(target.hand) + [card for card in target.equipment.values() if card]
+        if not candidates:
+            # 目标在结算之前把牌交光了（无懈窗口里被技能拿走 / 送出去一类）：
+            # 没有牌可选，这张牌就到此为止。**不能**摆一个"一个候选都没有"
+            # 的选牌窗口——那不是给玩家的选择，而是一个谁也答不了的请求，
+            # 整局会停在上面（实测 seed 55 卡死 900 帧以上）。
+            flow.game.message = "【%s】没有可选的牌。" % flow.card.display_name
+            return flow.finish(cancelled=False)
         request = flow.engine.pending.create(
             PendingRequestType.SELECT_CARDS,
             source=flow.actor, target=flow.actor,
@@ -383,42 +390,13 @@ def jiedao_victim_candidates(game, actor, targets):
 def jiedao_sha_options(game, wielder, victim):
     """持武器者对指定角色可用的**全部**【杀】使用方式（含 View-As 转化）。
 
-    统一走 Card Action Discovery：实体【杀】、火杀 / 雷杀、【武圣】【龙胆】
-    一类"当【杀】使用"的转化都在里面。不写"只看 card.name == SHA"那种判断。
+    实现放在规则层（``skills.mechanics.sha_use_options``）：乱武一类"令某人
+    对某人使用一张【杀】"的技能读的是同一份候选，不各自重写一遍。
     """
 
-    actions = getattr(game, "card_actions", None)
-    if actions is None:                                   # pragma: no cover
-        return []
-    context = actions.play_context(wielder)
-    result = []
-    seen = set()
-    for card in list(getattr(wielder, "hand", ()) or ()):
-        for option in actions.actions_for_card(wielder, card, context):
-            if option.result_name != "SHA" or not option.complete or not option.enabled:
-                continue
-            if not context.allows(option.result_name):
-                continue
-            virtual = actions.effective_card(option)
-            if virtual is None:
-                continue
-            from src.game.engine import UseCardAction
+    from src.game.skills.mechanics import sha_use_options
 
-            effect = game.engine.card_effects.get(virtual)
-            if effect is None:
-                continue
-            probe = UseCardAction(wielder, virtual, [victim],
-                                  ignore_usage_limit=True)
-            valid, _reason = effect.can_use(game, probe)
-            if not valid:
-                continue
-            token = (option.action_id,
-                     tuple(id(item) for item in option.source_cards))
-            if token in seen:
-                continue
-            seen.add(token)
-            result.append(option)
-    return result
+    return sha_use_options(game, wielder, victim)
 
 
 class JiedaoWielderFlow(Flow):
@@ -673,6 +651,13 @@ class HuogongEffect(CardEffect):
 
     def begin(self, flow):
         target = flow.targets[0]
+        if not list(target.hand):
+            # 目标在结算前失去了所有手牌（技能 / 落英一类）：没有牌可展示，
+            # 火攻就此作罢（官方规则：目标无手牌时火攻没有效果）。绝不摆一个
+            # 空候选的"展示一张手牌"窗口——那会让整局停在一个答不了的请求上
+            # （实测 seed 51 卡死 900 帧以上）。
+            flow.game.message = "【火攻】的目标没有手牌，没有牌可以展示。"
+            return flow.finish(cancelled=False)
         # 交给界面层的东西全部在这里声明（Phase 18 交互契约）：
         # ``reason`` 选规则层声明的展示语义，``revealed_card`` / ``caster``
         # 一类是这次交互的**上下文事实**，界面不自己算也不自己写文案。
