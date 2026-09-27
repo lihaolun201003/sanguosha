@@ -1,4 +1,14 @@
+import os
 import sys
+
+from src import crash
+
+# 最早的入口就装崩溃日志：release 版没有控制台，未捕获异常只会让窗口"消失"，
+# 玩家什么线索都拿不到。装在这里连 pygame 初始化失败也留痕。
+crash.install()
+# 发布版是 --windowed：双击时没有控制台，stdout/stderr 是 None，任何 print
+# 都会抛异常（"闪一下就没了"）。这里先把它们兜住。
+crash.ensure_streams()
 
 import pygame
 
@@ -23,6 +33,23 @@ from src.ui.identity_reveal import IdentityRevealScreen
 from src.ui.interaction import handle_game_click
 from src.ui.lan_scene import LAN_SCENES, LanScene
 from src.ui.runtime_hook import RuntimeContext, load_runtime_hook
+
+
+# ==================================================
+# 打包自检入口：Sanguosha.exe --selftest
+#
+# 发布产物是单个 EXE，舍友机器上没有 tools/、没有源码，于是"exe 能不能真的
+# 玩"就只能靠肉眼。给一个隐藏开关：它把内置的 src/selftest 挂到真实主循环上
+# （与 tools/ 下那些验收脚本同一套挂钩协议），无头跑一遍
+# 菜单 → 选将 → 牌桌，并断言素材 / 字体 / 路径 / 注册表，然后退出。
+#
+# 它只在这一个开关下生效，正常双击运行时连字符串比较都不会命中。
+# ==================================================
+
+if "--selftest" in sys.argv:
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    os.environ["SGS_RUNTIME_SCRIPT"] = "src.selftest"
 
 
 pygame.init()

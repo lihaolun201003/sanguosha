@@ -300,11 +300,17 @@ def card_asset_id(card):
 # ==================================================
 
 def default_assets_root():
-    """项目根目录下的 ``assets/``；与本模块位置无关地稳定解析。"""
+    """``assets/`` 的绝对路径。
 
-    here = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(here))
-    return os.path.join(project_root, ASSETS_DIRNAME)
+    解析统一交给 ``src.paths``：源码运行时是仓库根，PyInstaller 打包后是
+    ``sys._MEIPASS``（只读解压目录）。模块自己算 ``__file__`` 的相对层级在
+    打包后会指向临时目录里不存在的路径——**这是"我这儿有图、舍友那儿没图"
+    的经典成因**，所以只留一个入口。
+    """
+
+    from src import paths
+
+    return paths.assets_root()
 
 
 def fit_contain(rect, source_size, *, align="center"):

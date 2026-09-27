@@ -9,8 +9,10 @@
 
 # 存哪儿
 
-仓库根目录的 ``user_preferences.json``（已 gitignore）。文件不存在、内容损坏、
-字段类型不对，一律**退回默认值**并继续运行——偏好坏了不能让游戏起不来。
+源码运行时是仓库根目录的 ``user_preferences.json``（已 gitignore）；打包成
+EXE 后是 ``%LOCALAPPDATA%/Sanguosha/user_preferences.json``（见 ``src.paths``，
+只读资源与可写数据必须分开）。文件不存在、内容损坏、字段类型不对，一律
+**退回默认值**并继续运行——偏好坏了不能让游戏起不来。
 
 # 默认值
 
@@ -45,10 +47,20 @@ PATH_ENV = "SGS_PREFERENCES"
 
 
 def default_path():
+    """偏好文件的位置。
+
+    ``SGS_PREFERENCES`` 指到哪就用哪（探针 / 验收脚本用）；否则交给
+    ``src.paths``：源码运行时是仓库根（既有行为不变），**打包成 EXE 后是
+    ``%LOCALAPPDATA%/Sanguosha/``**——绝不能落在 ``_MEIPASS`` 里，那是
+    每次启动都重建的临时目录，配置关掉游戏就没了。
+    """
+
     override = (os.environ.get(PATH_ENV) or "").strip()
     if override:
         return override
-    return os.path.join(project_root(), FILE_NAME)
+    from src import paths
+
+    return paths.user_file(FILE_NAME)
 
 
 def _clean_ids(values):

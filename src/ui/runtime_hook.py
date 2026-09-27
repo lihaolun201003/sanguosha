@@ -14,6 +14,7 @@
 """
 
 import importlib
+import importlib.util
 import os
 import sys
 
@@ -36,15 +37,53 @@ class RuntimeContext:
             setattr(self, key, values.get(key))
 
 
+def _load_module(name):
+    """按名字或**绝对路径**取到脚本模块。
+
+    三种来源，都服务于同一件事——"把一段驱动脚本挂到真实主循环上"：
+
+    * ``src.`` 前缀：包内脚本（``src/selftest.py``），跟着 bundle 一起走，
+      所以"独立目录里只有 exe"时也能自检；
+    * ``.py`` 结尾的路径：外部脚本文件（本机做**两个 EXE 同机联机实测**时用
+      ``tools/runtime_capture.py`` 这类驱动，EXE 自己不带 tools/）；
+    * 其余：``tools/`` 下的模块名，源码运行时的既有用法。
+    """
+
+    if name.startswith("src.") or name in sys.modules:
+        return importlib.import_module(name)
+    if name.endswith(".py") or os.path.sep in name:
+        path = os.path.abspath(name)
+        if not os.path.exists(path):
+            return None
+        spec = importlib.util.spec_from_file_location("sgs_runtime_script", path)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    if TOOLS_DIR not in sys.path:
+        sys.path.insert(0, TOOLS_DIR)
+    return importlib.import_module(name)
+
+
 def load_runtime_hook():
-    """按环境变量加载运行期脚本；没有指定时返回 ``None``。"""
+    """按环境变量加载运行期脚本；没有指定时返回 ``None``。
+
+    两种来源：
+
+    * ``tools/`` 下的脚本（用模块名，例如 ``handplay_scene``）——源码运行时用；
+      ``tools/`` 不在 sys.path 时先插进去。
+    * **包内**脚本（名字带 ``src.`` 前缀，例如 ``src.selftest``）——打包成 EXE
+      之后 ``tools/`` 根本不存在，但包内脚本跟着 ``src`` 一起进了 bundle，
+      所以"独立目录里只有 exe"时仍然能做自动化验证。
+    """
 
     name = (os.environ.get(HOOK_ENV) or "").strip()
     if not name:
         return None
-    if TOOLS_DIR not in sys.path:
-        sys.path.insert(0, TOOLS_DIR)
-    module = importlib.import_module(name)
+    module = _load_module(name)
+    if module is None:
+        return None
     hook = module.Hook()
     hook.bind_environment(dict(os.environ))
     return hook
