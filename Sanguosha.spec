@@ -46,10 +46,12 @@ APP_NAME = "Sanguosha-debug" if DEBUG else "Sanguosha"
 datas = [(os.path.join(ROOT, "assets"), "assets")]
 
 # 版本标记：crash.log 的抬头读它，方便舍友发回来的日志能对上构建。
-_version_file = os.path.join(os.environ.get("TEMP") or ROOT, "_sgs_version.txt")
+# 文件名必须与 src/crash.py 读的那个一致（_version.txt），否则崩溃日志里只会
+# 显示 "版本: dev"，排错时对不上是哪一次构建。
+_version_file = os.path.join(os.environ.get("TEMP") or ROOT, "_version.txt")
 with open(_version_file, "w", encoding="utf-8") as handle:
     handle.write(VERSION)
-datas.append((_version_file, "."))
+datas.append((_version_file, "."))  # → bundle 根下的 _version.txt
 
 # ==================================================
 # 隐藏导入

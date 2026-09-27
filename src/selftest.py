@@ -158,6 +158,11 @@ class Hook:
                    bool(theme._body_font_path() or theme._display_font_path()),
                    theme._body_font_path())
 
+        # 版本标记：崩了之后拿到的 crash.log 要能对上构建
+        from src import crash
+        self.check("版本标记可读（crash.log 能对上构建）",
+                   crash._version() not in ("", "dev"), crash._version())
+
         # 可写数据真的能持久化（"关掉再开设置还在"）。
         # **只在临时目录里试写**：默认路径指向的是玩家真实配置，自检不能动它
         # （SGS_PREFERENCES 就是给这种场合准备的覆盖开关）。
