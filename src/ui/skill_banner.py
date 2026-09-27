@@ -239,7 +239,7 @@ class SkillBanner:
 
         name_font = metrics.fonts.get(theme.FONT_SECTION)
         meta_font = metrics.fonts.get(theme.FONT_SMALL)
-        name = name_font.render("【" + self.skill_name + "】", True, tone)
+        name = name_font.render(self.skill_name, True, tone)
         meta_bits = [bit for bit in (self.kind_label, self.player.name) if bit]
         meta = meta_font.render("  ·  ".join(meta_bits), True, theme.TEXT_SECONDARY)
         gap = metrics.px(14)
@@ -306,7 +306,7 @@ class SkillBanner:
         fonts = metrics.fonts
         cursor = y
         name_font = fonts.get("large")
-        name = name_font.render("【%s】" % self.skill_name, True, theme.GOLD_BRIGHT)
+        name = name_font.render(self.skill_name, True, theme.GOLD_BRIGHT)
         layer.blit(name, (x, cursor))
         cursor += name.get_height() + metrics.px(8)
 

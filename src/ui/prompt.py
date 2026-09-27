@@ -90,7 +90,7 @@ def describe(game):
         verb = "打出" if view_as.context.is_response else "使用"
         return PromptInfo(
             "view_as",
-            "【" + view_as.skill_name + "】请选择 %d 张牌，将其当【%s】%s"
+            (view_as.skill_name + "：请选择 %d 张牌，将其当【%s】%s")
             % (view_as.required_source_count,
                _result_display(view_as.result_name), verb),
             "点击手牌选择来源：" + view_as.describe_selected() if view_as.selected_source_cards
@@ -106,7 +106,7 @@ def describe(game):
         chosen = len(card_action["selected"])
         return PromptInfo(
             "action",
-            "【" + (option.skill_name or option.skill_id) + "】将"
+            (option.skill_name or option.skill_id) + "：将"
             + option.describe_sources() + "当【" + option.result_display + "】使用",
             "请再选择 %d 张牌作为转化来源" % max(0, option.min_sources - chosen)
             if chosen < option.min_sources else "点击「确认使用」结算",
@@ -137,7 +137,7 @@ def describe(game):
             progress = ""
         return PromptInfo(
             "skill",
-            "发动【" + skill_input["name"] + "】",
+            "发动" + skill_input["name"],
             body,
             progress,
             theme.TARGET_BLUE,
@@ -291,7 +291,7 @@ def _conversion_origin(selection):
     action = (selection.get("metadata") or {}).get("card_action")
     if action is None or not getattr(action, "is_conversion", False):
         return ""
-    return "【%s】将%s当【%s】" % (
+    return "%s：将%s当【%s】" % (
         action.skill_name or action.skill_id,
         action.describe_sources(),
         action.result_display,

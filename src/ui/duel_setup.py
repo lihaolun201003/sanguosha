@@ -1059,7 +1059,7 @@ class DuelSetupScreen:
             definition = game.skill_registry.get(skill_id)
             if definition is None or top + line_font.get_linesize() > limit:
                 continue
-            label = "【%s】%s" % (definition.name, definition.description)
+            label = "%s  %s" % (definition.name, definition.description)
             self.screen.blit(line_font.render(
                 ellipsize_text(label, line_font, width), True, theme.TEXT),
                 (text_x, top))
@@ -1121,9 +1121,9 @@ class DuelSetupScreen:
         for skill_id in general.skill_ids:
             definition = game.skill_registry.get(skill_id)
             if definition is None:
-                body = "【" + skill_id + "】未注册的技能定义。"
+                body = skill_id + "：未注册的技能定义。"
             else:
-                body = "【%s】%s" % (definition.name, definition.description)
+                body = "%s  %s" % (definition.name, definition.description)
             entries.extend((line, theme.TEXT) for line in _wrap_lines(body, line_font, body_width))
 
         ok, reason = general.availability_for(getattr(game, "mode_id", None))

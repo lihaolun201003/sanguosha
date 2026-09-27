@@ -399,8 +399,8 @@ class GeneralSelectScreen:
             definition = registry.get(skill_id) if registry is not None else None
             if definition is None:
                 continue
-            kinds.append("【%s】%s" % (getattr(definition, "name", skill_id),
-                                      general_cards.skill_kind_label(definition)))
+            kinds.append("%s %s" % (getattr(definition, "name", skill_id),
+                                    general_cards.skill_kind_label(definition)))
         return "%s（%s %d 体力）：%s" % (
             general.name, general_cards.kingdom_label(general),
             int(general.max_hp or 0), " ".join(kinds))

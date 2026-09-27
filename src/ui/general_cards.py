@@ -125,7 +125,7 @@ def draw_skill_list(surface, general, game, rect, metrics, *, name_font=None,
         if definition is None:
             continue
         head = name_font.render(
-            "【%s】" % getattr(definition, "name", skill_id), True, title_color)
+            getattr(definition, "name", skill_id), True, title_color)
         if cursor + head.get_height() > rect.bottom:
             break
         surface.blit(head, (rect.x, cursor))

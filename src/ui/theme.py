@@ -526,16 +526,45 @@ def resolve_state(*names):
 
 
 # ==================================================
-# 字体（缓存，不每帧重建）
+# 字体（两级族 + 缓存，不每帧重建）
+#
+# # 两个族，各管一段
+#
+# * **正文族**（``BODY_*``）：正文 / 按钮 / 提示 / 设置 / Tooltip，
+#   界面里 95% 的字。黑体（雅黑一系）在小字号下笔画清楚，是唯一可接受的
+#   默认族。
+# * **显示族**（``DISPLAY_*``）：页面大标题 / 武将名 / 阶段横幅这类"一眼要
+#   看到"的强调文本，用楷体（KaiTi）带出古风。
+#
+# 红线：**小字号永远不用显示族**。楷体在 20px 附近的横向笔画会细到发虚，
+# 这是可读性问题，不是审美问题；所以只有 ``hero`` / ``huge`` / ``title``
+# 三档（46px 起）走显示族（见 ``DISPLAY_SIZE_KEYS``）。正文族里没有楷体
+# ——不会出现"整页楷体"。
+#
+# # 为什么还要按**文件**指定
+#
+# ``pygame.font.match_font("Microsoft YaHei")`` 在 Windows 上会命中
+# ``msyhl.ttc``，那是**雅黑 Light（细体）**面，不是常规面：15~17px 的小字
+# 在暖棕背景上明显发虚（这是"观感普通"的主因之一）。字体名匹配拿不到
+# Regular 面，所以先按文件取常规面（``msyh.ttc`` 的 0 号面 = Microsoft
+# YaHei Regular，与 1 号面 YaHei UI 同属"雅黑 UI 一系"；pygame 没有选 ttc
+# 子面的接口，只能拿到 0 号面）。文件不在（macOS / Linux / 精简系统）时退回
+# 按名字匹配，再不行用 ``FALLBACK_FONT_PATHS``，最后交给 pygame 的默认字体
+# ——**任何一层失败都不抛异常**。
 # ==================================================
 
-FONT_CANDIDATES = (
+#: 正文族（按名字匹配；第一候选是微软为小字号优化的 UI 面）
+BODY_FONT_CANDIDATES = (
+    "Microsoft YaHei UI",
     "Microsoft YaHei",
-    "Microsoft JhengHei",
     "DengXian",
+    # ---- 以下为原有候选，顺序不动 ----
+    "Microsoft JhengHei",
     "SimHei",
     "SimSun",
-    "KaiTi",
+    # 注意：原来的候选列表里有 "KaiTi"，这里**故意去掉**了。楷体现在是显示族
+    # （见 DISPLAY_FONT_CANDIDATES），正文族里留它会在"雅黑一系全都没有"的
+    # 机器上让整页小字变成楷体——那正是要避免的情况。
     "FangSong",
     "PingFang SC",
     "Hiragino Sans GB",
@@ -543,6 +572,29 @@ FONT_CANDIDATES = (
     "STHeiti",
     "Arial Unicode MS",
 )
+
+#: 显示族（楷体一系；Windows = KaiTi / simkai.ttf，macOS = STKaiti / Kaiti SC）
+DISPLAY_FONT_CANDIDATES = (
+    "KaiTi",
+    "KaiTi_GB2312",
+    "STKaiti",
+    "Kaiti SC",
+    "Kaiti TC",
+)
+
+#: 正文族优先使用的**常规面**文件（避开 match_font 命中的 Light 细面）。
+BODY_FONT_FILES = (
+    "C:/Windows/Fonts/msyh.ttc",
+    "C:/Windows/Fonts/msyh.ttf",
+)
+
+#: 显示族优先使用的文件（``simkai.ttf`` = KaiTi 常规面）。
+DISPLAY_FONT_FILES = (
+    "C:/Windows/Fonts/simkai.ttf",
+)
+
+#: 旧的单族候选名，保留为别名（正文族）。新代码请用 ``BODY_FONT_CANDIDATES``。
+FONT_CANDIDATES = BODY_FONT_CANDIDATES
 
 SYMBOL_FONT_CANDIDATES = (
     "Segoe UI Symbol",
@@ -575,11 +627,57 @@ def _resolve_font_path(candidates, extra_paths):
 
 
 @lru_cache(maxsize=None)
-def load_font(size, *, symbol=False):
+def _resolve_family_path(files, candidates, extra_paths):
+    """一个族的解析顺序：**指定文件 → 名字匹配 → 备用路径**（都不中就 None）。
+
+    只是在 ``_resolve_font_path`` 前面加了一层"明确到文件"的偏好：字形族不变，
+    只是拿到常规面而不是 Light 面。
+    """
+
+    for path in files:
+        if os.path.exists(path):
+            return path
+    return _resolve_font_path(candidates, extra_paths)
+
+
+@lru_cache(maxsize=None)
+def _body_font_path():
+    return _resolve_family_path(
+        BODY_FONT_FILES, BODY_FONT_CANDIDATES, FALLBACK_FONT_PATHS)
+
+
+@lru_cache(maxsize=None)
+def _display_font_path():
+    path = _resolve_family_path(DISPLAY_FONT_FILES, DISPLAY_FONT_CANDIDATES, ())
+    if path is None:
+        # 整个显示族都不可用（没有楷体）→ 回退到正文族，而不是交给默认字体：
+        # 大标题退回黑体仍然可读，退回默认字体就是豆腐块。
+        path = _body_font_path()
+    return path
+
+
+def font_file(family="body"):
+    """某个族在当前系统上实际用到的字体文件路径（诊断 / 探针用）。
+
+    ``family`` 取 ``"body"`` / ``"display"`` / ``"symbol"``；解析不出来时返回
+    ``None``（此时 ``pygame.font.Font(None, size)`` 会用 pygame 默认字体）。
+    """
+
+    if family == "display":
+        return _display_font_path()
+    if family == "symbol":
+        return _resolve_font_path(SYMBOL_FONT_CANDIDATES, ())
+    return _body_font_path()
+
+
+@lru_cache(maxsize=None)
+def load_font(size, *, symbol=False, display=False):
     if symbol:
         path = _resolve_font_path(SYMBOL_FONT_CANDIDATES, ())
+    elif display:
+        path = _display_font_path()
     else:
-        path = _resolve_font_path(FONT_CANDIDATES, FALLBACK_FONT_PATHS)
+        path = _body_font_path()
     return pygame.font.Font(path, size)
 
 
@@ -604,6 +702,13 @@ FONT_SIZES = {
     "menu_count": 24,
 }
 
+#: 走显示族（楷体）的档位：**只有页面级大字**（46px 起）。
+#: 这三个档位的实际用途：hero = 主标题 / 武将名 / 身份名，title = 页面标题 /
+#: 武将池卡名，huge = 阶段横幅。它们不会出现在卡面、状态条、日志这些小字上。
+#: 想给小字单独用楷体时不要往这里加名字，请在调用点显式用 ``Fonts.display()``
+#: ——那是有意为之的选择，而不是这里偷偷全局生效。
+DISPLAY_SIZE_KEYS = ("hero", "huge", "title")
+
 
 class Fonts:
     """Lazily built font set; cache key includes the resolved pixel size so a
@@ -612,15 +717,40 @@ class Fonts:
     def __init__(self):
         self._cache = {}
 
-    def get(self, name, scale=1.0):
+    def _fetch(self, family, name, scale):
         base = FONT_SIZES[name]
         size = max(9, int(round(base * scale)))
-        key = (name, size)
+        key = (family, name, size)
         font = self._cache.get(key)
         if font is None:
-            font = load_font(size)
+            font = load_font(size, display=(family == "display"))
             self._cache[key] = font
         return font
+
+    def get(self, name, scale=1.0):
+        """按档位名取字体（档位名与语义不变）。
+
+        页面级大字（``DISPLAY_SIZE_KEYS``）自动走显示族，其余一律正文族——
+        所以现成的调用点不用改，``get("hero")`` / ``get("title")`` 就拿到楷体，
+        而 ``get("small")`` / ``get("micro")`` 还是黑体。
+        """
+
+        family = "display" if name in DISPLAY_SIZE_KEYS else "body"
+        return self._fetch(family, name, scale)
+
+    def display(self, name, scale=1.0):
+        """**强制**显示族（楷体）：给武将名 / 技能名 / 标题这类强调文本用。
+
+        ``name`` 仍是 ``FONT_SIZES`` 里的档位名（字号系统不变）。20px 级别的
+        小字不要用它：楷体小字发虚。
+        """
+
+        return self._fetch("display", name, scale)
+
+    def body(self, name, scale=1.0):
+        """**强制**正文族：与 ``display`` 相反，用于大字档位也想用黑体的场合。"""
+
+        return self._fetch("body", name, scale)
 
     def suit(self, size):
         size = max(8, int(size))
@@ -632,7 +762,7 @@ class Fonts:
         return font
 
     def cached_sizes(self):
-        return tuple(sorted({key[1] for key in self._cache if key[0] != "suit"}))
+        return tuple(sorted({key[-1] for key in self._cache if key[0] != "suit"}))
 
 
 _fonts = Fonts()

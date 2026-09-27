@@ -212,7 +212,7 @@ class SkillBar:
         if definition.is_lord_skill:
             kind += " · 主公技"
         reason = self.blocked_reasons.get(definition.id)
-        lines = ["【%s】  %s" % (definition.name, kind), definition.description or "暂无说明。"]
+        lines = ["%s  %s" % (definition.name, kind), definition.description or "暂无说明。"]
         if reason:
             lines.append("当前无法发动：" + reason)
         return "\n".join(lines)
@@ -278,7 +278,7 @@ class SkillBar:
                              border_radius=theme.RADIUS_BUTTON)
 
             label = ellipsize_text(
-                "【%s】" % definition.name, fonts.get("normal"),
+                definition.name, fonts.get("normal"),
                 rect.width - self.metrics.px(18))
             rendered = fonts.get("normal").render(label, True, text_color)
             surface.blit(rendered, rendered.get_rect(center=rect.center))
@@ -401,7 +401,7 @@ class SkillPicker:
 
         pad = metrics.px(18)
         name_color = theme.TEXT if allowed else theme.TEXT_MUTED
-        name = fonts.get("normal").render("【" + definition.name + "】", True, name_color)
+        name = fonts.get("normal").render(definition.name, True, name_color)
         surface.blit(name, (rect.x + pad, rect.y + metrics.px(10)))
 
         desc_font = fonts.get("small")

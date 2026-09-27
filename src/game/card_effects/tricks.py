@@ -29,13 +29,38 @@ class _ChooseTargetCardEffect(CardEffect):
     target_rule = TargetRule.SINGLE_OTHER
     min_targets = max_targets = 1
     destination_is_actor = False
+    #: 候选牌里是否包含目标**判定区**里的延时锦囊。
+    #:
+    #: 官方规则上【过河拆桥】与【顺手牵羊】都能作用于判定区的牌（把【乐不思蜀】
+    #: 一类拆掉 / 摸走），但两者是**分别**由各自的声明打开的：共用基类的另一个
+    #: 效果不会因为继承而悄悄改变自己的作用范围。本轮只打开【过河拆桥】
+    #: （``GuoheEffect.include_judgement_zone = True``）。
+    include_judgement_zone = False
+
+    def selectable_cards(self, target):
+        """目标此刻真的可以被挑走的一张牌（手牌 → 装备区 → 判定区）。
+
+        顺序就是界面上的排列顺序，也是三个区域唯一的权威枚举口：
+        ``can_use`` 的可用性与 ``begin`` 的候选读的是同一份，不会出现
+        "能用但候选为空"或反过来的错位。
+
+        判定区里放的一律是延时锦囊（只有置入判定区的那几条路径会写它），
+        所以这里不需要再按牌名筛一遍；真按牌名筛反而会把将来别的效果置入
+        判定区的牌排除在外。
+        """
+
+        cards = list(target.hand)
+        cards.extend(card for card in target.equipment.values() if card)
+        if self.include_judgement_zone:
+            cards.extend(card for card in target.judgement_zone if card)
+        return cards
 
     def can_use(self, game, action):
         valid, message = super().can_use(game, action)
         if not valid:
             return valid, message
         target = list(action.targets)[0]
-        if not target.hand and not any(target.equipment.values()):
+        if not self.selectable_cards(target):
             return False, "目标没有可选择的牌。"
         limit = self.distance_limit_for(game, action.actor, action.card)
         if (
@@ -48,7 +73,7 @@ class _ChooseTargetCardEffect(CardEffect):
 
     def begin(self, flow):
         target = flow.targets[0]
-        candidates = list(target.hand) + [card for card in target.equipment.values() if card]
+        candidates = self.selectable_cards(target)
         if not candidates:
             # 目标在结算之前把牌交光了（无懈窗口里被技能拿走 / 送出去一类）：
             # 没有牌可选，这张牌就到此为止。**不能**摆一个"一个候选都没有"
@@ -68,29 +93,67 @@ class _ChooseTargetCardEffect(CardEffect):
         flow.engine.present_or_auto_resolve(request)
         return flow.current_result()
 
+    def _origin_of(self, target, card):
+        """这张被选中的牌现在在目标的哪个区域。
+
+        返回值是 ``"hand"`` / ``"judgement"`` / ``"<装备槽名>"`` / ``None``。
+        **必须按实体牌 identity 逐个区域查**——以前只判"在不在手牌里"，
+        不在手牌就当成装备，判定区的【乐不思蜀】会被送进 ``UnequipAtom``
+        （那会发出一次并不存在的"失去装备"事件）。
+        """
+
+        if any(item is card for item in target.hand):
+            return "hand"
+        if any(item is card for item in target.judgement_zone):
+            return "judgement"
+        for slot, equipped in target.equipment.items():
+            if equipped is card:
+                return slot
+        return None
+
     def resume(self, flow, resolution):
         card = resolution.cards[0]
         target = flow.targets[0]
-        source = target.hand
-        from_equipment = not any(item is card for item in source)
-        if from_equipment:
-            # 装备区的牌统一走 UnequipAtom 离场：失去装备事件由它发出。
-            for slot, equipped in target.equipment.items():
-                if equipped is card:
-                    flow.context.apply(UnequipAtom(target, slot))
-                    source = None
-                    break
         taking = self.destination_is_actor
         destination = flow.actor.hand if taking else flow.game.deck.discard_pile
-        # 牌已经离开装备槽，归属只能由调用方给出（``source`` 是 None 时按区域
-        # 反查不出主人）。**原因必须显式写**：这张牌是"被拿走"还是"被弃置"
-        # 决定【落英】一类技能要不要响应——只看"最终进了弃牌堆"会把顺手牵羊
-        # 也算成弃置。手牌来源保持原样（区域能反查出归属，语义没变）。
-        move_reason = "" if not from_equipment else ("lose" if taking else "discard")
-        flow.context.apply(MoveCardAtom(
-            card, source=source, destination=destination,
-            reason=move_reason,
-            owner=target if from_equipment else None))
+        # 牌被拿走 / 被弃置的规则原因（``MoveCardAtom`` 的原因词汇表）：
+        # 它决定【落英】一类技能要不要响应——只看"最终进了弃牌堆"会把
+        # 顺手牵羊也算成弃置。
+        move_reason = "lose" if taking else "discard"
+        origin = self._origin_of(target, card)
+        if origin is None:
+            # 候选在结算之前被移走（技能 / 无懈窗口）：不复制、不凭空造，
+            # 也不要把一张已经不在原区域的牌硬塞给原子（那会抛异常）。
+            flow.game.add_log(
+                "【%s】选中的牌已经不在 %s 的区域内，本次结算结束。"
+                % (flow.card.display_name, target.name))
+            return flow.finish(cancelled=False)
+        if origin == "hand":
+            flow.context.apply(MoveCardAtom(
+                card, source=target.hand, destination=destination))
+        elif origin == "judgement":
+            # 判定区的延时锦囊走**普通移动**：它不是装备，绝不能经过
+            # ``UnequipAtom``（那条出口会发"失去装备"事件，让枭姬一类技能
+            # 凭空响应）。归属按来源区域反查得出（判定区属于目标），
+            # 原因显式写出来，与手牌 / 装备两条路径同一套词汇。
+            #
+            # 注意：本轮**只有**【过河拆桥】打开 ``include_judgement_zone``
+            # （弃置 → 弃牌堆）。将来若把【顺手牵羊】也打开，这里的目的地
+            # 必须按官方规则改成使用者**自己的判定区**（获得延时锦囊时置入
+            # 获得者的判定区），而不是 ``actor.hand``；同名延时锦囊已存在的
+            # 处理也要一并定下来——所以那件事不能只改一个布尔值。
+            flow.context.apply(MoveCardAtom(
+                card, source=target.judgement_zone, destination=destination,
+                reason=move_reason, owner=target))
+        else:
+            # origin 就是装备槽名：装备区的牌统一走 UnequipAtom 离场，
+            # 失去装备事件由它发出。
+            flow.context.apply(UnequipAtom(target, origin))
+            # 牌已经离开装备槽，归属只能由调用方给出（``source`` 是 None 时
+            # 按区域反查不出主人）。手牌 / 判定区两条路径保持原样。
+            flow.context.apply(MoveCardAtom(
+                card, source=None, destination=destination,
+                reason=move_reason, owner=target))
         # 展示被拿走 / 被弃置的那张牌并停留片刻，让真人看清发生了什么。
         flow.engine.show_taken_card(
             card, target, flow.actor, to_hand=taking)
@@ -101,6 +164,9 @@ class _ChooseTargetCardEffect(CardEffect):
 class GuoheEffect(_ChooseTargetCardEffect):
     card_name = "GUOHE"
     cancellable_by_wuxie = True
+    #: 【过河拆桥】可以弃置目标判定区里的延时锦囊（官方规则：目标是
+    #: "一名其他角色区域内的一张牌"，判定区在内）。
+    include_judgement_zone = True
 
 
 class ShunshouEffect(_ChooseTargetCardEffect):

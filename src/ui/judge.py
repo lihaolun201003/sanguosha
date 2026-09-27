@@ -6,12 +6,23 @@
 
 生命周期（全部由 dt 驱动，**绝不 sleep、绝不额外抽牌**）：
 
-    OPEN → SOURCE_HOLD → DRAW_ANIMATION → REVEALED_HOLD
+    OPEN → SOURCE_HOLD → DRAW_ANIMATION → FLIP → REVEALED_HOLD
          →（可多次 REPLACEMENT，鬼才一类改判）
          → FINAL_RESULT → OUTCOME_HOLD → FADE_OUT → DONE
 
 判定牌永远来自引擎已经移动过的实体牌（``JudgeResult.card`` /
 ``JudgeContext.current_card``），面板只表现它，不产生任何牌。
+
+判定牌的出场分两步，为的是"翻判定牌"这个动作真的能被看见：
+
+* ``DRAW_ANIMATION``（``draw_progress``）：一张**牌背**从牌堆方向滑进判定区，
+  此时绝不能露出正面；
+* ``FLIP``（``flip_progress``）：到中央后才翻面——水平方向缩放做伪 3D，
+  前半段牌背收窄、后半段换成正面展开，**卡牌中心点全程不动**。
+
+顺序即"先飞入、再翻开"：把翻面拆成独立阶段（而不是塞进 DRAW_ANIMATION 的
+后半段）之后，"牌背在飞 / 正在翻 / 已翻开"三件事各有一个可断言的标量，
+验收脚本与将来的调试都不用去猜进度落在哪一段。
 """
 
 import pygame
@@ -42,6 +53,7 @@ MIN_STAGE = {
     "open": 0.22,
     "source_hold": 0.42,
     "draw_animation": 0.32,
+    "flip": 0.34,
     "revealed_hold": 0.60,
     "replacement": 0.40,
     "final_result": 0.30,
@@ -49,11 +61,23 @@ MIN_STAGE = {
     "fade_out": 0.18,
 }
 
+#: 翻牌动画的基准时长（秒，未按速度档缩放）。改判之外的每个阶段的时长都
+#: 来自 ``FXTiming``，但那边没有"翻牌"这一项，而本面板又只该管自己的表现；
+#: 所以这里取基准值再乘上当前速度档的缩放系数（``FXTiming.scale``），
+#: 效果与 ``FXTiming.judge_draw`` 一类完全一致：档位越快翻得越快，
+#: 但再快也不会短于 ``MIN_STAGE["flip"]``（极速档下依然看得见翻面）。
+FLIP_BASE_SECONDS = 0.62
+
+#: 翻到一半时那条竖线的最小宽度（设计像素）。0 宽会让牌"消失一帧"——
+#: 那正是翻牌动画最容易露馅的地方，所以给一个下限。
+FLIP_MIN_WIDTH = 3
+
 
 class JudgeStage(str, Enum):
     OPEN = "open"
     SOURCE_HOLD = "source_hold"
     DRAW_ANIMATION = "draw_animation"
+    FLIP = "flip"
     REVEALED_HOLD = "revealed_hold"
     REPLACEMENT = "replacement"
     FINAL_RESULT = "final_result"
@@ -68,8 +92,21 @@ def _timing():
     return timing()
 
 
+def _flip_seconds():
+    """翻牌这一段该走多久：基准时长 × 当前速度档。"""
+
+    return FLIP_BASE_SECONDS * float(getattr(_timing(), "scale", 1.0))
+
+
 class JudgePanel:
     """一次判定的展示状态机；同一时刻只展示一次判定（引擎也是串行的）。"""
+
+    #: 判定牌的**入场**阶段：牌还在飞（``DRAW_ANIMATION``）或还在翻（``FLIP``）。
+    #: 这段时间里换牌会把入场动画打断，所以改判只能先记账，等入场演完再切
+    #: （见 ``note_replacement``）——改判窗口和判定牌是同时出现的，玩家点得
+    #: 快就会落在这一段里。
+    ENTRANCE_STAGES = (JudgeStage.OPEN, JudgeStage.SOURCE_HOLD,
+                       JudgeStage.DRAW_ANIMATION, JudgeStage.FLIP)
 
     def __init__(self):
         self.active = False
@@ -80,8 +117,10 @@ class JudgePanel:
         self.spec = None
         self.owner = None
         self.revealed_card = None
+        self.entrance_card = None       # 入场动画演的那张（第一次翻出的判定牌）
         self.final_card = None
         self.previous_card = None       # 最近一次被替换掉的旧判定牌
+        self.deferred_replacement = None   # 入场期间到达、还没换上的改判
         self.replacement_history = ()
         self.outcome = None
         self.result = None
@@ -89,9 +128,11 @@ class JudgePanel:
         self.replacement_actor = None
         # 节奏
         self.timer = 0.0
+        self.stage_total = 1.0          # 当前阶段的实际时长（进度按它归一）
         self.hold_elapsed = 0.0
         self.alpha = 255
-        self.draw_progress = 0.0        # 0→1 的翻牌动画进度
+        self.draw_progress = 0.0        # 0→1 的飞入进度（牌背滑进判定区）
+        self.flip_progress = 0.0        # 0→1 的翻面进度（0.5 处换面）
 
     # ==================================================
     # 事件入口
@@ -103,17 +144,21 @@ class JudgePanel:
         if result is None:
             return self
         self.active = True
-        self.stage = JudgeStage.OPEN
-        self.timer = max(_timing().judge_open, MIN_STAGE["open"])
+        self._enter(JudgeStage.OPEN, _timing().judge_open)
         self.hold_elapsed = 0.0
         self.alpha = 255
         self.draw_progress = 0.0
+        self.flip_progress = 0.0
         self.reason = getattr(result, "reason", "") or ""
         self.spec = getattr(result, "source_spec", None)
         self.owner = getattr(result, "target", None) or getattr(result, "source", None)
         self.revealed_card = getattr(result, "card", None)
+        # 入场演的永远是这一次翻出的判定牌：后来的改判 / 最终结果都不会
+        # 改变"玩家看到的是这张牌被翻开"这件事（见 ENTRANCE_STAGES）。
+        self.entrance_card = self.revealed_card
         self.final_card = None
         self.previous_card = None
+        self.deferred_replacement = None
         self.replacement_history = tuple(getattr(result, "replacement_history", ()) or ())
         self.outcome = None
         self.result = None
@@ -122,7 +167,14 @@ class JudgePanel:
         return self
 
     def note_replacement(self, payload, game=None):
-        """改判发生：保留面板，换成新的判定牌并标出"被改过"。"""
+        """改判发生：保留面板，换成新的判定牌并标出"被改过"。
+
+        判定牌还在飞 / 还在翻的时候（``ENTRANCE_STAGES``）不换牌，只把这次
+        改判记下来，等入场演完再切到 ``REPLACEMENT``：改判窗口与判定牌同时
+        出现，玩家点得快时"第一次判定牌"必须照样被翻出来，不能被改判的牌
+        顶掉。规则层与此无关——结果早就在引擎里算完了，这里只是**什么时候
+        把哪张牌画出来**。
+        """
 
         if not self.active:
             return self
@@ -130,14 +182,20 @@ class JudgePanel:
         old_card = payload.get("old_card")
         if new_card is None:
             return self
+        if self.in_entrance:
+            self.deferred_replacement = (payload, game)
+            return self
         self.previous_card = old_card
         self.revealed_card = new_card
         self.replacement_history = tuple(payload.get("history") or ())
         self.replacement_actor = payload.get("player")
         skill_id = payload.get("skill_id") or ""
         self.replacement_skill_name = self._skill_name(game, skill_id)
-        self.stage = JudgeStage.REPLACEMENT
-        self.timer = max(_timing().judge_replacement, MIN_STAGE["replacement"])
+        # 改判沿用现有表现：新牌直接以**正面**出现在判定区（不重播翻牌）。
+        # 这里只把两个进度收尾，保证"牌一定是全部展开的正面"。
+        self.draw_progress = 1.0
+        self.flip_progress = 1.0
+        self._enter(JudgeStage.REPLACEMENT, _timing().judge_replacement)
         return self
 
     def finish(self, result):
@@ -171,10 +229,15 @@ class JudgePanel:
         self.timer = 0.0
         if self.result is None:
             return False
-        self.stage = JudgeStage.FADE_OUT
+        # 跳过时把两个进度都收尾：牌背 / 半张牌都必须变成完整正面再淡出。
+        # 入场期间到达的改判也不需要补演了：最终判定牌（result.card）已经
+        # 到手，跳过的正是"看过程"。
+        self.deferred_replacement = None
         self.draw_progress = 1.0
+        self.flip_progress = 1.0
         self.alpha = 255
-        self.timer = min(max(_timing().judge_fade_out, 0.12), 0.25)
+        self._hold_stage(JudgeStage.FADE_OUT,
+                         min(max(_timing().judge_fade_out, 0.12), 0.25))
         return True
 
     # ==================================================
@@ -195,11 +258,17 @@ class JudgePanel:
             if self.timer <= 0:
                 self._enter(JudgeStage.DRAW_ANIMATION, timing.judge_draw)
         elif self.stage is JudgeStage.DRAW_ANIMATION:
-            self.draw_progress = 0.0 if timing.judge_draw <= 0 else min(
-                1.0, 1.0 - max(0.0, self.timer) / timing.judge_draw)
+            self.draw_progress = self.stage_progress
             if self.timer <= 0:
+                # 牌背已经到位，下一段才翻面。
                 self.draw_progress = 1.0
+                self._enter(JudgeStage.FLIP, _flip_seconds())
+        elif self.stage is JudgeStage.FLIP:
+            self.flip_progress = self.stage_progress
+            if self.timer <= 0:
+                self.flip_progress = 1.0
                 self._enter(JudgeStage.REVEALED_HOLD, timing.judge_revealed_hold)
+                self._flush_deferred_replacement(game)
         elif self.stage is JudgeStage.REPLACEMENT:
             if self.timer <= 0:
                 self._enter(JudgeStage.REVEALED_HOLD, timing.judge_revealed_hold)
@@ -231,6 +300,15 @@ class JudgePanel:
                 self.stage = JudgeStage.DONE
         return self
 
+    def _flush_deferred_replacement(self, game=None):
+        """入场演完：把入场期间到达的改判补上（可能不止一次，见改判连锁）。"""
+
+        while self.deferred_replacement is not None:
+            payload, entry_game = self.deferred_replacement
+            self.deferred_replacement = None
+            self.note_replacement(payload, entry_game if entry_game is not None else game)
+        return self
+
     @staticmethod
     def _engine_is_judging(game):
         """引擎里判定逻辑是不是还没走完（没有 UI / 只读视图时当作"已结束"）。"""
@@ -241,10 +319,29 @@ class JudgePanel:
         return bool(gate.logical_pending)
 
     def _enter(self, stage, duration):
-        self.stage = stage
+        """切到某个阶段：时长取 ``duration`` 与该阶段最短可读时间的较大者。"""
+
         minimum = MIN_STAGE.get(getattr(stage, "value", str(stage)), 0.0)
-        self.timer = max(float(duration), minimum)
+        return self._hold_stage(stage, max(float(duration), minimum))
+
+    def _hold_stage(self, stage, seconds):
+        """不看 ``MIN_STAGE`` 直接设定阶段与时长（``skip`` 一类收尾路径用）。"""
+
+        self.stage = stage
+        self.timer = float(seconds)
+        self.stage_total = max(1e-6, self.timer)
         return self
+
+    @property
+    def stage_progress(self):
+        """当前阶段走了多少（0→1）。
+
+        分母用本阶段**实际**时长 ``stage_total``（已经含 ``MIN_STAGE`` 的下限），
+        所以进度不会在极速档下提前冲到 1（那会让翻牌动画"跳帧到结果"）。
+        """
+
+        elapsed = self.stage_total - max(0.0, self.timer)
+        return max(0.0, min(1.0, elapsed / self.stage_total))
 
     # ---- 只读查询（供测试与布局）----
 
@@ -255,8 +352,32 @@ class JudgePanel:
         return self.final_card or self.revealed_card
 
     @property
+    def in_entrance(self):
+        """判定牌是不是还在入场（飞入 / 翻面）——这段时间不换牌。"""
+
+        return self.stage in self.ENTRANCE_STAGES
+
+    @property
     def was_replaced(self):
         return bool(self.replacement_history)
+
+    @property
+    def drawn_face(self):
+        """这一帧判定牌画的是哪一面：``"back"`` / ``"front"``；没有牌则 None。
+
+        纯派生量，只有绘制路径与验收脚本读它。它的意义是"演出承诺"：
+        ``DRAW_ANIMATION`` 与 ``FLIP`` 前半段必须是 ``"back"``——判定牌的正面
+        在翻到一半之前绝不出现。
+        """
+
+        if self.shown_card is None or self.stage in (JudgeStage.OPEN,
+                                                     JudgeStage.SOURCE_HOLD):
+            return None
+        if self.stage is JudgeStage.DRAW_ANIMATION:
+            return "back"
+        if self.stage is JudgeStage.FLIP:
+            return "back" if self.flip_progress < 0.5 else "front"
+        return "front"
 
     # ---- 动作节奏：判定展示期间压住后续行动 ----
 
@@ -293,6 +414,10 @@ class JudgePanel:
         card = self.shown_card
         if card is not None:
             ids.add(id(card))
+        # 入场期间画的是**第一次翻出的判定牌**：它此刻还没进弃牌堆（改判换下来
+        # 的那张才刚进去），所以一并报上去，免得同一张牌在面板与弃牌堆两处都出现。
+        if self.in_entrance and self.entrance_card is not None:
+            ids.add(id(self.entrance_card))
         source = self._source_card(game)
         if source is not None:
             ids.add(id(source))
@@ -465,32 +590,81 @@ class JudgePanel:
             y += metrics.px(6)
 
         card = self.shown_card
-        if card is None or self.stage in (JudgeStage.OPEN, JudgeStage.SOURCE_HOLD,
-                                          JudgeStage.DRAW_ANIMATION):
+        if card is None or self.in_entrance:
             pending = fonts.get("normal").render("判定中……", True, theme.TEXT)
             layer.blit(pending, (rect.x, y))
-            if card is not None and self.stage is JudgeStage.DRAW_ANIMATION:
-                self._draw_card_flight(layer, card, rect, metrics, y)
+            # 入场只演**第一次翻出的判定牌**：改判 / 最终结果即使已经到达，
+            # 也要等这张牌被翻完再换上（否则"翻判定牌"会被改判的牌顶掉）。
+            entrance = self.entrance_card or card
+            if entrance is not None and self.stage in (JudgeStage.DRAW_ANIMATION,
+                                                       JudgeStage.FLIP):
+                self._draw_reveal(layer, entrance, rect, metrics, y)
             return
 
         card_top = y
-        size = self._fit(metrics, JUDGE_CARD_SIZE)
-        target = pygame.Rect(rect.x + metrics.px(6), card_top, size[0], size[1])
+        target = self._judge_card_rect(rect, metrics, card_top)
         self._draw_judge_card(layer, card, target, metrics)
 
         text_x = target.right + metrics.px(18)
         text_w = max(metrics.px(120), rect.right - text_x)
         self._draw_judge_text(layer, game, card, text_x, card_top, text_w, metrics)
 
-    def _draw_card_flight(self, layer, card, rect, metrics, top):
-        """抽牌动画：把判定牌从右侧外沿滑进来（纯表现，牌早已被引擎抽好）。"""
+    @staticmethod
+    def _judge_card_rect(rect, metrics, top):
+        """判定牌的**最终**落点：REVEALED_HOLD 与判定的终点位置就是它。
 
-        size = self._fit(metrics, JUDGE_CARD_SIZE)
+        飞入、翻面、停留三个阶段全用这一个矩形，所以"翻完之后牌在哪、
+        多大"与改动前逐像素一致（中心点不位移、宽高就是满值）。
+        """
+
+        size = JudgePanel._fit(metrics, JUDGE_CARD_SIZE)
+        return pygame.Rect(rect.x + metrics.px(6), top, size[0], size[1])
+
+    def _draw_reveal(self, layer, card, rect, metrics, top):
+        """判定牌的出场：先飞入（牌背），再翻面，最后才是正面。"""
+
+        target = self._judge_card_rect(rect, metrics, top)
+        if self.stage is JudgeStage.DRAW_ANIMATION:
+            self._draw_card_flight(layer, rect, metrics, target)
+        else:
+            self._draw_card_flip(layer, card, metrics, target)
+
+    def _draw_card_flight(self, layer, rect, metrics, target):
+        """飞入：一张**牌背**从右侧外沿滑到判定区（牌早已被引擎抽好）。
+
+        这一阶段绝不能画正面——否则"翻判定牌"就没有任何悬念了。
+        """
+
         progress = max(0.0, min(1.0, self.draw_progress))
         start_x = rect.right + metrics.px(40)
-        target = pygame.Rect(0, 0, size[0], size[1])
-        target.topleft = (int(start_x + (rect.x + metrics.px(6) - start_x) * progress), top)
-        card_draw.draw_card(layer, card, target, metrics.fonts)
+        moving = pygame.Rect(0, 0, target.width, target.height)
+        moving.topleft = (int(start_x + (target.x - start_x) * progress), target.y)
+        card_draw.draw_card_back(layer, moving)
+
+    def _draw_card_flip(self, layer, card, metrics, target):
+        """翻面：只用**水平缩放**做伪 3D（绕 Y 轴转过去的观感）。
+
+        * 0→0.5：牌背，宽度 100% → 最窄（``FLIP_MIN_WIDTH``，不是 0）；
+        * 0.5→1：换成**正面**，宽度最窄 → 100%；
+        * 两次缩放都以牌的中心为基准，所以牌不会左右乱跳；
+        * 高度全程不变，翻完就是与 ``REVEALED_HOLD`` 完全相同的满尺寸正面。
+        """
+
+        phase = max(0.0, min(1.0, self.flip_progress))
+        face_up = phase >= 0.5
+        # 0.5 是"那条竖线"：两侧的宽度都从这里取最小值，中间不会跳。
+        ratio = (phase - 0.5) * 2.0 if face_up else 1.0 - phase * 2.0
+        width = max(metrics.px(FLIP_MIN_WIDTH), int(round(target.width * ratio)))
+
+        face = pygame.Surface(target.size, pygame.SRCALPHA)
+        body = face.get_rect()
+        if face_up:
+            card_draw.draw_card(face, card, body, metrics.fonts)
+        else:
+            card_draw.draw_card_back(face, body)
+        if width < body.width:
+            face = pygame.transform.smoothscale(face, (width, body.height))
+        layer.blit(face, face.get_rect(center=target.center))
 
     def _draw_judge_card(self, layer, card, target, metrics, *, size=None):
         frame = target.inflate(metrics.px(8), metrics.px(8))
@@ -516,9 +690,11 @@ class JudgePanel:
             # 面板里放不下第二张卡：用一行文字交代"原来翻出的是什么"，
             # 玩家依然能看出判定牌被换过、从什么换成了什么。
             actor = getattr(self.replacement_actor, "name", "")
-            skill = self.replacement_skill_name or "改判"
+            # 技能名不带【】（本行只有技能名；卡牌名的【】在别处，照旧保留）。
+            action = ("发动%s改判" % self.replacement_skill_name) \
+                if self.replacement_skill_name else "改判"
             note = fonts.get("small").render(
-                "%s 发动【%s】改判（共 %d 次）" % (actor, skill, len(self.replacement_history)),
+                "%s %s（共 %d 次）" % (actor, action, len(self.replacement_history)),
                 True, theme.TARGET_BLUE)
             layer.blit(note, (x, cursor))
             cursor += note.get_height() + metrics.px(4)

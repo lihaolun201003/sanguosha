@@ -137,7 +137,7 @@ def build_lines(game, player, font, max_width):
         return lines, header
 
     for name, description in rows:
-        lines.append(("【%s】" % name, font, theme.TEXT, 0))
+        lines.append((name, font, theme.TEXT, 0))
         for piece in wrap_text(description, font, max_width):
             lines.append((piece, font, theme.TEXT_DIM, 1))
     return lines, header

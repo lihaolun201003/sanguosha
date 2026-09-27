@@ -1339,7 +1339,7 @@ class Effects:
         self._skill_actor_left = timing().skill_float
         if float_text:
             x, y = self._anchor(player)
-            self.floats.append(FloatText("【" + str(skill_name) + "】", (x, y),
+            self.floats.append(FloatText(str(skill_name), (x, y),
                                          (250, 220, 150), life=timing().skill_float))
         targets = [item for item in (targets or ()) if item is not None]
         if targets:

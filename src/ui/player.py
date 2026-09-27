@@ -227,7 +227,7 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     for skill_id in game.skills.skill_ids_of(player):
         definition = game.skill_registry.get(skill_id)
         if definition is not None:
-            skill_names.append("【" + definition.name + "】")
+            skill_names.append(definition.name)
     # 座次取真实座位号：单机真人永远是 0，联网客户端可能是别的座位。
     seat_text = "座次 " + str(getattr(player, "seat", 0))
     seat_label = seat_text + ("  " + " ".join(skill_names) if skill_names else "")
@@ -236,7 +236,7 @@ def draw_player_status(surface, game, table_layout, *, flash=0.0, flash_color=th
     slots = list(table_layout.player_equipment_rects().values())
     limit_x = min((slot.x for slot in slots), default=rect.right) - metrics.px(12)
     seat_available = max(1, limit_x - seat_x)
-    # 放不下就整段不显示技能名：宁可不显示，也不要半截的「【…」。
+    # 放不下就整段不显示技能名：宁可不显示，也不要半截的技能名。
     if seat_font.size(seat_label)[0] > seat_available:
         seat_label = seat_text
     seat = seat_font.render(ellipsize_text(seat_label, seat_font, seat_available),

@@ -530,9 +530,9 @@ class RemoteHumanController(HumanController):
             if definition is not None and getattr(definition, "is_view_as", False):
                 # 视为技（武圣 / 装备赋予的丈八蛇矛…）在客户端是"牌的一种
                 # 用法"，不是一条可以单独回答的决策：给出可操作的指引。
-                state.notice = "【%s】请点击武器或直接选择要转化的牌" % definition.name
+                state.notice = "%s：请点击武器或直接选择要转化的牌" % definition.name
                 return None
-            state.notice = "房主没有列出发动【" + skill_id + "】"
+            state.notice = "房主没有列出发动" + skill_id
             return None
         if not entry.get("enabled", True):
             state.notice = str(entry.get("disabled_reason") or "现在不能发动")

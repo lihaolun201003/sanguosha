@@ -44,6 +44,24 @@ def hand_limit_of(game, player):
     return max(0, int(getattr(player, "hp", 0) or 0))
 
 
+def _tooltip_key(payload):
+    """悬停提示的"目标身份"（``TooltipManager`` 用它判断要不要重新计时）。
+
+    **字符串目标必须按内容取 key，不能按 ``id()``**：技能提示是一段每次
+    重新拼出来的字符串，``id()`` 每帧都可能不同，于是"换目标就重新计时"
+    会退化成"每帧都重新计时"——提示永远等不到 200ms 那一刻（表现为**时有时无**，
+    实测同一次悬停在两局里一次出现、一次不出现）。
+
+    卡牌 / 角色是长生命周期对象，用 ``id()`` 才是对的（同一张实体牌始终同一
+    个 identity）。
+    """
+
+    kind, target = payload
+    if isinstance(target, str):
+        return (kind, target)
+    return (kind, id(target))
+
+
 class Renderer:
 
     def __init__(self, screen):
@@ -1042,7 +1060,7 @@ class Renderer:
                 hovered_player = self._hovered_general(game)
                 if hovered_player is not None:
                     payload = ("player", hovered_player)
-        key = None if payload is None else (payload[0], id(payload[1]))
+        key = None if payload is None else _tooltip_key(payload)
         self.tooltips.observe(key)
         if payload is None or not self.tooltips.ready:
             return
