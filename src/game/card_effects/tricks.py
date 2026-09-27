@@ -72,19 +72,29 @@ class _ChooseTargetCardEffect(CardEffect):
         card = resolution.cards[0]
         target = flow.targets[0]
         source = target.hand
-        if not any(item is card for item in source):
+        from_equipment = not any(item is card for item in source)
+        if from_equipment:
             # 装备区的牌统一走 UnequipAtom 离场：失去装备事件由它发出。
             for slot, equipped in target.equipment.items():
                 if equipped is card:
                     flow.context.apply(UnequipAtom(target, slot))
                     source = None
                     break
-        destination = flow.actor.hand if self.destination_is_actor else flow.game.deck.discard_pile
-        flow.context.apply(MoveCardAtom(card, source=source, destination=destination))
+        taking = self.destination_is_actor
+        destination = flow.actor.hand if taking else flow.game.deck.discard_pile
+        # 牌已经离开装备槽，归属只能由调用方给出（``source`` 是 None 时按区域
+        # 反查不出主人）。**原因必须显式写**：这张牌是"被拿走"还是"被弃置"
+        # 决定【落英】一类技能要不要响应——只看"最终进了弃牌堆"会把顺手牵羊
+        # 也算成弃置。手牌来源保持原样（区域能反查出归属，语义没变）。
+        move_reason = "" if not from_equipment else ("lose" if taking else "discard")
+        flow.context.apply(MoveCardAtom(
+            card, source=source, destination=destination,
+            reason=move_reason,
+            owner=target if from_equipment else None))
         # 展示被拿走 / 被弃置的那张牌并停留片刻，让真人看清发生了什么。
         flow.engine.show_taken_card(
-            card, target, flow.actor, to_hand=self.destination_is_actor)
-        flow.game.message = flow.actor.name + "使用【" + flow.card.display_name + "】获得一张牌。" if self.destination_is_actor else flow.actor.name + "使用【过河拆桥】弃置一张牌。"
+            card, target, flow.actor, to_hand=taking)
+        flow.game.message = flow.actor.name + "使用【" + flow.card.display_name + "】获得一张牌。" if taking else flow.actor.name + "使用【过河拆桥】弃置一张牌。"
         return flow.finish(cancelled=False)
 
 

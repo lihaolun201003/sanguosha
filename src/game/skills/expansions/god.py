@@ -6,7 +6,13 @@
 "第一回合开始时再补"的近似实现冒充它。
 """
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, UnequipAtom
+from src.game.atoms_v2 import (
+    DISCARD_REASON,
+    DrawCardsAtom,
+    MoveCardAtom,
+    RecoverHpAtom,
+    UnequipAtom,
+)
 from src.game.conversion import (
     PLAY_CONTEXT,
     RESPONSE_CONTEXT,
@@ -859,7 +865,8 @@ class ShenfenFlow(Flow):
             for slot in list(getattr(other, "equipment", {})):
                 if other.get_equipment(slot) is not None:
                     self.context.apply(UnequipAtom(
-                        other, slot, game.deck.discard_pile))
+                        other, slot, game.deck.discard_pile,
+                        reason=DISCARD_REASON))
         self.stage = "discard"
         self.index = 0
         return self._next_discard()

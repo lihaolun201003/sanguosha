@@ -337,10 +337,11 @@ class Liuli(Skill):
             return
         for slot in ("weapon", "armor", "offensive_horse", "defensive_horse"):
             if self.owner.get_equipment(slot) is card:
-                from src.game.atoms_v2 import UnequipAtom
+                from src.game.atoms_v2 import DISCARD_REASON, UnequipAtom
 
                 game.engine.context.apply(UnequipAtom(
-                    self.owner, slot, game.deck.discard_pile))
+                    self.owner, slot, game.deck.discard_pile,
+                    reason=DISCARD_REASON))
                 return
 
 

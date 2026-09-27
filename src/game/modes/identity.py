@@ -1,6 +1,11 @@
 """标准身份局：身份配比、开局规则、死亡奖惩与阵营胜负。"""
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, UnequipAtom
+from src.game.atoms_v2 import (
+    DISCARD_REASON,
+    DrawCardsAtom,
+    MoveCardAtom,
+    UnequipAtom,
+)
 from src.game.engine import EventType
 from src.game.engine.state import GameOutcome, GameResult
 
@@ -252,7 +257,8 @@ class IdentityMode(GameMode):
         for slot, card in list(lord.equipment.items()):
             if card is not None:
                 self.game.engine.context.apply(
-                    UnequipAtom(lord, slot, self.game.deck.discard_pile))
+                    UnequipAtom(lord, slot, self.game.deck.discard_pile,
+                                reason=DISCARD_REASON))
         self.game.add_log(lord.name + " 误杀忠臣，弃置所有手牌与装备")
 
     # ==================================================

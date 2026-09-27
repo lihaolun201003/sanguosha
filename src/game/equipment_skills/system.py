@@ -1,6 +1,12 @@
 """Engine V2 equipment skills and resumable activation controller."""
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, UnequipAtom
+from src.game.atoms_v2 import (
+    DISCARD_REASON,
+    DrawCardsAtom,
+    MoveCardAtom,
+    RecoverHpAtom,
+    UnequipAtom,
+)
 from src.game.engine.domain_actions import UseCardAction
 from src.game.engine.events import EventType
 from src.game.engine.flows import FlowStatus
@@ -317,7 +323,11 @@ class EquipmentSkillController:
             card = resolution.cards[0]
             for slot, current in flow.target.equipment.items():
                 if current is card:
-                    flow.context.apply(UnequipAtom(flow.target, slot, flow.game.deck.discard_pile))
+                    # 麒麟弓的文本就是"弃置其装备区里的一张坐骑牌"：
+                    # 按弃置语义离开装备区，【落英】一类订阅者看得到。
+                    flow.context.apply(UnequipAtom(
+                        flow.target, slot, flow.game.deck.discard_pile,
+                        reason=DISCARD_REASON))
                     break
             return flow.finish(cancelled=False)
         return None

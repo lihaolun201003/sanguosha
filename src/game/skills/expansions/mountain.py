@@ -4,7 +4,12 @@
 原因写在各自的 ``unavailable_reason``——不在这里放半截实现。
 """
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, UnequipAtom
+from src.game.atoms_v2 import (
+    DISCARD_REASON,
+    DrawCardsAtom,
+    MoveCardAtom,
+    UnequipAtom,
+)
 from src.game.engine import EventType, Flow
 from src.game.engine.skills import Skill, SkillBinding
 from src.game.rules import TurnPhase
@@ -145,8 +150,10 @@ class TiaoxinFlow(Flow):
             else:
                 for slot, equipped in (self.target.equipment or {}).items():
                     if equipped is card:
+                        # 挑衅：文本就是"弃置其一张牌"，装备按弃置语义离场。
                         self.context.apply(UnequipAtom(
-                            self.target, slot, self.game.deck.discard_pile))
+                            self.target, slot, self.game.deck.discard_pile,
+                            reason=DISCARD_REASON))
                         break
             self.game.add_log("%s 的【挑衅】弃置了 %s 的一张牌"
                               % (self.owner.name, self.target.name))
@@ -605,7 +612,8 @@ class BeigeFlow(Flow):
             for slot, equipped in (self.owner.equipment or {}).items():
                 if equipped is card:
                     self.context.apply(UnequipAtom(
-                        self.owner, slot, self.game.deck.discard_pile))
+                        self.owner, slot, self.game.deck.discard_pile,
+                        reason=DISCARD_REASON))
                     break
         flow, result = judge(self.engine, self.damage.target, "beige")
         if result is None:
@@ -672,7 +680,8 @@ class BeigeFlow(Flow):
             for slot, equipped in (source.equipment or {}).items():
                 if equipped is card:
                     self.context.apply(UnequipAtom(
-                        source, slot, game.deck.discard_pile))
+                        source, slot, game.deck.discard_pile,
+                        reason=DISCARD_REASON))
                     discarded += 1
                     break
         name = getattr(source, "name", "伤害来源")

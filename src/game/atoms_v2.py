@@ -2,8 +2,15 @@
 
 from dataclasses import dataclass
 
+from src.game.conversion import EQUIPMENT_ZONE
+
 from .engine import Atom, AtomResult
 from .engine.events import Event, EventType
+
+#: 牌移动的原因词汇表里，"弃置"这一个。**进弃牌堆不等于弃置**：使用后置入、
+#: 判定后置入、替换装备置入、死亡清理置入都不是弃置，而【落英】这类技能只认
+#: 后者。规则的差异全部由这个字符串承载，不由目的地承载。
+DISCARD_REASON = "discard"
 
 
 def _remove_identity(items, value):
@@ -23,6 +30,54 @@ def _sync_granted_skills(game, player):
     from .equipment_skills.granted import sync_equipment_skills
 
     sync_equipment_skills(game, player)
+
+
+def emit_card_moved(context, card, *, source, destination, reason, owner,
+                    extra=None):
+    """牌移动之后的规则通知——全项目唯一的出口。
+
+    手牌移动与装备区移动读的是同一份 ``reason`` 语义，订阅者（【落英】
+    【屯田】…）不必关心牌是从哪个区域离开的：
+
+    * 目的地是弃牌堆 → ``CARD_DISCARDED``，``reason`` 如实带上，**算不算由
+      订阅者判断**（落英只认 discard / judge）；
+    * 其它目的地 → 牌离开了某名角色的区域 → ``CARD_LOST``；
+    * ``reason`` 为空 = 调用方**没有声明**这次移动的规则语义 → 不发任何通知。
+      这是兼容承诺：装备区的"未归类移动"（换装、死亡清理…）不会因为这次
+      收口而被当成弃置。
+    """
+
+    if not reason:
+        return
+    game = context.state
+    deck = getattr(game, "deck", None)
+    if deck is None:
+        return
+    payload = {
+        "card": card,
+        "reason": reason,
+        "owner": owner,
+        "from": source,
+    }
+    if extra:
+        payload.update(extra)
+    if destination is deck.discard_pile:
+        context.emit(Event(
+            EventType.CARD_DISCARDED,
+            source=owner,
+            target=owner,
+            payload=payload,
+        ))
+        return
+    if owner is None:
+        return
+    payload["to"] = destination
+    context.emit(Event(
+        EventType.CARD_LOST,
+        source=owner,
+        target=owner,
+        payload=payload,
+    ))
 
 
 @dataclass
@@ -53,8 +108,14 @@ class MoveCardAtom(Atom):
                 "destination": self.destination,
             }
         )
-        self._notify_discard(context)
-        self._notify_lost(context)
+        emit_card_moved(
+            context,
+            self.card,
+            source=self.source,
+            destination=self.destination,
+            reason=self.reason or DISCARD_REASON,
+            owner=self._discard_owner(context.state),
+        )
         return result
 
     def _discard_owner(self, game):
@@ -65,62 +126,6 @@ class MoveCardAtom(Atom):
         if owner is None and callable(finder):
             owner = finder(self.source)
         return owner
-
-    def _notify_discard(self, context):
-        """目的地是弃牌堆时发一条统一的「有牌进弃牌堆」通知。
-
-        这是全项目**唯一**的弃牌出口：手牌超限弃牌、拆顺弃牌、判定牌进弃牌堆、
-        装备被弃……全部经过这里。订阅它的技能不必再分别适配每条丢弃路径。
-        """
-
-        game = context.state
-        deck = getattr(game, "deck", None)
-        if deck is None or self.destination is not deck.discard_pile:
-            return
-        from .engine.events import Event, EventType
-
-        owner = self._discard_owner(game)
-        context.emit(Event(
-            EventType.CARD_DISCARDED,
-            source=owner,
-            target=owner,
-            payload={
-                "card": self.card,
-                "reason": self.reason or "discard",
-                "owner": owner,
-                "from": self.source,
-            },
-        ))
-
-    def _notify_lost(self, context):
-        """牌离开了某名角色的区域、但没有进弃牌堆（给出去了 / 被拿走了）。
-
-        「失去牌」是【屯田】一类能力的时机，它比「弃牌」更宽：被【顺手牵羊】
-        拿走、被【仁德】送出去都算。弃牌已经由 CARD_DISCARDED 单独通知，
-        这里不重复发，避免同一个动作触发两次。
-        """
-
-        game = context.state
-        deck = getattr(game, "deck", None)
-        if deck is None or self.destination is deck.discard_pile:
-            return
-        owner = self._discard_owner(game)
-        if owner is None:
-            return
-        from .engine.events import Event, EventType
-
-        context.emit(Event(
-            EventType.CARD_LOST,
-            source=owner,
-            target=owner,
-            payload={
-                "card": self.card,
-                "reason": self.reason or "lose",
-                "owner": owner,
-                "from": self.source,
-                "to": self.destination,
-            },
-        ))
 
 
 @dataclass
@@ -206,11 +211,20 @@ class UnequipAtom(Atom):
     这是装备区离开的统一出口：主动换装、被拆、被顺、被弃、死亡清理都走它，
     订阅 ``EQUIPMENT_LOST`` 的技能（枭姬一类）不必关心是谁把牌拿走的。
     ``destination`` 给定时顺手把牌放进目标区域。
+
+    ``reason`` 是这次离开装备区的**规则原因**（与 ``MoveCardAtom.reason``
+    同一套词汇）。它决定要不要再发一条牌移动通知：
+
+    * ``reason="discard"`` → 牌进弃牌堆时额外发 ``CARD_DISCARDED``，
+      所以【落英】这类"因弃置进入弃牌堆"的技能看得到装备被弃；
+    * 留空 → 只发 ``EQUIPMENT_LOST``。**进弃牌堆不等于弃置**——换装、死亡
+      清理、以及尚未归类的路径都靠这一条保持原来的语义，不会被误当成弃置。
     """
 
     player: object
     slot: str
     destination: object = None
+    reason: str = ""
 
     def apply(self, context):
         from .engine.events import Event, EventType
@@ -233,6 +247,17 @@ class UnequipAtom(Atom):
         ))
         # 装备已经离开装备区：由它赋予的技能（丈八蛇矛一类）同时失效。
         _sync_granted_skills(context.state, self.player)
+        # 再按规则原因补一条牌移动通知（弃置 → CARD_DISCARDED）。原拥有者
+        # 就是装备区的主人，不必靠区域反查——牌现在已经不在装备槽里了。
+        emit_card_moved(
+            context,
+            card,
+            source=None,
+            destination=self.destination,
+            reason=self.reason,
+            owner=self.player,
+            extra={"from_zone": EQUIPMENT_ZONE, "slot": self.slot},
+        )
         return AtomResult(data={
             "card": card,
             "player": self.player,
@@ -247,10 +272,14 @@ class TransferEquipmentAtom(Atom):
     source_player: object
     slot: str
     destination: object
+    #: 与 ``UnequipAtom.reason`` 同一套词汇；借刀杀人一类"转给别人"不是弃置，
+    #: 所以默认留空（只发 EQUIPMENT_LOST）。
+    reason: str = ""
 
     def apply(self, context):
         # 借刀杀人一类把装备转给别人：同样按「失去装备」结算。
-        result = context.apply(UnequipAtom(self.source_player, self.slot, self.destination))
+        result = context.apply(UnequipAtom(
+            self.source_player, self.slot, self.destination, reason=self.reason))
         return AtomResult(data={
             "card": result.data["card"],
             "source": self.source_player,

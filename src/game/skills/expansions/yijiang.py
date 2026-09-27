@@ -6,7 +6,13 @@
 任何猜测性的技能。
 """
 
-from src.game.atoms_v2 import DrawCardsAtom, MoveCardAtom, RecoverHpAtom, UnequipAtom
+from src.game.atoms_v2 import (
+    DISCARD_REASON,
+    DrawCardsAtom,
+    MoveCardAtom,
+    RecoverHpAtom,
+    UnequipAtom,
+)
 from src.game.conversion import CardConversion, PLAY_CONTEXT
 from src.game.engine import EventType, Flow
 from src.game.engine.skills import Skill, SkillBinding
@@ -14,6 +20,7 @@ from src.game.rules import TurnPhase
 
 from ..definitions import (
     ActiveSkillSpec,
+    CostZone,
     ModifierSpec,
     SkillDef,
     SkillKind,
@@ -475,6 +482,31 @@ def _jujian_targets(game, player):
     return other_alive_players(game, player)
 
 
+#: 【举荐】的输入契约：弃置**至多三张牌**，然后令一名其他角色摸等量的牌。
+#: 项目选用版本的文本是"弃置至多三张**牌**"（不是"手牌"），所以费用区域与
+#: 【制衡】一致——手牌与装备区的牌都能支付。区域只有这一处声明，候选、界面
+#: 高亮、引擎校验、远程下发全部由 ``allowed_zones`` 派生，没有按技能名的分支。
+JUJIAN_SPEC = ActiveSkillSpec(
+    needs_target=True,
+    target_candidates=_jujian_targets,
+    target_prompt="【举荐】：请选择摸牌的角色",
+    # 举荐的牌是**真的要弃置**（不是素材），所以走费用语义；
+    # 上限来自规则本身："至多三张"。
+    variable_cost=True,
+    max_cost_cards=3,
+    cost_prompt="【举荐】：请选择至多三张牌弃置",
+    allowed_zones=(CostZone.HAND, CostZone.EQUIPMENT),
+)
+
+
+def _jujian_cost_candidates(game, player):
+    """这次发动可以支付的牌（与引擎校验、界面高亮同一份判断）。"""
+
+    from src.game.skills.activation import cost_candidates
+
+    return cost_candidates(game, player, JUJIAN_SPEC)
+
+
 def _can_jujian(game, player):
     if game.game_over or not player.alive:
         return False, "无法发动"
@@ -482,29 +514,31 @@ def _can_jujian(game, player):
         return False, "只能在你的出牌阶段发动"
     if player.skill_state.get("jujian", "used", 0):
         return False, "本回合已经发动过"
-    if not player.hand:
-        return False, "没有可以弃置的手牌"
+    # 手牌 0、装备区有牌时照样能发动：费用是"牌"，不是"手牌"。
+    if not _jujian_cost_candidates(game, player):
+        return False, "没有可以弃置的牌"
     if not _jujian_targets(game, player):
         return False, "没有其他角色"
     return True, ""
 
 
 def _activate_jujian(game, player, target=None, cards=None):
-    """举荐：弃至多三张牌令一名其他角色摸等量的牌；三张同类则回复 1 点。"""
+    """举荐：弃至多三张牌令一名其他角色摸等量的牌；三张同类则回复 1 点。
+
+    费用牌**已经由引擎按 ``JUJIAN_SPEC`` 弃置**（手牌走 MoveCardAtom，装备区
+    走 UnequipAtom），所以这里不再自己移动任何牌——技能自己动一次就等于
+    引擎动的那次白动，两边谁都说不清"到底弃了几张"。
+    """
 
     if target is None:
         return False
     # 弃哪几张由玩家自己挑（张数上限写在 spec 的 max_cost_cards 里）。
     # 这里不再有任何"没传就替他挑一张"的兜底：那种兜底会让真人点了技能
     # 却看到程序自己丢了牌。
-    chosen = list(cards or ())[:3]
+    chosen = list(cards or ())
     if not chosen:
         game.message = "【举荐】：请先选择要弃置的牌。"
         return False
-    for card in chosen:
-        if any(item is card for item in player.hand):
-            game.engine.context.apply(MoveCardAtom(
-                card, source=player.hand, destination=game.deck.discard_pile))
     game.engine.context.apply(DrawCardsAtom(target, len(chosen)))
     player.skill_state.set("jujian", "used", 1, ResetScope.TURN)
     categories = {getattr(card, "category", None) for card in chosen}
@@ -1187,7 +1221,8 @@ class Huilei(Skill):
         for slot in list(killer.equipment):
             if killer.get_equipment(slot) is not None:
                 context.apply(UnequipAtom(
-                    killer, slot, game.deck.discard_pile))
+                    killer, slot, game.deck.discard_pile,
+                    reason=DISCARD_REASON))
                 count += 1
         for card in list(getattr(killer, "judgement_zone", ()) or ()):
             context.apply(MoveCardAtom(
@@ -1373,16 +1408,7 @@ YIJIANG_SKILLS = (
         "若你以此法弃置不少于三张且均为同一类别，你回复 1 点体力。",
         can_activate=_can_jujian,
         activate=_activate_jujian,
-        spec=ActiveSkillSpec(
-            needs_target=True,
-            target_candidates=_jujian_targets,
-            target_prompt="【举荐】：请选择摸牌的角色",
-            # 举荐的牌是**真的要弃置**（不是素材），所以走费用语义；
-            # 上限来自规则本身："至多三张"。
-            variable_cost=True,
-            max_cost_cards=3,
-            cost_prompt="【举荐】：请选择至多三张牌弃置",
-        ),
+        spec=JUJIAN_SPEC,
         tags=("active", "card_transfer"),
     ),
     triggered(

@@ -1,19 +1,34 @@
-"""Active-skill activation: validate → pay → settle.
+"""Active-skill activation: preflight → pay → settle.
 
 A skill activation is one transactional step.  The caller (UI for the human,
-AIController for AI) collects every required input first and then submits a
-single ``ActivateSkillAction``; only after validation succeeds are the cost
-cards discarded and the ``can_activate`` gate re-checked.
+AIController for AI, the host for a LAN client) collects every required input
+first and then submits a single ``ActivateSkillAction``.
 
-Because nothing is written before the final commit, cancelling a half-finished
-activation leaves no ``used`` mark and no discarded cards behind.
+**引擎边界只有一条规则：任何被拒绝的发动都不得造成任何状态变化。**
+所以这里把流程切成三段，顺序固定：
+
+    1. ``plan_activation``  纯校验（技能现在能不能发动 / 目标 / 费用）
+                            —— 不移动任何牌、不写任何标记
+    2. ``pay_cost``         支付费用（手牌走 MoveCardAtom，装备区走 UnequipAtom）
+    3. ``settle_activation``发技能事件并执行技能自己的效果
+
+校验阶段把"这张牌还在不在、区域对不对、是不是同一张牌被提交了两次"全部
+问完，支付阶段只按已经定好的位置执行——所以不存在"弃了一部分才发现剩下的
+不合法"。校验失败返回规则原因（`False, message`），不抛异常：
+
+* 远程客户端、脚本、未来的 replay 都能直接提交 ``ActivateSkillAction``，
+  提交得再离谱也只能被拒绝，不会把房主的引擎打崩。
 
 费用牌从哪些区域支付由 ``ActiveSkillSpec.allowed_zones`` 声明（默认只有
-手牌）。装备区的费用牌走 ``UnequipAtom``——失去装备事件、装备技能卸载、
-装备修正移除全部照常发生，绝不从装备字典里硬删。
+手牌）。装备区的费用牌走 ``UnequipAtom(reason="discard")``——失去装备事件、
+装备技能卸载、装备修正移除照常发生，并且"因弃置进入弃牌堆"的语义如实发出
+（【落英】一类技能靠它工作）。
 """
 
-from src.game.atoms_v2 import MoveCardAtom, UnequipAtom
+from dataclasses import dataclass
+from typing import Any, Tuple
+
+from src.game.atoms_v2 import DISCARD_REASON, MoveCardAtom, UnequipAtom
 from src.game.conversion import EQUIPMENT_ZONE, HAND_ZONE
 
 from .definitions import CostZone
@@ -81,12 +96,44 @@ def source_zone_name(player, card):
     return ""
 
 
+def duplicate_cost_card(cards):
+    """费用里重复出现的同一张实体牌（没有则返回 ``None``）。
+
+    为什么必须查：``[sha, sha]`` 这种提交在旧的"先全部定位、再全部支付"里
+    两次都能定位成功（两次问的都是**同一张还在手牌里的牌**），于是第一次
+    支付真的把它弃掉、第二次抛 ``ValueError``——玩家白丢一张牌，技能没发动。
+    去重必须在任何移动之前做，不能只靠界面：远程客户端与脚本也会到引擎入口。
+
+    判据是**实体身份**，两个维度都查：
+
+    * 对象身份（``id(card)``）——同一张牌被提交两次；
+    * 牌自己的 ``id``——两个对象、同一个牌子（反序列化或恶意构造的 payload）。
+
+    牌 id 由 ``Card`` 自动分配、进程内唯一，所以第二个维度不会误伤合法提交。
+    """
+
+    seen_objects = set()
+    seen_ids = set()
+    for card in cards:
+        if card is None:
+            continue
+        if id(card) in seen_objects:
+            return card
+        card_id = str(getattr(card, "id", "") or "")
+        if card_id and card_id in seen_ids:
+            return card
+        seen_objects.add(id(card))
+        if card_id:
+            seen_ids.add(card_id)
+    return None
+
+
 def cost_candidates(game, player, spec):
     """这次发动中，玩家**可以自己挑**的牌（按 ``allowed_zones`` 收集）。
 
     区域默认只有手牌，所以没声明区域的技能候选还是"全部手牌"，行为不变；
-    【制衡】声明了"手牌 + 装备区"，候选里就同时有手牌与装备牌，玩家可以
-    只挑手牌、只挑装备、或者混着挑。
+    【制衡】【举荐】声明了"手牌 + 装备区"，候选里就同时有手牌与装备牌，
+    玩家可以只挑手牌、只挑装备、或者混着挑。
     """
 
     if spec is None:
@@ -144,84 +191,121 @@ def activation_inputs(definition, game, player, *, grant_owners=None):
     }
 
 
-def resolve_activation(engine, action):
-    """执行一次技能发动；返回 (ok, message)。"""
+# ==================================================
+# 一次发动的执行计划
+# ==================================================
+
+@dataclass(frozen=True)
+class ActivationPlan:
+    """校验**全部**通过之后才存在的执行计划。
+
+    它存在的意义：把"这次发动要做什么"和"做"彻底分开。支付阶段只读这份
+    计划，不再查任何状态，也就不存在"付到一半发现不合法"。
+    """
+
+    definition: Any
+    spec: Any
+    player: Any
+    target: Any
+    zones: Tuple[Any, ...]
+    cards: Tuple[Any, ...]                 # 玩家提交的全部牌（keep_cards 用）
+    entries: Tuple[Any, ...]               # ((card, zone, slot), ...) 要支付的
+    destination: Any
+    keep_cards: bool
+
+    @property
+    def paid_cards(self):
+        return tuple(entry[0] for entry in self.entries)
+
+
+def plan_activation(engine, action):
+    """校验一次技能发动的全部输入；返回 ``(plan, message)``。
+
+    失败时 plan 为 ``None``、message 是规则原因。整个过程**不改任何状态**：
+    不移动牌、不写 used、不扣标记、不发事件。
+    """
 
     game = engine.game
     player = action.actor
     definition = game.skill_registry.get(action.skill_id)
     if definition is None or definition.activate is None:
+        # 这是编程错误（技能 id 不存在），不是玩家输入问题：照旧抛。
         raise ValueError("unknown active skill: " + str(action.skill_id))
 
+    # ---- 1) 技能本身现在还能不能发动（时机 / 次数 / 标记 / 阵营）----
     grant_owners = None
     if definition.grant is not None:
         # 授予型（【黄天】）：技能属于 target，发动的是 action.actor。
         # 目标就是"交给谁"，它必须是一个真的持有该技能、且允许此人发动的角色。
         if action.target is None:
-            return False, spec_of(definition).target_prompt
+            return None, spec_of(definition).target_prompt
         allowed, reason = game.skills.granted_state(
             action.target, player, definition.id)
         if not allowed:
-            game.message = reason
-            game.add_log(player.name + " 未能发动【" + definition.name + "】：" + reason)
-            return False, reason
+            return None, reason
         grant_owners = [action.target]
     else:
-        # 真正执行前再次校验：状态可能已经变化。
         allowed, reason = game.skills.can_activate(player, action.skill_id)
         if not allowed:
-            game.message = reason
-            game.add_log(player.name + " 未能发动【" + definition.name + "】：" + reason)
-            return False, reason
+            return None, reason
 
     inputs = activation_inputs(definition, game, player, grant_owners=grant_owners)
+
+    # ---- 2) 目标 ----
     if inputs["needs_target"] and action.target is None:
-        return False, spec_of(definition).target_prompt
+        return None, spec_of(definition).target_prompt
     if inputs["needs_target"] and not any(
         action.target is candidate for candidate in inputs["targets"]
     ):
-        return False, "目标不合法"
+        return None, "目标不合法"
 
+    # ---- 3) 费用：张数 ----
     cards = list(action.cards or ())
     spec = spec_of(definition)
     variable = bool(getattr(spec, "variable_cost", False)) if spec else False
     transfer = bool(getattr(spec, "transfer_cards", False)) if spec else False
+    keep = bool(getattr(spec, "keep_cards", False)) if spec else False
 
     if variable:
         if not cards:
-            return False, "至少选择一张牌"
+            return None, "至少选择一张牌"
     elif inputs["cost_cards"] and len(cards) < inputs["cost_cards"]:
-        return False, (
-            spec.cost_prompt if spec is not None else "需要支付更多牌"
-        )
+        return None, (spec.cost_prompt if spec is not None else "需要支付更多牌")
 
     cap = int(getattr(spec, "max_cost_cards", 0) or 0) if spec else 0
     if variable and cap and len(cards) > cap:
-        return False, "最多只能选择 %d 张牌" % cap
+        return None, "最多只能选择 %d 张牌" % cap
 
-    keep = bool(getattr(spec, "keep_cards", False)) if spec else False
     payable = [] if keep else (
         list(cards) if variable else list(cards[: inputs["cost_cards"]]))
+
+    # ---- 4) 费用：实体唯一（在任何移动之前）----
+    repeated = duplicate_cost_card(cards)
+    if repeated is not None:
+        return None, "同一张牌不能重复作为费用"
+
+    # ---- 5) 费用：每张牌的对象、归属、区域、候选资格 ----
     zones = tuple(inputs["allowed_zones"])
-    # 校验与支付读同一份判据：先全部定位，一张不合法就整体不执行——
-    # 绝不会"弃了一部分才发现剩下的不合法"。
-    placements = []
+    candidates = inputs.get("cost_candidates")
+    entries = []
     for card in payable:
+        if card is None:
+            return None, "选择的牌不存在"
         placement = cost_placement(player, card, zones)
         if placement is None:
-            return False, "选择的牌已经不在可以支付的区域"
-        placements.append(placement)
-
-    # 候选校验：玩家能挑的牌由 SkillDef 声明（红桃手牌 / 【闪】或【闪电】 /
-    # 手牌与装备牌…）。界面高亮用的是同一份判断，所以走到这里还不合法的，
-    # 只可能是绕过界面的提交（远程客户端 / 脚本）——直接拒绝。
-    candidates = inputs.get("cost_candidates")
-    if candidates is not None and (inputs["cost_cards"] or variable or keep):
-        for card in cards:
+            return None, "选择的牌已经不在可以支付的区域"
+        if candidates is not None and (inputs["cost_cards"] or variable or keep):
             if not any(card is item for item in candidates):
-                return False, "这张牌不能用于这次发动"
+                return None, "这张牌不能用于这次发动"
+        entries.append((card, placement[0], placement[1]))
 
-    # 校验全部通过：先支付费用，再交给技能自己结算。
+    # ---- 6) 组合约束（技能自己声明的费用组合校验，可选）----
+    validator = getattr(spec, "cost_validator", None) if spec is not None else None
+    if callable(validator):
+        ok, reason = _as_result(validator(game, player, [item[0] for item in entries]))
+        if not ok:
+            return None, reason
+
     # 费用牌默认进弃牌堆；【仁德】【黄天】一类技能改成把牌交给目标角色。
     # ``keep_cards`` 的技能不做任何代付——那些牌的去向是技能本身的一部分
     # （交给目标 / 装到装备区 / 当转化素材），引擎替它决定就等于改规则。
@@ -229,29 +313,63 @@ def resolve_activation(engine, action):
         destination = action.target.hand
     else:
         destination = game.deck.discard_pile
-    paid = []
-    for card, (zone, slot) in zip(payable, placements):
+
+    return ActivationPlan(
+        definition=definition,
+        spec=spec,
+        player=player,
+        target=action.target,
+        zones=zones,
+        cards=tuple(cards),
+        entries=tuple(entries),
+        destination=destination,
+        keep_cards=keep,
+    ), ""
+
+
+def _as_result(value):
+    """技能谓词的两种返回形态：bool 或 (bool, reason)。"""
+
+    if isinstance(value, tuple):
+        return bool(value[0]), str(value[1]) if len(value) > 1 else ""
+    return bool(value), ""
+
+
+def pay_cost(engine, plan):
+    """按计划支付费用（只读计划，不再查状态）。
+
+    手牌走 ``MoveCardAtom``，装备区走 ``UnequipAtom(reason="discard")``——
+    装备费用因此带上"因弃置进入弃牌堆"的语义（【落英】一类订阅者靠它工作），
+    同时照常发出 ``EQUIPMENT_LOST``、卸载装备技能、移除装备修正。
+    """
+
+    for card, zone, slot in plan.entries:
         if zone is CostZone.EQUIPMENT:
-            # 装备区的费用牌必须先经过失去装备的规则：事件、装备技能卸载、
-            # 修正移除都由这个原子负责（硬删会让它们整条消失）。
-            engine.context.apply(UnequipAtom(player, slot, destination))
+            engine.context.apply(UnequipAtom(
+                plan.player, slot, plan.destination, reason=DISCARD_REASON))
         else:
             engine.context.apply(MoveCardAtom(
                 card,
-                source=player.hand,
-                destination=destination,
+                source=plan.player.hand,
+                destination=plan.destination,
             ))
-        paid.append(card)
+
+
+def settle_activation(engine, plan):
+    """发技能事件并执行技能自己的效果（费用已经支付完毕）。"""
+
+    game = engine.game
+    definition = plan.definition
 
     from src.game.engine.events import Event, EventType
 
     # targets 只为表现层（指向箭头）提供"谁对谁发动了技能"，不参与任何规则判定。
-    skill_targets = [action.target] if action.target is not None else []
+    skill_targets = [plan.target] if plan.target is not None else []
     from src.game.interaction_presentation import skill_payload
 
     game.context.emit(Event(
         EventType.SKILL_TRIGGERED,
-        source=player,
+        source=plan.player,
         payload=skill_payload(
             game, definition.id, definition.name, targets=skill_targets),
     ))
@@ -263,12 +381,34 @@ def resolve_activation(engine, action):
     # ``keep_cards`` 的技能拿到玩家选的全部牌（去向由技能自己决定）；
     # 其余技能拿到的是**实际支付成功**的那些牌：摸牌数一类结算按真实支付量
     # 算，不会出现"某张牌没付出去、却按选择时的数量多算一张"。
-    result = definition.activate(
+    return definition.activate(
         game,
-        player,
-        target=action.target,
-        cards=list(cards) if keep else list(paid),
+        plan.player,
+        target=plan.target,
+        cards=list(plan.cards) if plan.keep_cards else list(plan.paid_cards),
     )
+
+
+def resolve_activation(engine, action):
+    """执行一次技能发动；返回 ``(ok, message)``。
+
+    顺序固定：**校验全部 → 支付全部 → 结算**。校验拒绝不产生任何状态变化；
+    支付之后技能自己的效果失败（返回 False）算"费用已付、效果为空"，与
+    "费用失败"不是一回事——技能实现用返回 False 表达的是后者之外的情况。
+    """
+
+    plan, reason = plan_activation(engine, action)
+    if plan is None:
+        game = engine.game
+        name = getattr(engine.game.skill_registry.get(action.skill_id),
+                       "name", action.skill_id)
+        game.message = reason
+        game.add_log(action.actor.name + " 未能发动【" + str(name) + "】：" + reason)
+        return False, reason
+
+    pay_cost(engine, plan)
+    result = settle_activation(engine, plan)
     if result is False:
+        game = engine.game
         return False, str(game.message or "技能未能发动")
     return True, ""

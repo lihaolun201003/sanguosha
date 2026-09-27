@@ -439,8 +439,35 @@ class Player:
         action = self._decide()
         if action is None:
             return
+        self._check_cost_invariant()
         self._click(action)
         self.cooldown = self.COOLDOWN
+
+    def _check_cost_invariant(self):
+        """常驻不变量：一次技能费用里不允许出现同一张实体牌两次。
+
+        引擎自己会拦（``skills/activation.py`` 的 preflight 按实体身份去重，
+        重复费用返回规则原因且不移动任何牌），这里记的是**界面是怎么凑出
+        这份费用的**——真出现时能直接定位到 seed / 技能 / 牌 id。
+
+        只读、无副作用：不修界面状态，也不替脚本改选。
+        """
+
+        info = getattr(self.game, "pending_skill_input", None)
+        if not info:
+            return
+        seen = set()
+        for card in info.get("cards") or ():
+            key = id(card)
+            if key in seen:
+                self._record(
+                    "不变量(技能费用重复)", "duplicate_cost_card",
+                    "技能=%s 牌=%s id=%s cards=%s"
+                    % (info.get("name"), getattr(card, "name", "?"),
+                       getattr(card, "id", "?"),
+                       [getattr(item, "id", "?") for item in info.get("cards") or ()]))
+                return
+            seen.add(key)
 
     def _note_sig(self):
         sig = self._sig()
@@ -622,6 +649,17 @@ class Player:
             point = self._card_point(view_as[0])
             if point is not None:
                 return ("技能来源牌", point)
+        # 费用牌：一张一张点候选（手牌或装备区的牌，走与真人同一条点击路由）。
+        # 以前这里不点费用，所以带费用的主动技在试玩里**从来没被发动过**——
+        # 制衡 / 举荐这类"弃牌换收益"的路径一直没被跑到。
+        need = self._cost_need(info)
+        if len(info.get("cards") or ()) < need:
+            for card in info.get("cost_candidates") or ():
+                if any(item is card for item in info.get("cards") or ()):
+                    continue
+                point = self._card_point(card, prefer_pool=False)
+                if point is not None and not self._failed("技能费用牌", point):
+                    return ("技能费用牌", point)
         targets = list(info.get("targets") or ())
         if targets and info.get("target") is None:
             point = self._seat_point(targets[0])
@@ -630,6 +668,23 @@ class Player:
         if renderer.primary_button.enabled:
             return ("确认发动技能", pygame.Rect(renderer.primary_button.rect).center)
         return None
+
+    @staticmethod
+    def _cost_need(info):
+        """这次发动准备挑几张费用牌（脚本自己的策略，不是规则）。
+
+        规则上限由 ``max_cost_cards`` 给出；不可变的费用按张数凑齐即可。
+        试玩只挑**够用的最小张数**（最多两张）：弃光手牌会让这一局没得打，
+        那不是要找的问题。
+        """
+
+        cost = int(info.get("cost_cards") or 0)
+        if not info.get("variable_cost"):
+            return cost
+        cap = int(info.get("max_cost_cards") or 0)
+        available = len(info.get("cost_candidates") or ())
+        limit = min(available, cap) if cap else available
+        return max(1, min(limit, 2))
 
     def _decide_play(self):
         game = self.game

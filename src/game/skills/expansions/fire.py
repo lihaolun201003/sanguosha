@@ -316,12 +316,13 @@ class MengjinFlow(Flow):
         container = _card_container(self.game, self.target, card)
         if container is None:
             # 装备区里的牌：按槽位卸下（发出「失去装备」事件，枭姬一类照常响应）。
-            from src.game.atoms_v2 import UnequipAtom
+            from src.game.atoms_v2 import DISCARD_REASON, UnequipAtom
 
             for slot, equipped in (self.target.equipment or {}).items():
                 if equipped is card:
                     self.context.apply(UnequipAtom(
-                        self.target, slot, self.game.deck.discard_pile))
+                        self.target, slot, self.game.deck.discard_pile,
+                        reason=DISCARD_REASON))
                     break
             else:
                 return self.complete({"applied": False})
@@ -376,7 +377,7 @@ class NiepanFlow(Flow):
         if response is None or not response.confirmed:
             return self.complete({"applied": False})
         self.stage = "done"
-        from src.game.atoms_v2 import UnequipAtom
+        from src.game.atoms_v2 import DISCARD_REASON, UnequipAtom
 
         from ..mechanics import consume_limited
 
@@ -387,7 +388,9 @@ class NiepanFlow(Flow):
                 card, source=owner.hand, destination=game.deck.discard_pile))
         for slot in list(owner.equipment):
             if owner.get_equipment(slot) is not None:
-                self.context.apply(UnequipAtom(owner, slot, game.deck.discard_pile))
+                self.context.apply(UnequipAtom(
+                    owner, slot, game.deck.discard_pile,
+                    reason=DISCARD_REASON))
         for card in list(owner.judgement_zone):
             self.context.apply(MoveCardAtom(
                 card, source=owner.judgement_zone, destination=game.deck.discard_pile))
